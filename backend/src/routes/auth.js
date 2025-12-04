@@ -146,4 +146,44 @@ router.post('/register', auth, async (req, res, next) => {
   }
 });
 
+// Setup first admin (only works if no admins exist)
+router.get('/setup', async (req, res, next) => {
+  try {
+    // Check if any admin exists
+    const existingAdmin = await pool.query('SELECT COUNT(*) FROM admins');
+    
+    if (parseInt(existingAdmin.rows[0].count) > 0) {
+      return res.json({
+        success: false,
+        message: 'משתמש מנהל כבר קיים. השתמש בדף ההתחברות.'
+      });
+    }
+
+    // Create default admin
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash('admin123', salt);
+
+    const result = await pool.query(
+      `INSERT INTO admins (name, email, password_hash, role)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, name, email, role`,
+      ['מנהל ראשי', 'admin@delivery.com', hashedPassword, 'super_admin']
+    );
+
+    logger.info('First admin created via setup');
+
+    res.json({
+      success: true,
+      message: 'משתמש מנהל נוצר בהצלחה!',
+      credentials: {
+        email: 'admin@delivery.com',
+        password: 'admin123'
+      },
+      note: 'שנה את הסיסמה מיד לאחר ההתחברות!'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
