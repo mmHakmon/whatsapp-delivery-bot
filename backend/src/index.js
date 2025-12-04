@@ -10,6 +10,7 @@ const cron = require('node-cron');
 const logger = require('./utils/logger');
 const { pool, testConnection } = require('./config/database');
 const errorHandler = require('./middlewares/errorHandler');
+const initDatabase = require('./init-db');
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -116,6 +117,9 @@ async function startServer() {
   try {
     // Test database connection
     await testConnection();
+    
+    // Initialize database tables if they don't exist
+    await initDatabase();
     
     httpServer.listen(PORT, () => {
       logger.info(`🚀 Server running on port ${PORT}`);
