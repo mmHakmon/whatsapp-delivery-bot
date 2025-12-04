@@ -1,5 +1,5 @@
 // init-db.js - Initialize database tables
-const pool = require('./config/database');
+const { pool } = require('./config/database');
 
 const initDatabase = async () => {
   const client = await pool.connect();
