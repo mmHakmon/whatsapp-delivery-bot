@@ -20,6 +20,7 @@ const paymentRoutes = require('./routes/payments');
 const whatsappRoutes = require('./routes/whatsapp');
 const dashboardRoutes = require('./routes/dashboard');
 const settingsRoutes = require('./routes/settings');
+const twilioWebhook = require('./routes/twilio-webhook');
 
 // Services
 const SchedulerService = require('./services/SchedulerService');
@@ -62,7 +63,10 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 
-// WhatsApp Webhook verification (GET)
+// Twilio WhatsApp Webhook
+app.use('/webhook/twilio', twilioWebhook);
+
+// WhatsApp Webhook verification (GET) - for Meta
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -123,7 +127,7 @@ async function startServer() {
     
     httpServer.listen(PORT, () => {
       logger.info(`🚀 Server running on port ${PORT}`);
-      logger.info(`📱 WhatsApp webhook ready at /webhook`);
+      logger.info(`📱 Twilio WhatsApp webhook ready at /webhook/twilio`);
       logger.info(`🔌 Socket.IO ready for real-time updates`);
     });
   } catch (error) {
