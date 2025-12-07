@@ -1,7 +1,7 @@
 {
   "name": "mmh-delivery-system",
-  "version": "3.0.0",
-  "description": "M.M.H Delivery System - Real-time delivery management with WhatsApp integration and SQLite database",
+  "version": "1.0.0",
+  "description": "M.M.H Delivery System - Real-time delivery management with WhatsApp integration",
   "main": "server.js",
   "engines": {
     "node": ">=18.0.0"
@@ -14,8 +14,7 @@
     "express": "^4.18.2",
     "ws": "^8.16.0",
     "cors": "^2.8.5",
-    "axios": "^1.6.5",
-    "better-sqlite3": "^9.4.3"
+    "axios": "^1.6.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
