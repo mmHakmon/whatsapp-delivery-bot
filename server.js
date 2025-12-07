@@ -194,9 +194,6 @@ const takeOrder = async (orderNum, cd) => {
   msg += `📍 *כתובת איסוף:*\n${o.pickup_address}\n\n`;
   msg += `🔗 *ניווט:*\nhttps://waze.com/ul?q=${encodeURIComponent(o.pickup_address)}\n`;
   msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-  msg += `📥 *פרטי המקבל:*\n👤 שם: ${o.receiver_name}\n📞 טלפון: ${o.receiver_phone}\n\n`;
-  msg += `🏠 *כתובת מסירה:*\n${o.delivery_address}\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
   if (o.details) msg += `📝 *פרטים:*\n${o.details}\n━━━━━━━━━━━━━━━━━━━━\n`;
   msg += `💰 *תשלום אחרי עמלה:* ₪${o.courier_payout}\n`;
   msg += `━━━━━━━━━━━━━━━━━━━━\n\n📦 *אספת? לחץ כאן:*\n${pickupUrl}\n\nבהצלחה! 🚀`;
