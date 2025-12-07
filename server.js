@@ -1,6 +1,6 @@
 /**
  * M.M.H Delivery System - Backend + Frontend Server
- * For Render.com deployment
+ * Version 2.0 - With Interactive Status Updates
  */
 
 const express = require('express');
@@ -8,7 +8,6 @@ const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
 const axios = require('axios');
-const path = require('path');
 
 // ==================== CONFIGURATION ====================
 const CONFIG = {
@@ -42,9 +41,7 @@ const wss = new WebSocket.Server({ server });
 const broadcast = (message) => {
   const data = JSON.stringify(message);
   wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(data);
-    }
+    if (client.readyState === WebSocket.OPEN) client.send(data);
   });
 };
 
@@ -66,7 +63,6 @@ wss.on('connection', (ws) => {
   });
   
   ws.on('close', () => console.log('🔌 Client disconnected'));
-  
   const pingInterval = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); }, 30000);
   ws.on('close', () => clearInterval(pingInterval));
 });
@@ -141,27 +137,35 @@ const handlePublishOrder = async (orderId) => {
   }
 };
 
-const handleOrderPicked = async (orderId) => {
+const handleOrderPicked = async (orderId, fromCourier = false) => {
   const order = db.orders.find(o => o.id === orderId);
   if (!order) return;
   
   order.status = 'picked';
   order.pickedAt = new Date();
   
+  // שלח הודעה לשליח עם לינק לסימון מסירה
   if (order.courier && order.courier.whatsappId) {
-    let message = '📦 *המשלוח ' + order.id + ' נאסף!*\n\n';
+    const deliverUrl = CONFIG.PUBLIC_URL + '/status/' + order.id + '/deliver';
+    
+    let message = '📦 *אישור איסוף - ' + order.id + '*\n\n';
+    message += '✅ המשלוח סומן כנאסף!\n\n';
     message += '🏠 *כתובת מסירה:*\n' + order.deliveryAddress + '\n\n';
     message += '👤 *מקבל:* ' + order.receiverName + '\n';
     message += '📞 *טלפון:* ' + order.receiverPhone + '\n\n';
-    message += '🔗 *ניווט:*\nhttps://waze.com/ul?q=' + encodeURIComponent(order.deliveryAddress);
-    try { await sendWhatsAppMessage(order.courier.whatsappId, message); } catch (error) { console.error('Failed to send pickup confirmation:', error.message); }
+    message += '🔗 *ניווט למסירה:*\nhttps://waze.com/ul?q=' + encodeURIComponent(order.deliveryAddress) + '\n\n';
+    message += '━━━━━━━━━━━━━━━━━━━━\n';
+    message += '📬 *מסרת? לחץ כאן:*\n' + deliverUrl;
+    
+    try { await sendWhatsAppMessage(order.courier.whatsappId, message); } 
+    catch (error) { console.error('Failed to send pickup confirmation:', error.message); }
   }
   
   broadcast({ type: 'order_picked', data: { orderId: orderId } });
   console.log('📦 Order ' + orderId + ' picked up');
 };
 
-const handleOrderDelivered = async (orderId) => {
+const handleOrderDelivered = async (orderId, fromCourier = false) => {
   const order = db.orders.find(o => o.id === orderId);
   if (!order) return;
   
@@ -169,9 +173,21 @@ const handleOrderDelivered = async (orderId) => {
   order.deliveredAt = new Date();
   
   if (order.courier && order.courier.whatsappId) {
-    let message = '✅ *המשלוח ' + order.id + ' סומן כנמסר!*\n\n💰 רווח: ₪' + order.courierPayout + '\n\nתודה רבה! 🙏';
-    try { await sendWhatsAppMessage(order.courier.whatsappId, message); } catch (error) { console.error('Failed to send delivery confirmation:', error.message); }
+    let message = '✅ *המשלוח ' + order.id + ' נמסר בהצלחה!*\n\n';
+    message += '━━━━━━━━━━━━━━━━━━━━\n';
+    message += '💰 *רווח מהמשלוח:* ₪' + order.courierPayout + '\n';
+    message += '━━━━━━━━━━━━━━━━━━━━\n\n';
+    message += 'תודה רבה על העבודה! 🙏\n';
+    message += 'מחכים למשלוח הבא 🚀';
+    
+    try { await sendWhatsAppMessage(order.courier.whatsappId, message); } 
+    catch (error) { console.error('Failed to send delivery confirmation:', error.message); }
   }
+  
+  // הודעה לקבוצה
+  try { 
+    await sendWhatsAppMessage(CONFIG.WHAPI.COURIERS_GROUP_ID, '✅ המשלוח ' + order.id + ' נמסר בהצלחה!'); 
+  } catch (error) { console.error('Failed to notify group:', error.message); }
   
   broadcast({ type: 'order_delivered', data: { orderId: orderId } });
   console.log('✅ Order ' + orderId + ' delivered');
@@ -199,22 +215,125 @@ const handleCancelOrder = async (orderId) => {
   console.log('❌ Order ' + orderId + ' cancelled');
 };
 
+// ==================== STATUS UPDATE PAGES ====================
+// דף עדכון סטטוס - איסוף
+app.get('/status/:orderId/pickup', (req, res) => {
+  const order = db.orders.find(o => o.id === req.params.orderId);
+  
+  if (!order) {
+    return res.send(statusPage('❌', 'הזמנה לא נמצאה', 'ההזמנה אינה קיימת במערכת', '#ef4444'));
+  }
+  
+  if (order.status !== 'taken') {
+    return res.send(statusPage('ℹ️', 'לא ניתן לעדכן', 'המשלוח כבר עודכן או בוטל', '#f59e0b'));
+  }
+  
+  res.send(statusPage('📦', 'אישור איסוף', `האם אספת את המשלוח ${order.id}?`, '#10b981', `
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button onclick="confirmPickup()" style="flex:1;padding:15px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:12px;color:white;font-size:16px;font-weight:bold;cursor:pointer;">✅ כן, אספתי</button>
+      <button onclick="window.close()" style="flex:1;padding:15px;background:#334155;border:none;border-radius:12px;color:white;font-size:16px;cursor:pointer;">❌ לא עדיין</button>
+    </div>
+    <script>
+      async function confirmPickup() {
+        try {
+          const res = await fetch('/api/status/${order.id}/pickup', { method: 'POST' });
+          const data = await res.json();
+          if (data.success) {
+            document.body.innerHTML = '<div style="text-align:center;padding:50px;"><div style="font-size:60px;margin-bottom:20px;">✅</div><h1 style="color:#10b981;margin-bottom:10px;">נרשם בהצלחה!</h1><p style="color:#94a3b8;">המשלוח סומן כנאסף</p></div>';
+          } else {
+            alert(data.error || 'שגיאה');
+          }
+        } catch (e) { alert('שגיאת תקשורת'); }
+      }
+    </script>
+  `));
+});
+
+// דף עדכון סטטוס - מסירה
+app.get('/status/:orderId/deliver', (req, res) => {
+  const order = db.orders.find(o => o.id === req.params.orderId);
+  
+  if (!order) {
+    return res.send(statusPage('❌', 'הזמנה לא נמצאה', 'ההזמנה אינה קיימת במערכת', '#ef4444'));
+  }
+  
+  if (order.status !== 'picked') {
+    if (order.status === 'taken') {
+      return res.send(statusPage('ℹ️', 'צריך לאסוף קודם', 'סמן את המשלוח כנאסף לפני סימון מסירה', '#f59e0b'));
+    }
+    return res.send(statusPage('ℹ️', 'לא ניתן לעדכן', 'המשלוח כבר נמסר או בוטל', '#f59e0b'));
+  }
+  
+  res.send(statusPage('📬', 'אישור מסירה', `האם מסרת את המשלוח ${order.id}?`, '#10b981', `
+    <div style="margin:20px 0;padding:15px;background:#1e293b;border-radius:12px;border:1px solid #334155;">
+      <div style="color:#64748b;font-size:12px;margin-bottom:5px;">נמסר ל:</div>
+      <div style="color:white;font-size:16px;">${order.receiverName}</div>
+      <div style="color:#94a3b8;font-size:14px;">${order.deliveryAddress}</div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="confirmDelivery()" style="flex:1;padding:15px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:12px;color:white;font-size:16px;font-weight:bold;cursor:pointer;">✅ כן, מסרתי</button>
+      <button onclick="window.close()" style="flex:1;padding:15px;background:#334155;border:none;border-radius:12px;color:white;font-size:16px;cursor:pointer;">❌ לא עדיין</button>
+    </div>
+    <div style="margin-top:20px;padding:15px;background:#10b98120;border-radius:12px;text-align:center;">
+      <div style="color:#10b981;font-size:14px;">💰 רווח מהמשלוח</div>
+      <div style="color:#10b981;font-size:28px;font-weight:bold;">₪${order.courierPayout}</div>
+    </div>
+    <script>
+      async function confirmDelivery() {
+        try {
+          const res = await fetch('/api/status/${order.id}/deliver', { method: 'POST' });
+          const data = await res.json();
+          if (data.success) {
+            document.body.innerHTML = '<div style="text-align:center;padding:50px;"><div style="font-size:60px;margin-bottom:20px;">🎉</div><h1 style="color:#10b981;margin-bottom:10px;">המשלוח נמסר!</h1><p style="color:#94a3b8;margin-bottom:20px;">תודה רבה על העבודה</p><div style="background:#10b98120;padding:20px;border-radius:12px;"><div style="color:#10b981;font-size:14px;">הרווחת</div><div style="color:#10b981;font-size:32px;font-weight:bold;">₪${order.courierPayout}</div></div></div>';
+          } else {
+            alert(data.error || 'שגיאה');
+          }
+        } catch (e) { alert('שגיאת תקשורת'); }
+      }
+    </script>
+  `));
+});
+
+// פונקציה ליצירת דף סטטוס
+function statusPage(emoji, title, subtitle, color, content = '') {
+  return `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>*{font-family:Segoe UI,Tahoma,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#1e293b;border-radius:20px;padding:30px;text-align:center;border:1px solid #334155;max-width:400px;width:100%}.emoji{font-size:50px;margin-bottom:15px}h1{color:${color};margin-bottom:10px;font-size:22px}p{color:#94a3b8;font-size:14px}</style></head><body><div class="card"><div class="emoji">${emoji}</div><h1>${title}</h1><p>${subtitle}</p>${content}</div></body></html>`;
+}
+
+// API לעדכון סטטוס
+app.post('/api/status/:orderId/pickup', async (req, res) => {
+  const order = db.orders.find(o => o.id === req.params.orderId);
+  if (!order) return res.json({ success: false, error: 'הזמנה לא נמצאה' });
+  if (order.status !== 'taken') return res.json({ success: false, error: 'לא ניתן לעדכן סטטוס' });
+  
+  await handleOrderPicked(order.id, true);
+  res.json({ success: true });
+});
+
+app.post('/api/status/:orderId/deliver', async (req, res) => {
+  const order = db.orders.find(o => o.id === req.params.orderId);
+  if (!order) return res.json({ success: false, error: 'הזמנה לא נמצאה' });
+  if (order.status !== 'picked') return res.json({ success: false, error: 'לא ניתן לעדכן סטטוס' });
+  
+  await handleOrderDelivered(order.id, true);
+  res.json({ success: true });
+});
+
 // ==================== TAKE ORDER PAGE ====================
 app.get('/take/:orderId', (req, res) => {
   const order = db.orders.find(o => o.id === req.params.orderId);
   
   if (!order) {
-    return res.send(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>הזמנה לא נמצאה</title><style>*{font-family:Segoe UI,Tahoma,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#1e293b;border-radius:20px;padding:40px;text-align:center;border:1px solid #334155}h1{color:#ef4444;margin-bottom:10px}p{color:#94a3b8}</style></head><body><div class="card"><h1>❌ הזמנה לא נמצאה</h1><p>ההזמנה אינה קיימת או שהלינק שגוי</p></div></body></html>`);
+    return res.send(statusPage('❌', 'הזמנה לא נמצאה', 'ההזמנה אינה קיימת או שהלינק שגוי', '#ef4444'));
   }
   
   if (order.status !== 'published') {
-    return res.send(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>המשלוח נתפס</title><style>*{font-family:Segoe UI,Tahoma,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#1e293b;border-radius:20px;padding:40px;text-align:center;border:1px solid #334155;max-width:400px}h1{color:#f59e0b;margin-bottom:10px;font-size:24px}p{color:#94a3b8}.emoji{font-size:50px;margin-bottom:20px}</style></head><body><div class="card"><div class="emoji">🏍️</div><h1>המשלוח כבר נתפס!</h1><p>מישהו הספיק לפניך. בפעם הבאה תהיה מהיר יותר! 😉</p></div></body></html>`);
+    return res.send(statusPage('🏍️', 'המשלוח נתפס!', 'מישהו הספיק לפניך. בפעם הבאה תהיה מהיר יותר! 😉', '#f59e0b'));
   }
   
-  res.send(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>תפיסת משלוח ${order.id}</title><style>*{font-family:Segoe UI,Tahoma,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);min-height:100vh;padding:20px}.container{max-width:500px;margin:0 auto}.header{text-align:center;margin-bottom:30px}.logo{font-size:40px;margin-bottom:10px}h1{color:#10b981;font-size:24px;margin-bottom:5px}.order-id{color:#60a5fa;font-size:18px}.card{background:#1e293b;border-radius:20px;padding:25px;border:1px solid #334155;margin-bottom:20px}.info-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #334155}.info-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}.info-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}.info-icon.pickup{background:#f59e0b20}.info-icon.delivery{background:#10b98120}.info-icon.money{background:#60a5fa20}.info-content{flex:1}.info-label{color:#64748b;font-size:12px;margin-bottom:3px}.info-value{color:#fff;font-size:15px}.payout{color:#10b981!important;font-size:22px!important;font-weight:bold}.form-title{color:#fff;font-size:18px;margin-bottom:20px;text-align:center}.form-group{margin-bottom:15px}label{display:block;color:#94a3b8;font-size:14px;margin-bottom:6px}input{width:100%;padding:14px 16px;background:#0f172a;border:2px solid #334155;border-radius:12px;color:#fff;font-size:16px;transition:border-color .2s}input:focus{outline:none;border-color:#10b981}input::placeholder{color:#475569}.btn{width:100%;padding:16px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);border:none;border-radius:12px;color:#fff;font-size:18px;font-weight:bold;cursor:pointer;transition:transform .2s,box-shadow .2s}.btn:hover{transform:translateY(-2px);box-shadow:0 10px 30px rgba(16,185,129,.3)}.btn:disabled{background:#475569;cursor:not-allowed;transform:none;box-shadow:none}.success{display:none;text-align:center;padding:40px 20px}.success.show{display:block}.success-icon{font-size:60px;margin-bottom:20px}.success h2{color:#10b981;margin-bottom:10px}.success p{color:#94a3b8;margin-bottom:20px}.whatsapp-note{background:#10b98120;border-radius:10px;padding:15px;color:#10b981;font-size:14px}.form-container.hidden{display:none}.error{background:#ef444420;border:1px solid #ef4444;border-radius:10px;padding:15px;color:#ef4444;margin-bottom:15px;display:none}.error.show{display:block}</style></head><body><div class="container"><div class="header"><div class="logo">🚚</div><h1>M.M.H משלוחים</h1><div class="order-id">משלוח ${order.id}</div></div><div class="card"><div class="info-row"><div class="info-icon pickup">📍</div><div class="info-content"><div class="info-label">כתובת איסוף</div><div class="info-value">${order.pickupAddress}</div></div></div><div class="info-row"><div class="info-icon delivery">🏠</div><div class="info-content"><div class="info-label">כתובת מסירה</div><div class="info-value">${order.deliveryAddress}</div></div></div><div class="info-row"><div class="info-icon money">💰</div><div class="info-content"><div class="info-label">תשלום לשליח</div><div class="info-value payout">₪${order.courierPayout}</div></div></div></div><div class="card form-container" id="formContainer"><div class="form-title">📝 מלא את הפרטים לתפיסת המשלוח</div><div class="error" id="errorMsg"></div><form id="takeForm"><div class="form-group"><label>שם פרטי</label><input type="text" id="firstName" placeholder="הכנס שם פרטי" required></div><div class="form-group"><label>שם משפחה</label><input type="text" id="lastName" placeholder="הכנס שם משפחה" required></div><div class="form-group"><label>תעודת זהות</label><input type="text" id="idNumber" placeholder="הכנס ת.ז" pattern="[0-9]{9}" maxlength="9" required></div><div class="form-group"><label>טלפון</label><input type="tel" id="phone" placeholder="05X-XXXXXXX" required></div><button type="submit" class="btn" id="submitBtn">✋ תפוס את המשלוח!</button></form></div><div class="card success" id="successMsg"><div class="success-icon">🎉</div><h2>תפסת את המשלוח!</h2><p>הפרטים המלאים נשלחו אליך בוואטסאפ</p><div class="whatsapp-note">📱 בדוק את ההודעות בוואטסאפ לקבלת פרטי הלקוח וניווט</div></div></div><script>var form=document.getElementById("takeForm");var formContainer=document.getElementById("formContainer");var successMsg=document.getElementById("successMsg");var errorMsg=document.getElementById("errorMsg");var submitBtn=document.getElementById("submitBtn");form.addEventListener("submit",async function(e){e.preventDefault();submitBtn.disabled=true;submitBtn.textContent="שולח...";errorMsg.classList.remove("show");var data={firstName:document.getElementById("firstName").value.trim(),lastName:document.getElementById("lastName").value.trim(),idNumber:document.getElementById("idNumber").value.trim(),phone:document.getElementById("phone").value.trim()};try{var response=await fetch("/api/take/${order.id}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});var result=await response.json();if(result.success){formContainer.classList.add("hidden");successMsg.classList.add("show")}else{errorMsg.textContent=result.error||"שגיאה בתפיסת המשלוח";errorMsg.classList.add("show");submitBtn.disabled=false;submitBtn.textContent="✋ תפוס את המשלוח!"}}catch(error){errorMsg.textContent="שגיאת תקשורת. נסה שוב.";errorMsg.classList.add("show");submitBtn.disabled=false;submitBtn.textContent="✋ תפוס את המשלוח!"}});</script></body></html>`);
+  res.send(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>תפיסת משלוח ${order.id}</title><style>*{font-family:Segoe UI,Tahoma,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);min-height:100vh;padding:20px}.container{max-width:500px;margin:0 auto}.header{text-align:center;margin-bottom:30px}.logo{font-size:40px;margin-bottom:10px}h1{color:#10b981;font-size:24px;margin-bottom:5px}.order-id{color:#60a5fa;font-size:18px}.card{background:#1e293b;border-radius:20px;padding:25px;border:1px solid #334155;margin-bottom:20px}.info-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #334155}.info-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}.info-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}.info-icon.pickup{background:#f59e0b20}.info-icon.delivery{background:#10b98120}.info-icon.money{background:#60a5fa20}.info-content{flex:1}.info-label{color:#64748b;font-size:12px;margin-bottom:3px}.info-value{color:#fff;font-size:15px}.payout{color:#10b981!important;font-size:22px!important;font-weight:bold}.form-title{color:#fff;font-size:18px;margin-bottom:20px;text-align:center}.form-group{margin-bottom:15px}label{display:block;color:#94a3b8;font-size:14px;margin-bottom:6px}input{width:100%;padding:14px 16px;background:#0f172a;border:2px solid #334155;border-radius:12px;color:#fff;font-size:16px}input:focus{outline:none;border-color:#10b981}.btn{width:100%;padding:16px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);border:none;border-radius:12px;color:#fff;font-size:18px;font-weight:bold;cursor:pointer}.btn:disabled{background:#475569;cursor:not-allowed}.success{display:none;text-align:center;padding:40px 20px}.success.show{display:block}.success-icon{font-size:60px;margin-bottom:20px}.success h2{color:#10b981;margin-bottom:10px}.success p{color:#94a3b8}.form-container.hidden{display:none}.error{background:#ef444420;border:1px solid #ef4444;border-radius:10px;padding:15px;color:#ef4444;margin-bottom:15px;display:none}.error.show{display:block}</style></head><body><div class="container"><div class="header"><div class="logo">🚚</div><h1>M.M.H משלוחים</h1><div class="order-id">משלוח ${order.id}</div></div><div class="card"><div class="info-row"><div class="info-icon pickup">📍</div><div class="info-content"><div class="info-label">כתובת איסוף</div><div class="info-value">${order.pickupAddress}</div></div></div><div class="info-row"><div class="info-icon delivery">🏠</div><div class="info-content"><div class="info-label">כתובת מסירה</div><div class="info-value">${order.deliveryAddress}</div></div></div><div class="info-row"><div class="info-icon money">💰</div><div class="info-content"><div class="info-label">תשלום לשליח</div><div class="info-value payout">₪${order.courierPayout}</div></div></div></div><div class="card form-container" id="formContainer"><div class="form-title">📝 מלא את הפרטים לתפיסת המשלוח</div><div class="error" id="errorMsg"></div><form id="takeForm"><div class="form-group"><label>שם פרטי</label><input type="text" id="firstName" placeholder="הכנס שם פרטי" required></div><div class="form-group"><label>שם משפחה</label><input type="text" id="lastName" placeholder="הכנס שם משפחה" required></div><div class="form-group"><label>תעודת זהות</label><input type="text" id="idNumber" placeholder="הכנס ת.ז" pattern="[0-9]{9}" maxlength="9" required></div><div class="form-group"><label>טלפון</label><input type="tel" id="phone" placeholder="05X-XXXXXXX" required></div><button type="submit" class="btn" id="submitBtn">✋ תפוס את המשלוח!</button></form></div><div class="card success" id="successMsg"><div class="success-icon">🎉</div><h2>תפסת את המשלוח!</h2><p>הפרטים המלאים נשלחו אליך בוואטסאפ</p></div></div><script>document.getElementById("takeForm").addEventListener("submit",async function(e){e.preventDefault();var btn=document.getElementById("submitBtn");btn.disabled=true;btn.textContent="שולח...";document.getElementById("errorMsg").classList.remove("show");var data={firstName:document.getElementById("firstName").value.trim(),lastName:document.getElementById("lastName").value.trim(),idNumber:document.getElementById("idNumber").value.trim(),phone:document.getElementById("phone").value.trim()};try{var res=await fetch("/api/take/${order.id}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});var result=await res.json();if(result.success){document.getElementById("formContainer").classList.add("hidden");document.getElementById("successMsg").classList.add("show")}else{document.getElementById("errorMsg").textContent=result.error;document.getElementById("errorMsg").classList.add("show");btn.disabled=false;btn.textContent="✋ תפוס את המשלוח!"}}catch(err){document.getElementById("errorMsg").textContent="שגיאת תקשורת";document.getElementById("errorMsg").classList.add("show");btn.disabled=false;btn.textContent="✋ תפוס את המשלוח!"}});</script></body></html>`);
 });
 
-// API לתפיסת משלוח
+// API לתפיסת משלוח - משודרג עם לינקים לעדכון סטטוס
 app.post('/api/take/:orderId', async (req, res) => {
   const orderId = req.params.orderId;
   const { firstName, lastName, idNumber, phone } = req.body;
@@ -231,17 +350,33 @@ app.post('/api/take/:orderId', async (req, res) => {
     whatsappId: phone.replace(/^0/, '972').replace(/-/g, '') + '@s.whatsapp.net'
   };
   
+  // לינקים לעדכון סטטוס
+  const pickupUrl = CONFIG.PUBLIC_URL + '/status/' + order.id + '/pickup';
+  
   let fullDetails = '✅ *תפסת את המשלוח ' + order.id + '!*\n\n';
-  fullDetails += '📤 *פרטי השולח:*\nשם: ' + order.senderName + '\nטלפון: ' + order.senderPhone + '\n\n';
+  fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
+  fullDetails += '📤 *פרטי השולח:*\n';
+  fullDetails += '👤 שם: ' + order.senderName + '\n';
+  fullDetails += '📞 טלפון: ' + order.senderPhone + '\n\n';
   fullDetails += '📍 *כתובת איסוף:*\n' + order.pickupAddress + '\n\n';
-  fullDetails += '📥 *פרטי המקבל:*\nשם: ' + order.receiverName + '\nטלפון: ' + order.receiverPhone + '\n\n';
-  fullDetails += '🏠 *כתובת מסירה:*\n' + order.deliveryAddress + '\n\n';
-  if (order.details) fullDetails += '📝 *פרטים:*\n' + order.details + '\n\n';
-  fullDetails += '💰 *תשלום:* ₪' + order.courierPayout + '\n\n';
-  fullDetails += '🔗 *ניווט לאיסוף:*\nhttps://waze.com/ul?q=' + encodeURIComponent(order.pickupAddress) + '\n\nבהצלחה! 🚀';
+  fullDetails += '🔗 *ניווט לאיסוף:*\nhttps://waze.com/ul?q=' + encodeURIComponent(order.pickupAddress) + '\n';
+  fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
+  fullDetails += '📥 *פרטי המקבל:*\n';
+  fullDetails += '👤 שם: ' + order.receiverName + '\n';
+  fullDetails += '📞 טלפון: ' + order.receiverPhone + '\n\n';
+  fullDetails += '🏠 *כתובת מסירה:*\n' + order.deliveryAddress + '\n';
+  fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
+  if (order.details) fullDetails += '📝 *פרטים:*\n' + order.details + '\n━━━━━━━━━━━━━━━━━━━━\n';
+  fullDetails += '💰 *תשלום:* ₪' + order.courierPayout + '\n';
+  fullDetails += '━━━━━━━━━━━━━━━━━━━━\n\n';
+  fullDetails += '📦 *אספת? לחץ כאן:*\n' + pickupUrl + '\n\n';
+  fullDetails += 'בהצלחה! 🚀';
 
-  try { await sendWhatsAppMessage(order.courier.whatsappId, fullDetails); } catch (error) { console.error('Failed to send details to courier:', error.message); }
-  try { await sendWhatsAppMessage(CONFIG.WHAPI.COURIERS_GROUP_ID, '✅ המשלוח ' + order.id + ' נתפס על ידי ' + firstName + ' ' + lastName); } catch (error) { console.error('Failed to notify group:', error.message); }
+  try { await sendWhatsAppMessage(order.courier.whatsappId, fullDetails); } 
+  catch (error) { console.error('Failed to send details to courier:', error.message); }
+  
+  try { await sendWhatsAppMessage(CONFIG.WHAPI.COURIERS_GROUP_ID, '✅ המשלוח ' + order.id + ' נתפס על ידי ' + firstName + ' ' + lastName); } 
+  catch (error) { console.error('Failed to notify group:', error.message); }
   
   broadcast({ type: 'order_taken', data: { orderId: orderId, courier: order.courier } });
   console.log('🏍️ Order ' + orderId + ' taken by ' + firstName + ' ' + lastName);
@@ -261,14 +396,14 @@ app.post('/webhook/whapi', async (req, res) => {
       if (message.type === 'text' && message.text?.body) {
         const text = message.text.body.toLowerCase();
         
-        if (text.includes('נאסף') || text.includes('picked')) {
+        if (text.includes('נאסף') || text.includes('picked') || text.includes('אספתי')) {
           const activeOrder = db.orders.find(o => o.status === 'taken' && o.courier?.whatsappId === senderPhone);
-          if (activeOrder) await handleOrderPicked(activeOrder.id);
+          if (activeOrder) await handleOrderPicked(activeOrder.id, true);
         }
         
-        if (text.includes('נמסר') || text.includes('delivered')) {
+        if (text.includes('נמסר') || text.includes('delivered') || text.includes('מסרתי')) {
           const pickedOrder = db.orders.find(o => o.status === 'picked' && o.courier?.whatsappId === senderPhone);
-          if (pickedOrder) await handleOrderDelivered(pickedOrder.id);
+          if (pickedOrder) await handleOrderDelivered(pickedOrder.id, true);
         }
       }
     }
@@ -291,10 +426,6 @@ app.get('/', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>M.M.H Delivery System</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
-    .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-  </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
   <div id="app"></div>
@@ -307,32 +438,22 @@ app.get('/', (req, res) => {
     
     function connectWebSocket() {
       ws = new WebSocket(WS_URL);
-      
-      ws.onopen = () => {
-        connected = true;
-        render();
-        showToast('מחובר לשרת', 'success');
-      };
-      
+      ws.onopen = () => { connected = true; render(); showToast('מחובר לשרת', 'success'); };
       ws.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         if (msg.type === 'orders_init') orders = msg.data.orders || [];
         else if (msg.type === 'new_order') { orders.unshift(msg.data.order); showToast('הזמנה חדשה: ' + msg.data.order.id, 'info'); }
         else if (msg.type === 'order_published') orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'published'} : o);
         else if (msg.type === 'order_taken') { orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'taken', courier: msg.data.courier} : o); showToast('נתפס: ' + msg.data.orderId, 'success'); }
-        else if (msg.type === 'order_picked') orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'picked'} : o);
+        else if (msg.type === 'order_picked') { orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'picked'} : o); showToast('נאסף: ' + msg.data.orderId, 'info'); }
         else if (msg.type === 'order_delivered') { orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'delivered'} : o); showToast('נמסר: ' + msg.data.orderId, 'success'); }
-        else if (msg.type === 'order_cancelled') orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'cancelled'} : o);
+        else if (msg.type === 'order_cancelled') { orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'cancelled'} : o); showToast('בוטל: ' + msg.data.orderId, 'error'); }
         render();
       };
-      
       ws.onclose = () => { connected = false; render(); setTimeout(connectWebSocket, 3000); };
-      ws.onerror = () => { connected = false; render(); };
     }
     
-    function send(type, data = {}) {
-      if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type, ...data }));
-    }
+    function send(type, data = {}) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type, ...data })); }
     
     function showToast(message, type) {
       const toast = document.createElement('div');
@@ -343,21 +464,18 @@ app.get('/', (req, res) => {
       setTimeout(() => toast.remove(), 3000);
     }
     
-    function getStatusText(s) {
-      return { new: 'חדש', published: 'פורסם', taken: 'נתפס', picked: 'נאסף', delivered: 'נמסר', cancelled: 'בוטל' }[s] || s;
-    }
-    
+    function getStatusText(s) { return { new: 'חדש', published: 'פורסם', taken: 'נתפס', picked: 'נאסף', delivered: 'נמסר', cancelled: 'בוטל' }[s] || s; }
     function getStatusColor(s) {
       const c = { new: 'slate', published: 'amber', taken: 'blue', picked: 'purple', delivered: 'emerald', cancelled: 'red' }[s] || 'slate';
       return 'bg-' + c + '-500/20 text-' + c + '-400 border-' + c + '-500/50';
     }
-    
     function formatCurrency(n) { return '₪' + (n || 0).toLocaleString(); }
     
     function render() {
       const stats = {
         total: orders.length,
         new: orders.filter(o => o.status === 'new').length,
+        published: orders.filter(o => o.status === 'published').length,
         active: orders.filter(o => ['taken', 'picked'].includes(o.status)).length,
         delivered: orders.filter(o => o.status === 'delivered').length,
         revenue: orders.filter(o => o.status === 'delivered').reduce((s, o) => s + (o.price || 0), 0)
@@ -380,22 +498,26 @@ app.get('/', (req, res) => {
         </header>
         
         <main class="max-w-7xl mx-auto px-4 py-6">
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-slate-800/50 rounded-2xl p-5 border border-slate-700/50">
-              <div class="p-3 rounded-xl bg-blue-500/20 text-blue-400 w-fit text-xl">📦</div>
-              <div class="mt-4"><div class="text-2xl font-bold">\${stats.total}</div><div class="text-sm text-slate-400">סה״כ</div></div>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+              <div class="text-2xl font-bold">\${stats.total}</div>
+              <div class="text-sm text-slate-400">סה״כ</div>
             </div>
-            <div class="bg-slate-800/50 rounded-2xl p-5 border border-slate-700/50">
-              <div class="p-3 rounded-xl bg-amber-500/20 text-amber-400 w-fit text-xl">⏳</div>
-              <div class="mt-4"><div class="text-2xl font-bold">\${stats.new}</div><div class="text-sm text-slate-400">ממתינים</div></div>
+            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+              <div class="text-2xl font-bold text-amber-400">\${stats.new + stats.published}</div>
+              <div class="text-sm text-slate-400">ממתינים</div>
             </div>
-            <div class="bg-slate-800/50 rounded-2xl p-5 border border-slate-700/50">
-              <div class="p-3 rounded-xl bg-purple-500/20 text-purple-400 w-fit text-xl">🏍️</div>
-              <div class="mt-4"><div class="text-2xl font-bold">\${stats.active}</div><div class="text-sm text-slate-400">פעילים</div></div>
+            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+              <div class="text-2xl font-bold text-purple-400">\${stats.active}</div>
+              <div class="text-sm text-slate-400">פעילים</div>
             </div>
-            <div class="bg-slate-800/50 rounded-2xl p-5 border border-slate-700/50">
-              <div class="p-3 rounded-xl bg-emerald-500/20 text-emerald-400 w-fit text-xl">💰</div>
-              <div class="mt-4"><div class="text-2xl font-bold">\${formatCurrency(stats.revenue)}</div><div class="text-sm text-slate-400">\${stats.delivered} נמסרו</div></div>
+            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+              <div class="text-2xl font-bold text-emerald-400">\${stats.delivered}</div>
+              <div class="text-sm text-slate-400">נמסרו</div>
+            </div>
+            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+              <div class="text-2xl font-bold text-emerald-400">\${formatCurrency(stats.revenue)}</div>
+              <div class="text-sm text-slate-400">הכנסות</div>
             </div>
           </div>
           
@@ -433,11 +555,16 @@ app.get('/', (req, res) => {
                   \${order.courier ? \`<div class="bg-slate-700/50 rounded-xl p-3"><div class="text-xs text-slate-500">שליח</div><div class="text-white font-medium">\${order.courier.name}</div><div class="text-sm text-slate-400">\${order.courier.phone}</div></div>\` : ''}
                   \${order.status === 'new' ? \`
                     <div class="flex gap-2 pt-2">
-                      <button onclick="publishOrder('\${order.id}')" class="flex-1 bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-2 rounded-xl font-medium">📤 פרסם בקבוצה</button>
+                      <button onclick="publishOrder('\${order.id}')" class="flex-1 bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-2 rounded-xl font-medium">📤 פרסם</button>
                       <button onclick="cancelOrder('\${order.id}')" class="px-4 bg-red-500/20 text-red-400 rounded-xl">✕</button>
                     </div>
                   \` : ''}
-                  \${order.status === 'published' ? \`<button onclick="cancelOrder('\${order.id}')" class="w-full bg-red-500/20 text-red-400 py-2 rounded-xl font-medium">בטל משלוח</button>\` : ''}
+                  \${order.status === 'published' ? \`
+                    <button onclick="cancelOrder('\${order.id}')" class="w-full bg-red-500/20 text-red-400 py-2 rounded-xl font-medium">❌ בטל משלוח</button>
+                  \` : ''}
+                  \${order.status === 'taken' ? \`
+                    <button onclick="cancelOrder('\${order.id}')" class="w-full bg-red-500/20 text-red-400 py-2 rounded-xl font-medium">❌ בטל משלוח</button>
+                  \` : ''}
                 </div>
               </div>
             \`).join('')}
@@ -445,13 +572,12 @@ app.get('/', (req, res) => {
           
           \${orders.length === 0 ? '<div class="text-center py-12"><div class="text-6xl mb-4">📦</div><h3 class="text-lg font-medium mb-2">אין הזמנות</h3><p class="text-slate-400">לחץ "הזמנה חדשה" להתחיל</p></div>' : ''}
         </main>
-        
         <div id="modal"></div>
       \`;
     }
     
     function publishOrder(id) { send('publish', { orderId: id }); showToast('מפרסם...', 'info'); }
-    function cancelOrder(id) { if (confirm('לבטל?')) send('cancel', { orderId: id }); }
+    function cancelOrder(id) { if (confirm('האם לבטל את המשלוח?')) { send('cancel', { orderId: id }); } }
     
     function showNewOrderForm() {
       document.getElementById('modal').innerHTML = \`
@@ -488,7 +614,7 @@ app.get('/', (req, res) => {
     
     function submitOrder(e) {
       e.preventDefault();
-      const data = {
+      send('create_order', { data: {
         senderName: document.getElementById('senderName').value,
         senderPhone: document.getElementById('senderPhone').value,
         pickupAddress: document.getElementById('pickupAddress').value,
@@ -498,8 +624,7 @@ app.get('/', (req, res) => {
         details: document.getElementById('details').value,
         price: parseInt(document.getElementById('price').value) || 0,
         priority: document.getElementById('priority').value
-      };
-      send('create_order', { data });
+      }});
       closeModal();
       showToast('יוצר הזמנה...', 'info');
     }
@@ -514,9 +639,8 @@ app.get('/', (req, res) => {
 // ==================== START ====================
 server.listen(CONFIG.PORT, '0.0.0.0', () => {
   console.log('\\n╔══════════════════════════════════════════════════════════════╗');
-  console.log('║     🚚  M.M.H Delivery System - Backend Server  🚚          ║');
+  console.log('║     🚚  M.M.H Delivery System v2.0  🚚                       ║');
   console.log('║     Server running on port ' + CONFIG.PORT + '                              ║');
   console.log('║     Public URL: ' + CONFIG.PUBLIC_URL);
-  console.log('║     Webhook: ' + CONFIG.PUBLIC_URL + '/webhook/whapi');
   console.log('╚══════════════════════════════════════════════════════════════╝\\n');
 });
