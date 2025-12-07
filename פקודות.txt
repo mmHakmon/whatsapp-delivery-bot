@@ -1,0 +1,5 @@
+PowerSHell
+cloudflared tunnel --url http://localhost:3001
+
+cmd
+NPM start
