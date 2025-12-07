@@ -362,10 +362,8 @@ app.post('/api/take/:orderId', async (req, res) => {
   fullDetails += '🔗 *ניווט לאיסוף:*\nhttps://waze.com/ul?q=' + encodeURIComponent(order.pickupAddress) + '\n';
   fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
   if (order.details) fullDetails += '📝 *פרטים:*\n' + order.details + '\n━━━━━━━━━━━━━━━━━━━━\n';
-  fullDetails += '💰 *תשלום אחרי עמלה:* ₪' + order.courierPayout + '\n';
-  fullDetails += '━━━━━━━━━━━━━━━━━━━━\n\n';
   fullDetails += '📦 *אספת? לחץ כאן:*\n' + pickupUrl + '\n\n';
-  fullDetails += 'בהצלחה! 🚀';
+  fullDetails += 'אחרי אישור איסוף החבילה תקבל פרטי מסירה ! 🚀';
 
   try { await sendWhatsAppMessage(order.courier.whatsappId, fullDetails); } 
   catch (error) { console.error('Failed to send details to courier:', error.message); }
