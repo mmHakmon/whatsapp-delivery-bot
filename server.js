@@ -1,639 +1,673 @@
 /**
- * M.M.H Delivery System - Backend + Frontend Server
- * Version 2.0 - With Interactive Status Updates
+ * M.M.H Delivery System Pro v3.0
+ * Full featured delivery management with PostgreSQL
  */
 
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const cors = require('cors');
 const axios = require('axios');
+const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
-// ==================== CONFIGURATION ====================
+// ==================== CONFIG ====================
 const CONFIG = {
   PORT: process.env.PORT || 3001,
   PUBLIC_URL: process.env.PUBLIC_URL || 'https://mmh-delivery.onrender.com',
+  JWT_SECRET: process.env.JWT_SECRET || 'mmh-secret-change-this',
   WHAPI: {
     API_URL: 'https://gate.whapi.cloud',
-    TOKEN: process.env.WHAPI_TOKEN || 'a52q50FVgRAJNQaP4y165EoHx6fDixXw',
-    COURIERS_GROUP_ID: process.env.COURIERS_GROUP_ID || '120363404988099203@g.us',
+    TOKEN: process.env.WHAPI_TOKEN,
+    GROUP_ID: process.env.COURIERS_GROUP_ID,
   },
-  COMMISSION_RATE: parseFloat(process.env.COMMISSION_RATE) || 0.25,
+  COMMISSION: parseFloat(process.env.COMMISSION_RATE) || 0.25,
 };
 
 // ==================== DATABASE ====================
-const db = {
-  orders: [],
-  orderCounter: 100,
-};
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
 
-// ==================== EXPRESS APP ====================
+// ==================== EXPRESS ====================
 const app = express();
-app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
+app.use(cors({ origin: '*' }));
 app.use(express.json());
-app.use((req, res, next) => { res.setHeader('ngrok-skip-browser-warning', 'true'); next(); });
-
 const server = http.createServer(app);
 
-// ==================== WEBSOCKET SERVER ====================
+// ==================== AUTH ====================
+const verifyToken = (token) => {
+  try { return jwt.verify(token, CONFIG.JWT_SECRET); } 
+  catch (e) { return null; }
+};
+
+const requireAuth = (req, res, next) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'נדרשת התחברות' });
+  const decoded = verifyToken(token);
+  if (!decoded) return res.status(401).json({ error: 'טוקן לא תקין' });
+  req.user = decoded;
+  next();
+};
+
+const requireRole = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.user?.role)) return res.status(403).json({ error: 'אין הרשאה' });
+  next();
+};
+
+// ==================== WEBSOCKET ====================
 const wss = new WebSocket.Server({ server });
+const clients = new Map();
 
-const broadcast = (message) => {
-  const data = JSON.stringify(message);
-  wss.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) client.send(data);
-  });
+const broadcast = (msg) => {
+  const data = JSON.stringify(msg);
+  wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(data); });
 };
 
-wss.on('connection', (ws) => {
+wss.on('connection', async (ws) => {
   console.log('🔌 Client connected');
-  ws.send(JSON.stringify({ type: 'orders_init', data: { orders: db.orders } }));
+  try {
+    const orders = await getOrders();
+    const stats = await getStats();
+    ws.send(JSON.stringify({ type: 'init', data: { orders, stats } }));
+  } catch (e) { console.error('Init error:', e); }
   
-  ws.on('message', async (message) => {
+  ws.on('message', async (msg) => {
     try {
-      const { type, orderId, data } = JSON.parse(message);
-      switch (type) {
-        case 'create_order': await handleCreateOrder(data); break;
-        case 'publish': await handlePublishOrder(orderId); break;
-        case 'picked': await handleOrderPicked(orderId); break;
-        case 'delivered': await handleOrderDelivered(orderId); break;
-        case 'cancel': await handleCancelOrder(orderId); break;
+      const { type, token, ...data } = JSON.parse(msg);
+      if (type === 'auth') {
+        const user = verifyToken(data.token);
+        if (user) { clients.set(ws, user); ws.send(JSON.stringify({ type: 'auth_success' })); }
+        return;
       }
-    } catch (error) { console.error('WebSocket message error:', error); }
+      const user = clients.get(ws);
+      if (type === 'create_order' && user) {
+        const order = await createOrder(data.data, user.id);
+        broadcast({ type: 'new_order', data: { order } });
+      } else if (type === 'publish') {
+        await publishOrder(data.orderId);
+      } else if (type === 'cancel') {
+        await cancelOrder(data.orderId, data.reason, user?.id);
+      }
+    } catch (e) { console.error('WS Error:', e); }
   });
   
-  ws.on('close', () => console.log('🔌 Client disconnected'));
-  const pingInterval = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); }, 30000);
-  ws.on('close', () => clearInterval(pingInterval));
+  ws.on('close', () => { clients.delete(ws); console.log('🔌 Disconnected'); });
+  const ping = setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.ping(); }, 30000);
+  ws.on('close', () => clearInterval(ping));
 });
 
-// ==================== WHAPI FUNCTIONS ====================
-const sendWhatsAppMessage = async (chatId, text) => {
+// ==================== WHATSAPP ====================
+const sendWhatsApp = async (to, message) => {
+  if (!CONFIG.WHAPI.TOKEN) { console.log('📱 WA:', message.substring(0, 50)); return; }
   try {
-    const response = await axios.post(
-      CONFIG.WHAPI.API_URL + '/messages/text',
-      { to: chatId, body: text },
-      { headers: { Authorization: 'Bearer ' + CONFIG.WHAPI.TOKEN } }
-    );
-    return response.data;
-  } catch (error) {
-    console.error('WhatsApp send error:', error.response?.data || error.message);
-    throw error;
+    await axios.post(CONFIG.WHAPI.API_URL + '/messages/text', { to, body: message }, 
+      { headers: { Authorization: 'Bearer ' + CONFIG.WHAPI.TOKEN } });
+  } catch (e) { console.error('WA error:', e.message); }
+};
+
+// ==================== DB HELPERS ====================
+const getOrders = async (filters = {}) => {
+  let q = `SELECT o.*, c.first_name as cfn, c.last_name as cln, c.phone as cph 
+           FROM orders o LEFT JOIN couriers c ON o.courier_id = c.id WHERE 1=1`;
+  const p = [];
+  let i = 1;
+  if (filters.status) { q += ` AND o.status = $${i++}`; p.push(filters.status); }
+  if (filters.search) { q += ` AND (o.order_number ILIKE $${i} OR o.sender_name ILIKE $${i})`; p.push(`%${filters.search}%`); i++; }
+  q += ' ORDER BY o.created_at DESC LIMIT 200';
+  const r = await pool.query(q, p);
+  return r.rows.map(formatOrder);
+};
+
+const getStats = async () => {
+  const r = await pool.query(`
+    SELECT COUNT(*) as total,
+      COUNT(CASE WHEN status='new' THEN 1 END) as new,
+      COUNT(CASE WHEN status='published' THEN 1 END) as published,
+      COUNT(CASE WHEN status IN ('taken','picked') THEN 1 END) as active,
+      COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered,
+      COALESCE(SUM(CASE WHEN status='delivered' THEN price END),0) as revenue,
+      COALESCE(SUM(CASE WHEN status='delivered' THEN commission END),0) as commission
+    FROM orders WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'`);
+  return r.rows[0];
+};
+
+const formatOrder = (o) => ({
+  id: o.id, orderNumber: o.order_number, senderName: o.sender_name, senderPhone: o.sender_phone,
+  pickupAddress: o.pickup_address, receiverName: o.receiver_name, receiverPhone: o.receiver_phone,
+  deliveryAddress: o.delivery_address, details: o.details, priority: o.priority,
+  price: parseFloat(o.price), commission: parseFloat(o.commission||0), courierPayout: parseFloat(o.courier_payout||0),
+  status: o.status, createdAt: o.created_at,
+  courier: o.courier_id ? { id: o.courier_id, name: `${o.cfn} ${o.cln}`, phone: o.cph } : null
+});
+
+// ==================== ORDER FUNCTIONS ====================
+const createOrder = async (data, userId) => {
+  const cnt = await pool.query("SELECT COALESCE(MAX(CAST(SUBSTRING(order_number FROM 5) AS INTEGER)),100)+1 as n FROM orders");
+  const orderNum = 'MMH-' + cnt.rows[0].n;
+  const comm = Math.round(data.price * CONFIG.COMMISSION);
+  const payout = data.price - comm;
+  
+  const r = await pool.query(`
+    INSERT INTO orders (order_number,sender_name,sender_phone,pickup_address,receiver_name,receiver_phone,
+      delivery_address,details,priority,price,commission_rate,commission,courier_payout,created_by)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+    [orderNum,data.senderName,data.senderPhone,data.pickupAddress,data.receiverName,data.receiverPhone,
+     data.deliveryAddress,data.details||'',data.priority||'normal',data.price,CONFIG.COMMISSION*100,comm,payout,userId]);
+  console.log('📦 Created:', orderNum);
+  return formatOrder(r.rows[0]);
+};
+
+const publishOrder = async (id) => {
+  const r = await pool.query("UPDATE orders SET status='published',published_at=NOW() WHERE id=$1 RETURNING *",[id]);
+  const o = r.rows[0]; if (!o) return;
+  const url = CONFIG.PUBLIC_URL + '/take/' + o.order_number;
+  const emoji = {normal:'📦',express:'⚡',urgent:'🚨'}[o.priority]||'📦';
+  let msg = `${emoji} *משלוח חדש - ${o.order_number}*\n\n📍 *איסוף:* ${o.pickup_address}\n🏠 *יעד:* ${o.delivery_address}\n`;
+  if (o.details) msg += `📝 *פרטים:* ${o.details}\n`;
+  msg += `\n💰 *תשלום:* ₪${o.courier_payout}\n\n👇 *לתפיסה:*\n${url}`;
+  if (CONFIG.WHAPI.GROUP_ID) await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, msg);
+  broadcast({ type: 'order_updated', data: { order: formatOrder(o) } });
+  console.log('📤 Published:', o.order_number);
+};
+
+const takeOrder = async (orderNum, cd) => {
+  const or = await pool.query("SELECT * FROM orders WHERE order_number=$1 AND status='published'",[orderNum]);
+  const o = or.rows[0]; if (!o) return { success: false, error: 'המשלוח כבר נתפס' };
+  
+  let cr = await pool.query("SELECT * FROM couriers WHERE id_number=$1",[cd.idNumber]);
+  if (!cr.rows[0]) {
+    const waId = cd.phone.replace(/^0/,'972').replace(/-/g,'')+'@s.whatsapp.net';
+    cr = await pool.query("INSERT INTO couriers (first_name,last_name,id_number,phone,whatsapp_id) VALUES ($1,$2,$3,$4,$5) RETURNING *",
+      [cd.firstName,cd.lastName,cd.idNumber,cd.phone,waId]);
   }
+  const cid = cr.rows[0].id, waId = cr.rows[0].whatsapp_id;
+  
+  await pool.query("UPDATE orders SET status='taken',taken_at=NOW(),courier_id=$1 WHERE id=$2",[cid,o.id]);
+  
+  const pickupUrl = CONFIG.PUBLIC_URL + '/status/' + o.order_number + '/pickup';
+  let msg = `✅ *תפסת את המשלוח ${o.order_number}!*\n━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📤 *פרטי השולח:*\n👤 שם: ${o.sender_name}\n📞 טלפון: ${o.sender_phone}\n\n`;
+  msg += `📍 *כתובת איסוף:*\n${o.pickup_address}\n\n`;
+  msg += `🔗 *ניווט:*\nhttps://waze.com/ul?q=${encodeURIComponent(o.pickup_address)}\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📥 *פרטי המקבל:*\n👤 שם: ${o.receiver_name}\n📞 טלפון: ${o.receiver_phone}\n\n`;
+  msg += `🏠 *כתובת מסירה:*\n${o.delivery_address}\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+  if (o.details) msg += `📝 *פרטים:*\n${o.details}\n━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `💰 *תשלום אחרי עמלה:* ₪${o.courier_payout}\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n\n📦 *אספת? לחץ כאן:*\n${pickupUrl}\n\nבהצלחה! 🚀`;
+  
+  await sendWhatsApp(waId, msg);
+  if (CONFIG.WHAPI.GROUP_ID) await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, `✅ המשלוח ${o.order_number} נתפס על ידי ${cd.firstName} ${cd.lastName}`);
+  
+  const upd = await pool.query(`SELECT o.*,c.first_name as cfn,c.last_name as cln,c.phone as cph FROM orders o 
+    LEFT JOIN couriers c ON o.courier_id=c.id WHERE o.id=$1`,[o.id]);
+  broadcast({ type: 'order_updated', data: { order: formatOrder(upd.rows[0]) } });
+  console.log('🏍️ Taken:', o.order_number);
+  return { success: true };
 };
 
-// ==================== ORDER HANDLERS ====================
-const handleCreateOrder = async (data) => {
-  const orderId = 'MMH-' + (++db.orderCounter);
-  const commission = Math.round(data.price * CONFIG.COMMISSION_RATE);
+const pickupOrder = async (orderNum) => {
+  const r = await pool.query("UPDATE orders SET status='picked',picked_at=NOW() WHERE order_number=$1 AND status='taken' RETURNING *",[orderNum]);
+  const o = r.rows[0]; if (!o) return { success: false };
   
-  const order = {
-    id: orderId,
-    senderName: data.senderName,
-    senderPhone: data.senderPhone,
-    pickupAddress: data.pickupAddress,
-    receiverName: data.receiverName,
-    receiverPhone: data.receiverPhone,
-    deliveryAddress: data.deliveryAddress,
-    details: data.details || '',
-    price: data.price,
-    commission: commission,
-    courierPayout: data.price - commission,
-    priority: data.priority || 'normal',
-    status: 'new',
-    createdAt: new Date(),
-    courier: null,
-  };
+  const cr = await pool.query("SELECT * FROM couriers WHERE id=$1",[o.courier_id]);
+  if (cr.rows[0]?.whatsapp_id) {
+    const url = CONFIG.PUBLIC_URL + '/status/' + o.order_number + '/deliver';
+    let msg = `📦 *אישור איסוף - ${o.order_number}*\n\n✅ המשלוח סומן כנאסף!\n\n`;
+    msg += `🏠 *כתובת מסירה:*\n${o.delivery_address}\n\n`;
+    msg += `👤 *מקבל:* ${o.receiver_name}\n📞 *טלפון:* ${o.receiver_phone}\n\n`;
+    msg += `🔗 *ניווט:*\nhttps://waze.com/ul?q=${encodeURIComponent(o.delivery_address)}\n\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n📬 *מסרת? לחץ כאן:*\n${url}`;
+    await sendWhatsApp(cr.rows[0].whatsapp_id, msg);
+  }
   
-  db.orders.unshift(order);
-  broadcast({ type: 'new_order', data: { order: order } });
-  console.log('📦 New order created: ' + orderId);
-  return order;
+  const upd = await pool.query(`SELECT o.*,c.first_name as cfn,c.last_name as cln,c.phone as cph FROM orders o 
+    LEFT JOIN couriers c ON o.courier_id=c.id WHERE o.id=$1`,[o.id]);
+  broadcast({ type: 'order_updated', data: { order: formatOrder(upd.rows[0]) } });
+  return { success: true };
 };
 
-const handlePublishOrder = async (orderId) => {
-  const order = db.orders.find(o => o.id === orderId);
-  if (!order) return;
+const deliverOrder = async (orderNum) => {
+  const r = await pool.query("UPDATE orders SET status='delivered',delivered_at=NOW() WHERE order_number=$1 AND status='picked' RETURNING *",[orderNum]);
+  const o = r.rows[0]; if (!o) return { success: false };
   
-  order.status = 'published';
-  const priorityEmoji = { normal: '📦', express: '⚡', urgent: '🚨' };
-  const priorityText = order.priority === 'urgent' ? 'דחוף!' : order.priority === 'express' ? 'אקספרס' : 'רגיל';
-  const takeUrl = CONFIG.PUBLIC_URL + '/take/' + order.id;
+  await pool.query("UPDATE couriers SET total_deliveries=total_deliveries+1,total_earned=total_earned+$1,balance=balance+$1 WHERE id=$2",
+    [o.courier_payout,o.courier_id]);
   
-  let message = priorityEmoji[order.priority] + ' *משלוח חדש - ' + order.id + '*\n\n';
-  message += '📍 *איסוף:* ' + order.pickupAddress + '\n';
-  message += '🏠 *יעד:* ' + order.deliveryAddress + '\n';
-  if (order.details) message += '📝 *פרטים:* ' + order.details + '\n';
-  message += '\n💰 *תשלום לשליח:* ₪' + order.courierPayout + '\n';
-  message += '⏰ ' + priorityText + '\n\n';
-  message += '👇 *לתפיסת המשלוח לחץ כאן:*\n' + takeUrl;
+  const cr = await pool.query("SELECT * FROM couriers WHERE id=$1",[o.courier_id]);
+  if (cr.rows[0]?.whatsapp_id) {
+    await sendWhatsApp(cr.rows[0].whatsapp_id, `✅ *המשלוח ${o.order_number} נמסר!*\n\n━━━━━━━━━━━━━━━━━━━━\n💰 *רווח:* ₪${o.courier_payout}\n━━━━━━━━━━━━━━━━━━━━\n\nתודה! 🙏`);
+  }
+  if (CONFIG.WHAPI.GROUP_ID) await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, `✅ המשלוח ${o.order_number} נמסר!`);
+  
+  const upd = await pool.query(`SELECT o.*,c.first_name as cfn,c.last_name as cln,c.phone as cph FROM orders o 
+    LEFT JOIN couriers c ON o.courier_id=c.id WHERE o.id=$1`,[o.id]);
+  broadcast({ type: 'order_updated', data: { order: formatOrder(upd.rows[0]) } });
+  broadcast({ type: 'stats_updated', data: await getStats() });
+  console.log('✅ Delivered:', o.order_number);
+  return { success: true };
+};
 
+const cancelOrder = async (id, reason, userId) => {
+  const r = await pool.query("UPDATE orders SET status='cancelled',cancelled_at=NOW(),cancel_reason=$1 WHERE id=$2 RETURNING *",[reason,id]);
+  const o = r.rows[0]; if (!o) return;
+  
+  if (o.courier_id) {
+    const cr = await pool.query("SELECT * FROM couriers WHERE id=$1",[o.courier_id]);
+    if (cr.rows[0]?.whatsapp_id) await sendWhatsApp(cr.rows[0].whatsapp_id, `❌ *המשלוח ${o.order_number} בוטל*`);
+  }
+  if (CONFIG.WHAPI.GROUP_ID && ['published','taken','picked'].includes(o.status)) 
+    await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, `❌ המשלוח ${o.order_number} בוטל`);
+  
+  broadcast({ type: 'order_updated', data: { order: formatOrder(o) } });
+  console.log('❌ Cancelled:', o.order_number);
+};
+
+// ==================== API ROUTES ====================
+app.post('/api/auth/login', async (req, res) => {
   try {
-    await sendWhatsAppMessage(CONFIG.WHAPI.COURIERS_GROUP_ID, message);
-    broadcast({ type: 'order_published', data: { orderId: orderId } });
-    console.log('📤 Order ' + orderId + ' published to couriers group');
-  } catch (error) {
-    console.error('Failed to publish order ' + orderId + ':', error.message);
-  }
-};
-
-const handleOrderPicked = async (orderId, fromCourier = false) => {
-  const order = db.orders.find(o => o.id === orderId);
-  if (!order) return;
-  
-  order.status = 'picked';
-  order.pickedAt = new Date();
-  
-  // שלח הודעה לשליח עם לינק לסימון מסירה
-  if (order.courier && order.courier.whatsappId) {
-    const deliverUrl = CONFIG.PUBLIC_URL + '/status/' + order.id + '/deliver';
+    const { username, password } = req.body;
+    const r = await pool.query("SELECT * FROM users WHERE username=$1 AND active=true",[username]);
+    const user = r.rows[0];
+    if (!user || !(await bcrypt.compare(password, user.password))) 
+      return res.json({ success: false, error: 'שם משתמש או סיסמה שגויים' });
     
-    let message = '📦 *אישור איסוף - ' + order.id + '*\n\n';
-    message += '✅ המשלוח סומן כנאסף!\n\n';
-    message += '🏠 *כתובת מסירה:*\n' + order.deliveryAddress + '\n\n';
-    message += '👤 *מקבל:* ' + order.receiverName + '\n';
-    message += '📞 *טלפון:* ' + order.receiverPhone + '\n\n';
-    message += '🔗 *ניווט למסירה:*\nhttps://waze.com/ul?q=' + encodeURIComponent(order.deliveryAddress) + '\n\n';
-    message += '━━━━━━━━━━━━━━━━━━━━\n';
-    message += '📬 *מסרת? לחץ כאן:*\n' + deliverUrl;
-    
-    try { await sendWhatsAppMessage(order.courier.whatsappId, message); } 
-    catch (error) { console.error('Failed to send pickup confirmation:', error.message); }
-  }
-  
-  broadcast({ type: 'order_picked', data: { orderId: orderId } });
-  console.log('📦 Order ' + orderId + ' picked up');
-};
-
-const handleOrderDelivered = async (orderId, fromCourier = false) => {
-  const order = db.orders.find(o => o.id === orderId);
-  if (!order) return;
-  
-  order.status = 'delivered';
-  order.deliveredAt = new Date();
-  
-  if (order.courier && order.courier.whatsappId) {
-    let message = '✅ *המשלוח ' + order.id + ' נמסר בהצלחה!*\n\n';
-    message += '━━━━━━━━━━━━━━━━━━━━\n';
-    message += '💰 *רווח מהמשלוח:* ₪' + order.courierPayout + '\n';
-    message += '━━━━━━━━━━━━━━━━━━━━\n\n';
-    message += 'תודה רבה על העבודה! 🙏\n';
-    message += 'מחכים למשלוח הבא 🚀';
-    
-    try { await sendWhatsAppMessage(order.courier.whatsappId, message); } 
-    catch (error) { console.error('Failed to send delivery confirmation:', error.message); }
-  }
-  
-  // הודעה לקבוצה
-  try { 
-    await sendWhatsAppMessage(CONFIG.WHAPI.COURIERS_GROUP_ID, '✅ המשלוח ' + order.id + ' נמסר בהצלחה!'); 
-  } catch (error) { console.error('Failed to notify group:', error.message); }
-  
-  broadcast({ type: 'order_delivered', data: { orderId: orderId } });
-  console.log('✅ Order ' + orderId + ' delivered');
-};
-
-const handleCancelOrder = async (orderId) => {
-  const order = db.orders.find(o => o.id === orderId);
-  if (!order) return;
-  
-  const previousStatus = order.status;
-  order.status = 'cancelled';
-  order.cancelledAt = new Date();
-  
-  if (order.courier && order.courier.whatsappId) {
-    try { await sendWhatsAppMessage(order.courier.whatsappId, '❌ *המשלוח ' + order.id + ' בוטל*\n\nהמשלוח שתפסת בוטל על ידי המנהל.\nמתנצלים על אי הנוחות.'); } 
-    catch (error) { console.error('Failed to notify courier about cancellation:', error.message); }
-  }
-  
-  if (['published', 'taken', 'picked'].includes(previousStatus)) {
-    try { await sendWhatsAppMessage(CONFIG.WHAPI.COURIERS_GROUP_ID, '❌ *המשלוח ' + order.id + ' בוטל*'); } 
-    catch (error) { console.error('Failed to notify group about cancellation:', error.message); }
-  }
-  
-  broadcast({ type: 'order_cancelled', data: { orderId: orderId } });
-  console.log('❌ Order ' + orderId + ' cancelled');
-};
-
-// ==================== STATUS UPDATE PAGES ====================
-// דף עדכון סטטוס - איסוף
-app.get('/status/:orderId/pickup', (req, res) => {
-  const order = db.orders.find(o => o.id === req.params.orderId);
-  
-  if (!order) {
-    return res.send(statusPage('❌', 'הזמנה לא נמצאה', 'ההזמנה אינה קיימת במערכת', '#ef4444'));
-  }
-  
-  if (order.status !== 'taken') {
-    return res.send(statusPage('ℹ️', 'לא ניתן לעדכן', 'המשלוח כבר עודכן או בוטל', '#f59e0b'));
-  }
-  
-  res.send(statusPage('📦', 'אישור איסוף', `האם אספת את המשלוח ${order.id}?`, '#10b981', `
-    <div style="display:flex;gap:10px;margin-top:20px;">
-      <button onclick="confirmPickup()" style="flex:1;padding:15px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:12px;color:white;font-size:16px;font-weight:bold;cursor:pointer;">✅ כן, אספתי</button>
-      <button onclick="window.close()" style="flex:1;padding:15px;background:#334155;border:none;border-radius:12px;color:white;font-size:16px;cursor:pointer;">❌ לא עדיין</button>
-    </div>
-    <script>
-      async function confirmPickup() {
-        try {
-          const res = await fetch('/api/status/${order.id}/pickup', { method: 'POST' });
-          const data = await res.json();
-          if (data.success) {
-            document.body.innerHTML = '<div style="text-align:center;padding:50px;"><div style="font-size:60px;margin-bottom:20px;">✅</div><h1 style="color:#10b981;margin-bottom:10px;">נרשם בהצלחה!</h1><p style="color:#94a3b8;">המשלוח סומן כנאסף</p></div>';
-          } else {
-            alert(data.error || 'שגיאה');
-          }
-        } catch (e) { alert('שגיאת תקשורת'); }
-      }
-    </script>
-  `));
+    await pool.query("UPDATE users SET last_login=NOW() WHERE id=$1",[user.id]);
+    const token = jwt.sign({ id:user.id, username:user.username, role:user.role, name:user.name }, CONFIG.JWT_SECRET, { expiresIn:'7d' });
+    res.json({ success:true, token, user:{ id:user.id, username:user.username, name:user.name, role:user.role } });
+  } catch (e) { console.error('Login error:',e); res.status(500).json({ success:false, error:'שגיאת שרת' }); }
 });
 
-// דף עדכון סטטוס - מסירה
-app.get('/status/:orderId/deliver', (req, res) => {
-  const order = db.orders.find(o => o.id === req.params.orderId);
-  
-  if (!order) {
-    return res.send(statusPage('❌', 'הזמנה לא נמצאה', 'ההזמנה אינה קיימת במערכת', '#ef4444'));
-  }
-  
-  if (order.status !== 'picked') {
-    if (order.status === 'taken') {
-      return res.send(statusPage('ℹ️', 'צריך לאסוף קודם', 'סמן את המשלוח כנאסף לפני סימון מסירה', '#f59e0b'));
-    }
-    return res.send(statusPage('ℹ️', 'לא ניתן לעדכן', 'המשלוח כבר נמסר או בוטל', '#f59e0b'));
-  }
-  
-  res.send(statusPage('📬', 'אישור מסירה', `האם מסרת את המשלוח ${order.id}?`, '#10b981', `
-    <div style="margin:20px 0;padding:15px;background:#1e293b;border-radius:12px;border:1px solid #334155;">
-      <div style="color:#64748b;font-size:12px;margin-bottom:5px;">נמסר ל:</div>
-      <div style="color:white;font-size:16px;">${order.receiverName}</div>
-      <div style="color:#94a3b8;font-size:14px;">${order.deliveryAddress}</div>
-    </div>
-    <div style="display:flex;gap:10px;">
-      <button onclick="confirmDelivery()" style="flex:1;padding:15px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:12px;color:white;font-size:16px;font-weight:bold;cursor:pointer;">✅ כן, מסרתי</button>
-      <button onclick="window.close()" style="flex:1;padding:15px;background:#334155;border:none;border-radius:12px;color:white;font-size:16px;cursor:pointer;">❌ לא עדיין</button>
-    </div>
-    <div style="margin-top:20px;padding:15px;background:#10b98120;border-radius:12px;text-align:center;">
-      <div style="color:#10b981;font-size:14px;">💰 רווח מהמשלוח</div>
-      <div style="color:#10b981;font-size:28px;font-weight:bold;">₪${order.courierPayout}</div>
-    </div>
-    <script>
-      async function confirmDelivery() {
-        try {
-          const res = await fetch('/api/status/${order.id}/deliver', { method: 'POST' });
-          const data = await res.json();
-          if (data.success) {
-            document.body.innerHTML = '<div style="text-align:center;padding:50px;"><div style="font-size:60px;margin-bottom:20px;">🎉</div><h1 style="color:#10b981;margin-bottom:10px;">המשלוח נמסר!</h1><p style="color:#94a3b8;margin-bottom:20px;">תודה רבה על העבודה</p><div style="background:#10b98120;padding:20px;border-radius:12px;"><div style="color:#10b981;font-size:14px;">הרווחת</div><div style="color:#10b981;font-size:32px;font-weight:bold;">₪${order.courierPayout}</div></div></div>';
-          } else {
-            alert(data.error || 'שגיאה');
-          }
-        } catch (e) { alert('שגיאת תקשורת'); }
-      }
-    </script>
-  `));
+app.get('/api/auth/me', requireAuth, (req, res) => res.json({ success:true, user:req.user }));
+
+app.get('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query("SELECT id,username,name,role,phone,email,active,created_at FROM users ORDER BY created_at DESC");
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
 });
 
-// פונקציה ליצירת דף סטטוס
-function statusPage(emoji, title, subtitle, color, content = '') {
-  return `<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${title}</title><style>*{font-family:Segoe UI,Tahoma,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#1e293b;border-radius:20px;padding:30px;text-align:center;border:1px solid #334155;max-width:400px;width:100%}.emoji{font-size:50px;margin-bottom:15px}h1{color:${color};margin-bottom:10px;font-size:22px}p{color:#94a3b8;font-size:14px}</style></head><body><div class="card"><div class="emoji">${emoji}</div><h1>${title}</h1><p>${subtitle}</p>${content}</div></body></html>`;
-}
-
-// API לעדכון סטטוס
-app.post('/api/status/:orderId/pickup', async (req, res) => {
-  const order = db.orders.find(o => o.id === req.params.orderId);
-  if (!order) return res.json({ success: false, error: 'הזמנה לא נמצאה' });
-  if (order.status !== 'taken') return res.json({ success: false, error: 'לא ניתן לעדכן סטטוס' });
-  
-  await handleOrderPicked(order.id, true);
-  res.json({ success: true });
-});
-
-app.post('/api/status/:orderId/deliver', async (req, res) => {
-  const order = db.orders.find(o => o.id === req.params.orderId);
-  if (!order) return res.json({ success: false, error: 'הזמנה לא נמצאה' });
-  if (order.status !== 'picked') return res.json({ success: false, error: 'לא ניתן לעדכן סטטוס' });
-  
-  await handleOrderDelivered(order.id, true);
-  res.json({ success: true });
-});
-
-// ==================== TAKE ORDER PAGE ====================
-app.get('/take/:orderId', (req, res) => {
-  const order = db.orders.find(o => o.id === req.params.orderId);
-  
-  if (!order) {
-    return res.send(statusPage('❌', 'הזמנה לא נמצאה', 'ההזמנה אינה קיימת או שהלינק שגוי', '#ef4444'));
+app.post('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { username, password, name, role, phone, email } = req.body;
+    const hash = await bcrypt.hash(password, 10);
+    const r = await pool.query("INSERT INTO users (username,password,name,role,phone,email) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id,username,name,role",
+      [username,hash,name,role||'agent',phone,email]);
+    res.json({ success:true, user:r.rows[0] });
+  } catch (e) {
+    if (e.code === '23505') return res.json({ success:false, error:'שם משתמש קיים' });
+    res.status(500).json({ success:false, error:'שגיאת שרת' });
   }
-  
-  if (order.status !== 'published') {
-    return res.send(statusPage('🏍️', 'המשלוח נתפס!', 'מישהו הספיק לפניך. בפעם הבאה תהיה מהיר יותר! 😉', '#f59e0b'));
-  }
-  
-  res.send(`<!DOCTYPE html><html dir="rtl" lang="he"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>תפיסת משלוח ${order.id}</title><style>*{font-family:Segoe UI,Tahoma,sans-serif;margin:0;padding:0;box-sizing:border-box}body{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);min-height:100vh;padding:20px}.container{max-width:500px;margin:0 auto}.header{text-align:center;margin-bottom:30px}.logo{font-size:40px;margin-bottom:10px}h1{color:#10b981;font-size:24px;margin-bottom:5px}.order-id{color:#60a5fa;font-size:18px}.card{background:#1e293b;border-radius:20px;padding:25px;border:1px solid #334155;margin-bottom:20px}.info-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:15px;padding-bottom:15px;border-bottom:1px solid #334155}.info-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}.info-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}.info-icon.pickup{background:#f59e0b20}.info-icon.delivery{background:#10b98120}.info-icon.money{background:#60a5fa20}.info-content{flex:1}.info-label{color:#64748b;font-size:12px;margin-bottom:3px}.info-value{color:#fff;font-size:15px}.payout{color:#10b981!important;font-size:22px!important;font-weight:bold}.form-title{color:#fff;font-size:18px;margin-bottom:20px;text-align:center}.form-group{margin-bottom:15px}label{display:block;color:#94a3b8;font-size:14px;margin-bottom:6px}input{width:100%;padding:14px 16px;background:#0f172a;border:2px solid #334155;border-radius:12px;color:#fff;font-size:16px}input:focus{outline:none;border-color:#10b981}.btn{width:100%;padding:16px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);border:none;border-radius:12px;color:#fff;font-size:18px;font-weight:bold;cursor:pointer}.btn:disabled{background:#475569;cursor:not-allowed}.success{display:none;text-align:center;padding:40px 20px}.success.show{display:block}.success-icon{font-size:60px;margin-bottom:20px}.success h2{color:#10b981;margin-bottom:10px}.success p{color:#94a3b8}.form-container.hidden{display:none}.error{background:#ef444420;border:1px solid #ef4444;border-radius:10px;padding:15px;color:#ef4444;margin-bottom:15px;display:none}.error.show{display:block}</style></head><body><div class="container"><div class="header"><div class="logo">🚚</div><h1>M.M.H משלוחים</h1><div class="order-id">משלוח ${order.id}</div></div><div class="card"><div class="info-row"><div class="info-icon pickup">📍</div><div class="info-content"><div class="info-label">כתובת איסוף</div><div class="info-value">${order.pickupAddress}</div></div></div><div class="info-row"><div class="info-icon delivery">🏠</div><div class="info-content"><div class="info-label">כתובת מסירה</div><div class="info-value">${order.deliveryAddress}</div></div></div><div class="info-row"><div class="info-icon money">💰</div><div class="info-content"><div class="info-label">תשלום לשליח</div><div class="info-value payout">₪${order.courierPayout}</div></div></div></div><div class="card form-container" id="formContainer"><div class="form-title">📝 מלא את הפרטים לתפיסת המשלוח</div><div class="error" id="errorMsg"></div><form id="takeForm"><div class="form-group"><label>שם פרטי</label><input type="text" id="firstName" placeholder="הכנס שם פרטי" required></div><div class="form-group"><label>שם משפחה</label><input type="text" id="lastName" placeholder="הכנס שם משפחה" required></div><div class="form-group"><label>תעודת זהות</label><input type="text" id="idNumber" placeholder="הכנס ת.ז" pattern="[0-9]{9}" maxlength="9" required></div><div class="form-group"><label>טלפון</label><input type="tel" id="phone" placeholder="05X-XXXXXXX" required></div><button type="submit" class="btn" id="submitBtn">✋ תפוס את המשלוח!</button></form></div><div class="card success" id="successMsg"><div class="success-icon">🎉</div><h2>תפסת את המשלוח!</h2><p>הפרטים המלאים נשלחו אליך בוואטסאפ</p></div></div><script>document.getElementById("takeForm").addEventListener("submit",async function(e){e.preventDefault();var btn=document.getElementById("submitBtn");btn.disabled=true;btn.textContent="שולח...";document.getElementById("errorMsg").classList.remove("show");var data={firstName:document.getElementById("firstName").value.trim(),lastName:document.getElementById("lastName").value.trim(),idNumber:document.getElementById("idNumber").value.trim(),phone:document.getElementById("phone").value.trim()};try{var res=await fetch("/api/take/${order.id}",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});var result=await res.json();if(result.success){document.getElementById("formContainer").classList.add("hidden");document.getElementById("successMsg").classList.add("show")}else{document.getElementById("errorMsg").textContent=result.error;document.getElementById("errorMsg").classList.add("show");btn.disabled=false;btn.textContent="✋ תפוס את המשלוח!"}}catch(err){document.getElementById("errorMsg").textContent="שגיאת תקשורת";document.getElementById("errorMsg").classList.add("show");btn.disabled=false;btn.textContent="✋ תפוס את המשלוח!"}});</script></body></html>`);
 });
 
-// API לתפיסת משלוח - משודרג עם לינקים לעדכון סטטוס
-app.post('/api/take/:orderId', async (req, res) => {
-  const orderId = req.params.orderId;
-  const { firstName, lastName, idNumber, phone } = req.body;
-  const order = db.orders.find(o => o.id === orderId);
-  
-  if (!order) return res.json({ success: false, error: 'הזמנה לא נמצאה' });
-  if (order.status !== 'published') return res.json({ success: false, error: 'המשלוח כבר נתפס!' });
-  
-  order.status = 'taken';
-  order.takenAt = new Date();
-  order.courier = {
-    firstName, lastName, idNumber, phone,
-    name: firstName + ' ' + lastName,
-    whatsappId: phone.replace(/^0/, '972').replace(/-/g, '') + '@s.whatsapp.net'
-  };
-  
-  // לינקים לעדכון סטטוס
-  const pickupUrl = CONFIG.PUBLIC_URL + '/status/' + order.id + '/pickup';
-  
-  let fullDetails = '✅ *תפסת את המשלוח ' + order.id + '!*\n';
-  fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
-  fullDetails += '📤 *פרטי השולח:*\n';
-  fullDetails += '👤 שם: ' + order.senderName + '\n';
-  fullDetails += '📞 טלפון: ' + order.senderPhone + '\n\n';
-  fullDetails += '📍 *כתובת איסוף:*\n' + order.pickupAddress + '\n\n';
-  fullDetails += '🔗 *ניווט לאיסוף:*\nhttps://waze.com/ul?q=' + encodeURIComponent(order.pickupAddress) + '\n';
-  fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
-  if (order.details) fullDetails += '📝 *פרטים:*\n' + order.details + '\n━━━━━━━━━━━━━━━━━━━━\n';
-  fullDetails += '📦 *אספת? לחץ כאן:*\n' + pickupUrl + '\n\n';
-  fullDetails += 'אחרי אישור איסוף החבילה תקבל פרטי מסירה ! 🚀';
+app.get('/api/couriers', requireAuth, async (req, res) => {
+  try { const r = await pool.query("SELECT * FROM couriers ORDER BY created_at DESC"); res.json(r.rows); }
+  catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
 
-  try { await sendWhatsAppMessage(order.courier.whatsappId, fullDetails); } 
-  catch (error) { console.error('Failed to send details to courier:', error.message); }
-  
-  try { await sendWhatsAppMessage(CONFIG.WHAPI.COURIERS_GROUP_ID, '✅ המשלוח ' + order.id + ' נתפס על ידי ' + firstName + ' ' + lastName); } 
-  catch (error) { console.error('Failed to notify group:', error.message); }
-  
-  broadcast({ type: 'order_taken', data: { orderId: orderId, courier: order.courier } });
-  console.log('🏍️ Order ' + orderId + ' taken by ' + firstName + ' ' + lastName);
-  res.json({ success: true });
+app.get('/api/couriers/:id', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query("SELECT * FROM couriers WHERE id=$1",[req.params.id]);
+    if (!r.rows[0]) return res.status(404).json({ error:'לא נמצא' });
+    const orders = await pool.query("SELECT * FROM orders WHERE courier_id=$1 ORDER BY created_at DESC LIMIT 50",[req.params.id]);
+    res.json({ ...r.rows[0], orders:orders.rows });
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+app.put('/api/couriers/:id', requireAuth, async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    await pool.query("UPDATE couriers SET status=$1,notes=$2,updated_at=NOW() WHERE id=$3",[status,notes,req.params.id]);
+    res.json({ success:true });
+  } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+app.get('/api/orders', requireAuth, async (req, res) => {
+  try { res.json(await getOrders(req.query)); } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+app.get('/api/orders/stats', requireAuth, async (req, res) => {
+  try { res.json(await getStats()); } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+app.post('/api/orders', requireAuth, async (req, res) => {
+  try {
+    const order = await createOrder(req.body, req.user.id);
+    broadcast({ type:'new_order', data:{ order } });
+    res.json({ success:true, order });
+  } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+app.post('/api/orders/:id/publish', requireAuth, async (req, res) => {
+  try { await publishOrder(req.params.id); res.json({ success:true }); }
+  catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+app.post('/api/orders/:id/cancel', requireAuth, async (req, res) => {
+  try { await cancelOrder(req.params.id, req.body.reason, req.user.id); res.json({ success:true }); }
+  catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+app.get('/api/payments', requireAuth, requireRole('admin','manager'), async (req, res) => {
+  try {
+    const r = await pool.query("SELECT p.*,c.first_name,c.last_name FROM payments p JOIN couriers c ON p.courier_id=c.id ORDER BY p.created_at DESC LIMIT 100");
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+app.post('/api/payments', requireAuth, requireRole('admin','manager'), async (req, res) => {
+  try {
+    const { courier_id, amount, method, notes } = req.body;
+    await pool.query("INSERT INTO payments (courier_id,amount,method,notes,created_by) VALUES ($1,$2,$3,$4,$5)",[courier_id,amount,method,notes,req.user.id]);
+    await pool.query("UPDATE couriers SET balance=balance-$1 WHERE id=$2",[amount,courier_id]);
+    res.json({ success:true });
+  } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+// ==================== PUBLIC ROUTES ====================
+app.get('/take/:orderNumber', async (req, res) => {
+  try {
+    const r = await pool.query("SELECT * FROM orders WHERE order_number=$1",[req.params.orderNumber]);
+    const o = r.rows[0];
+    if (!o) return res.send(statusHTML('❌','הזמנה לא נמצאה','','#ef4444'));
+    if (o.status !== 'published') return res.send(statusHTML('🏍️','המשלוח נתפס!','מישהו הספיק לפניך','#f59e0b'));
+    res.send(takeOrderHTML(o));
+  } catch (e) { res.status(500).send(statusHTML('❌','שגיאה','','#ef4444')); }
+});
+
+app.post('/api/take/:orderNumber', async (req, res) => {
+  try { res.json(await takeOrder(req.params.orderNumber, req.body)); }
+  catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+app.get('/status/:orderNumber/pickup', async (req, res) => {
+  try {
+    const r = await pool.query("SELECT * FROM orders WHERE order_number=$1",[req.params.orderNumber]);
+    const o = r.rows[0];
+    if (!o) return res.send(statusHTML('❌','לא נמצא','','#ef4444'));
+    if (o.status !== 'taken') return res.send(statusHTML('ℹ️','לא ניתן לעדכן','','#f59e0b'));
+    res.send(statusUpdateHTML(o,'pickup'));
+  } catch (e) { res.status(500).send(statusHTML('❌','שגיאה','','#ef4444')); }
+});
+
+app.post('/api/status/:orderNumber/pickup', async (req, res) => {
+  try { res.json(await pickupOrder(req.params.orderNumber)); }
+  catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+app.get('/status/:orderNumber/deliver', async (req, res) => {
+  try {
+    const r = await pool.query("SELECT * FROM orders WHERE order_number=$1",[req.params.orderNumber]);
+    const o = r.rows[0];
+    if (!o) return res.send(statusHTML('❌','לא נמצא','','#ef4444'));
+    if (o.status !== 'picked') return res.send(statusHTML('ℹ️','לא ניתן לעדכן','','#f59e0b'));
+    res.send(statusUpdateHTML(o,'deliver'));
+  } catch (e) { res.status(500).send(statusHTML('❌','שגיאה','','#ef4444')); }
+});
+
+app.post('/api/status/:orderNumber/deliver', async (req, res) => {
+  try { res.json(await deliverOrder(req.params.orderNumber)); }
+  catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
 });
 
 // ==================== WEBHOOK ====================
 app.post('/webhook/whapi', async (req, res) => {
   try {
     const messages = req.body.messages;
-    if (!messages || !messages.length) return res.sendStatus(200);
-    
-    for (const message of messages) {
-      if (message.from_me) continue;
-      const senderPhone = message.chat_id;
-      
-      if (message.type === 'text' && message.text?.body) {
-        const text = message.text.body.toLowerCase();
-        
-        if (text.includes('נאסף') || text.includes('picked') || text.includes('אספתי')) {
-          const activeOrder = db.orders.find(o => o.status === 'taken' && o.courier?.whatsappId === senderPhone);
-          if (activeOrder) await handleOrderPicked(activeOrder.id, true);
-        }
-        
-        if (text.includes('נמסר') || text.includes('delivered') || text.includes('מסרתי')) {
-          const pickedOrder = db.orders.find(o => o.status === 'picked' && o.courier?.whatsappId === senderPhone);
-          if (pickedOrder) await handleOrderDelivered(pickedOrder.id, true);
-        }
+    if (!messages?.length) return res.sendStatus(200);
+    for (const m of messages) {
+      if (m.from_me) continue;
+      const cr = await pool.query("SELECT * FROM couriers WHERE whatsapp_id=$1",[m.chat_id]);
+      if (!cr.rows[0]) continue;
+      const text = m.text?.body?.toLowerCase() || '';
+      if (text.includes('אספתי') || text.includes('נאסף')) {
+        const o = await pool.query("SELECT order_number FROM orders WHERE courier_id=$1 AND status='taken' ORDER BY taken_at DESC LIMIT 1",[cr.rows[0].id]);
+        if (o.rows[0]) await pickupOrder(o.rows[0].order_number);
+      }
+      if (text.includes('מסרתי') || text.includes('נמסר')) {
+        const o = await pool.query("SELECT order_number FROM orders WHERE courier_id=$1 AND status='picked' ORDER BY picked_at DESC LIMIT 1",[cr.rows[0].id]);
+        if (o.rows[0]) await deliverOrder(o.rows[0].order_number);
       }
     }
     res.sendStatus(200);
-  } catch (error) { console.error('Webhook error:', error); res.sendStatus(500); }
+  } catch (e) { console.error('Webhook error:',e); res.sendStatus(500); }
 });
 
-// ==================== API ====================
-app.get('/api/orders', (req, res) => res.json(db.orders));
-app.get('/health', (req, res) => res.json({ status: 'ok', orders: db.orders.length, uptime: process.uptime() }));
+app.get('/health', (req, res) => res.json({ status:'ok', uptime:process.uptime() }));
 
-// ==================== FRONTEND DASHBOARD ====================
+// ==================== HTML TEMPLATES ====================
+function statusHTML(emoji, title, subtitle, color) {
+  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>*{font-family:system-ui;margin:0;padding:0;box-sizing:border-box}body{background:#0f172a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#1e293b;border-radius:20px;padding:40px;text-align:center;border:1px solid #334155;max-width:400px}.emoji{font-size:60px;margin-bottom:20px}h1{color:${color};margin-bottom:10px}p{color:#94a3b8}</style></head><body><div class="card"><div class="emoji">${emoji}</div><h1>${title}</h1><p>${subtitle}</p></div></body></html>`;
+}
+
+function takeOrderHTML(o) {
+  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>תפיסת משלוח</title><style>*{font-family:system-ui;margin:0;padding:0;box-sizing:border-box}body{background:#0f172a;min-height:100vh;padding:20px}.container{max-width:500px;margin:0 auto}.header{text-align:center;margin-bottom:20px}.logo{font-size:40px}.title{color:#10b981;font-size:24px;margin:10px 0 5px}.order-id{color:#60a5fa}.card{background:#1e293b;border-radius:16px;padding:20px;border:1px solid #334155;margin-bottom:16px}.row{display:flex;gap:12px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #334155}.row:last-child{border:none;margin:0;padding:0}.icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center}.icon.p{background:#f59e0b20}.icon.d{background:#10b98120}.icon.m{background:#60a5fa20}.content{flex:1}.label{color:#64748b;font-size:12px}.value{color:#fff;font-size:14px}.payout{color:#10b981!important;font-size:20px!important;font-weight:bold}.input{width:100%;padding:12px;background:#0f172a;border:1px solid #334155;border-radius:10px;color:#fff;font-size:16px;margin-bottom:12px}.input:focus{outline:none;border-color:#10b981}.btn{width:100%;padding:14px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:10px;color:#fff;font-size:16px;font-weight:bold;cursor:pointer}.btn:disabled{background:#475569}.success{display:none;text-align:center;padding:30px}.success.show{display:block}.hidden{display:none}.error{background:#ef444420;border:1px solid #ef4444;border-radius:8px;padding:12px;color:#ef4444;margin-bottom:12px;display:none}.error.show{display:block}</style></head><body><div class="container"><div class="header"><div class="logo">🚚</div><div class="title">M.M.H משלוחים</div><div class="order-id">משלוח ${o.order_number}</div></div><div class="card"><div class="row"><div class="icon p">📍</div><div class="content"><div class="label">כתובת איסוף</div><div class="value">${o.pickup_address}</div></div></div><div class="row"><div class="icon d">🏠</div><div class="content"><div class="label">כתובת מסירה</div><div class="value">${o.delivery_address}</div></div></div><div class="row"><div class="icon m">💰</div><div class="content"><div class="label">תשלום לשליח</div><div class="value payout">₪${o.courier_payout}</div></div></div></div><div class="card" id="form"><div class="error" id="err"></div><input class="input" id="fn" placeholder="שם פרטי"><input class="input" id="ln" placeholder="שם משפחה"><input class="input" id="id" placeholder="ת.ז" maxlength="9"><input class="input" id="ph" placeholder="טלפון"><button class="btn" id="btn" onclick="submit()">✋ תפוס את המשלוח!</button></div><div class="card success" id="ok"><div style="font-size:50px;margin-bottom:15px">🎉</div><h2 style="color:#10b981">תפסת את המשלוח!</h2><p style="color:#94a3b8">הפרטים נשלחו בוואטסאפ</p></div></div><script>async function submit(){const b=document.getElementById('btn');b.disabled=true;b.textContent='שולח...';document.getElementById('err').classList.remove('show');const d={firstName:document.getElementById('fn').value.trim(),lastName:document.getElementById('ln').value.trim(),idNumber:document.getElementById('id').value.trim(),phone:document.getElementById('ph').value.trim()};if(!d.firstName||!d.lastName||!d.idNumber||!d.phone){document.getElementById('err').textContent='נא למלא הכל';document.getElementById('err').classList.add('show');b.disabled=false;b.textContent='✋ תפוס את המשלוח!';return}try{const r=await fetch('/api/take/${o.order_number}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});const j=await r.json();if(j.success){document.getElementById('form').classList.add('hidden');document.getElementById('ok').classList.add('show')}else{document.getElementById('err').textContent=j.error;document.getElementById('err').classList.add('show');b.disabled=false;b.textContent='✋ תפוס את המשלוח!'}}catch(e){document.getElementById('err').textContent='שגיאה';document.getElementById('err').classList.add('show');b.disabled=false;b.textContent='✋ תפוס את המשלוח!'}}</script></body></html>`;
+}
+
+function statusUpdateHTML(o, action) {
+  const isPickup = action === 'pickup';
+  const title = isPickup ? 'אישור איסוף' : 'אישור מסירה';
+  const q = isPickup ? 'האם אספת?' : 'האם מסרת?';
+  const btn = isPickup ? '✅ כן, אספתי' : '✅ כן, מסרתי';
+  const api = `/api/status/${o.order_number}/${action}`;
+  const success = isPickup ? 'סומן כנאסף!' : 'נמסר בהצלחה!';
+  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>*{font-family:system-ui;margin:0;padding:0;box-sizing:border-box}body{background:#0f172a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#1e293b;border-radius:20px;padding:30px;text-align:center;border:1px solid #334155;max-width:400px;width:100%}.emoji{font-size:50px;margin-bottom:15px}h1{color:#10b981;margin-bottom:10px}p{color:#94a3b8;margin-bottom:20px}.info{background:#0f172a;border-radius:10px;padding:12px;margin-bottom:20px;text-align:right}.buttons{display:flex;gap:10px}.btn{flex:1;padding:14px;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer}.btn-yes{background:linear-gradient(135deg,#10b981,#059669);color:#fff}.btn-no{background:#334155;color:#94a3b8}.payout{background:#10b98120;border-radius:10px;padding:15px;margin-top:20px}.payout-value{color:#10b981;font-size:28px;font-weight:bold}</style></head><body><div class="card" id="main"><div class="emoji">${isPickup?'📦':'📬'}</div><h1>${title}</h1><p>${q}</p>${!isPickup?`<div class="info"><div style="color:#64748b;font-size:12px">נמסר ל:</div><div style="color:#fff">${o.receiver_name}</div><div style="color:#94a3b8;font-size:13px">${o.delivery_address}</div></div>`:''}<div class="buttons"><button class="btn btn-yes" onclick="confirm()">${btn}</button><button class="btn btn-no" onclick="window.close()">❌ לא עדיין</button></div>${!isPickup?`<div class="payout"><div style="color:#10b981;font-size:14px">💰 רווח</div><div class="payout-value">₪${o.courier_payout}</div></div>`:''}</div><script>async function confirm(){try{const r=await fetch('${api}',{method:'POST'});const d=await r.json();if(d.success){document.getElementById('main').innerHTML='<div class="emoji">✅</div><h1>${success}</h1><p>תודה!</p>${!isPickup?`<div class="payout"><div style="color:#10b981;font-size:14px">הרווחת</div><div class="payout-value">₪${o.courier_payout}</div></div>`:''}';}else{alert(d.error||'שגיאה');}}catch(e){alert('שגיאת תקשורת');}}</script></body></html>`;
+}
+
+// ==================== DASHBOARD ====================
 app.get('/', (req, res) => {
-  const wsUrl = CONFIG.PUBLIC_URL.replace('https://', 'wss://').replace('http://', 'ws://');
-  
+  const wsUrl = CONFIG.PUBLIC_URL.replace('https://','wss://').replace('http://','ws://');
   res.send(`<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>M.M.H Delivery System</title>
+  <title>M.M.H Delivery</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>*{font-family:system-ui,-apple-system,sans-serif}</style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-  <div id="app"></div>
+<div id="app"></div>
+<script>
+const API='',WS_URL='${wsUrl}';
+let token=localStorage.getItem('token'),user=JSON.parse(localStorage.getItem('user')||'null'),orders=[],stats={},couriers=[],users=[],ws=null,connected=false,currentTab='orders',filter='all',search='';
+
+async function login(){
+  const u=document.getElementById('username').value,p=document.getElementById('password').value;
+  try{
+    const r=await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    const d=await r.json();
+    if(d.success){token=d.token;user=d.user;localStorage.setItem('token',token);localStorage.setItem('user',JSON.stringify(user));connectWS();render();}
+    else{document.getElementById('loginError').textContent=d.error;document.getElementById('loginError').classList.remove('hidden');}
+  }catch(e){document.getElementById('loginError').textContent='שגיאת תקשורת';document.getElementById('loginError').classList.remove('hidden');}
+}
+
+function logout(){token=null;user=null;localStorage.removeItem('token');localStorage.removeItem('user');if(ws)ws.close();render();}
+
+function connectWS(){
+  if(!token)return;ws=new WebSocket(WS_URL);
+  ws.onopen=()=>{connected=true;ws.send(JSON.stringify({type:'auth',token}));render();};
+  ws.onmessage=(e)=>{const m=JSON.parse(e.data);if(m.type==='init'){orders=m.data.orders||[];stats=m.data.stats||{};render();}else if(m.type==='new_order'){orders.unshift(m.data.order);showToast('🆕 '+m.data.order.orderNumber);render();}else if(m.type==='order_updated'){orders=orders.map(o=>o.id===m.data.order.id?m.data.order:o);render();}else if(m.type==='stats_updated'){stats=m.data;render();}};
+  ws.onclose=()=>{connected=false;render();setTimeout(connectWS,3000);};
+}
+
+async function api(ep,method='GET',body=null){const opts={method,headers:{'Content-Type':'application/json'}};if(token)opts.headers.Authorization='Bearer '+token;if(body)opts.body=JSON.stringify(body);return(await fetch(API+ep,opts)).json();}
+async function loadCouriers(){couriers=await api('/api/couriers');render();}
+async function loadUsers(){if(user?.role==='admin'){users=await api('/api/users');render();}}
+
+async function createOrder(d){const r=await api('/api/orders','POST',d);if(r.success){closeModal();showToast('✅ נוצר');}}
+async function publishOrder(id){await api('/api/orders/'+id+'/publish','POST');showToast('📤 פורסם');}
+async function cancelOrder(id){if(!confirm('לבטל?'))return;await api('/api/orders/'+id+'/cancel','POST',{reason:'ביטול'});showToast('❌ בוטל');}
+async function createUser(d){const r=await api('/api/users','POST',d);if(r.success){closeModal();showToast('✅ נוצר');loadUsers();}else alert(r.error);}
+async function createPayment(d){const r=await api('/api/payments','POST',d);if(r.success){closeModal();showToast('✅ תשלום נרשם');loadCouriers();}}
+
+function showToast(m){const t=document.createElement('div');t.className='fixed top-4 left-1/2 -translate-x-1/2 bg-slate-700 text-white px-6 py-3 rounded-xl shadow-lg z-50';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
+function closeModal(){document.getElementById('modal').innerHTML='';}
+function setTab(t){currentTab=t;if(t==='couriers')loadCouriers();if(t==='users')loadUsers();render();}
+function setFilter(f){filter=f;render();}
+function fmt(n){return'₪'+(n||0).toLocaleString();}
+function fmtDate(d){return d?new Date(d).toLocaleString('he-IL'):'-';}
+function statusText(s){return{new:'חדש',published:'פורסם',taken:'נתפס',picked:'נאסף',delivered:'נמסר',cancelled:'בוטל'}[s]||s;}
+function statusColor(s){const c={new:'slate',published:'amber',taken:'blue',picked:'purple',delivered:'emerald',cancelled:'red'}[s]||'slate';return 'bg-'+c+'-500/20 text-'+c+'-400 border-'+c+'-500/50';}
+
+function render(){if(!token||!user)renderLogin();else renderDashboard();}
+
+function renderLogin(){
+  document.getElementById('app').innerHTML=\`<div class="min-h-screen flex items-center justify-center p-4"><div class="bg-slate-800/80 backdrop-blur rounded-2xl p-8 w-full max-w-md border border-slate-700"><div class="text-center mb-8"><div class="text-5xl mb-4">🚚</div><h1 class="text-2xl font-bold text-emerald-400">M.M.H Delivery</h1><p class="text-slate-400 mt-2">מערכת ניהול משלוחים</p></div><div id="loginError" class="hidden bg-red-500/20 border border-red-500 text-red-400 rounded-lg p-3 mb-4 text-center"></div><div class="space-y-4"><input type="text" id="username" placeholder="שם משתמש" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"><input type="password" id="password" placeholder="סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none" onkeypress="if(event.key==='Enter')login()"><button onclick="login()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-xl font-bold">התחבר</button></div></div></div>\`;
+}
+
+function renderDashboard(){
+  const fo=orders.filter(o=>{if(filter==='active')return['new','published','taken','picked'].includes(o.status);if(filter==='delivered')return o.status==='delivered';if(filter==='cancelled')return o.status==='cancelled';return true;}).filter(o=>{if(!search)return true;const s=search.toLowerCase();return o.orderNumber?.toLowerCase().includes(s)||o.senderName?.toLowerCase().includes(s)||o.receiverName?.toLowerCase().includes(s)||o.pickupAddress?.toLowerCase().includes(s)||o.deliveryAddress?.toLowerCase().includes(s);});
   
-  <script>
-    const WS_URL = '${wsUrl}';
-    let ws = null;
-    let orders = [];
-    let connected = false;
-    
-    function connectWebSocket() {
-      ws = new WebSocket(WS_URL);
-      ws.onopen = () => { connected = true; render(); showToast('מחובר לשרת', 'success'); };
-      ws.onmessage = (e) => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === 'orders_init') orders = msg.data.orders || [];
-        else if (msg.type === 'new_order') { orders.unshift(msg.data.order); showToast('הזמנה חדשה: ' + msg.data.order.id, 'info'); }
-        else if (msg.type === 'order_published') orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'published'} : o);
-        else if (msg.type === 'order_taken') { orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'taken', courier: msg.data.courier} : o); showToast('נתפס: ' + msg.data.orderId, 'success'); }
-        else if (msg.type === 'order_picked') { orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'picked'} : o); showToast('נאסף: ' + msg.data.orderId, 'info'); }
-        else if (msg.type === 'order_delivered') { orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'delivered'} : o); showToast('נמסר: ' + msg.data.orderId, 'success'); }
-        else if (msg.type === 'order_cancelled') { orders = orders.map(o => o.id === msg.data.orderId ? {...o, status: 'cancelled'} : o); showToast('בוטל: ' + msg.data.orderId, 'error'); }
-        render();
-      };
-      ws.onclose = () => { connected = false; render(); setTimeout(connectWebSocket, 3000); };
-    }
-    
-    function send(type, data = {}) { if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type, ...data })); }
-    
-    function showToast(message, type) {
-      const toast = document.createElement('div');
-      toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl shadow-2xl z-50 text-white font-medium ' + 
-        (type === 'success' ? 'bg-emerald-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500');
-      toast.textContent = message;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
-    }
-    
-    function getStatusText(s) { return { new: 'חדש', published: 'פורסם', taken: 'נתפס', picked: 'נאסף', delivered: 'נמסר', cancelled: 'בוטל' }[s] || s; }
-    function getStatusColor(s) {
-      const c = { new: 'slate', published: 'amber', taken: 'blue', picked: 'purple', delivered: 'emerald', cancelled: 'red' }[s] || 'slate';
-      return 'bg-' + c + '-500/20 text-' + c + '-400 border-' + c + '-500/50';
-    }
-    function formatCurrency(n) { return '₪' + (n || 0).toLocaleString(); }
-    
-    function render() {
-      const stats = {
-        total: orders.length,
-        new: orders.filter(o => o.status === 'new').length,
-        published: orders.filter(o => o.status === 'published').length,
-        active: orders.filter(o => ['taken', 'picked'].includes(o.status)).length,
-        delivered: orders.filter(o => o.status === 'delivered').length,
-        revenue: orders.filter(o => o.status === 'delivered').reduce((s, o) => s + (o.price || 0), 0)
-      };
-      
-      document.getElementById('app').innerHTML = \`
-        <header class="border-b border-slate-700/50 bg-slate-900/50 backdrop-blur-xl sticky top-0 z-10">
-          <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-xl flex items-center justify-center text-xl">🚚</div>
-              <div>
-                <h1 class="text-xl font-bold bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent">M.M.H Delivery</h1>
-                <p class="text-xs text-slate-500">מערכת ניהול משלוחים</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm \${connected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}">
-              \${connected ? '🟢 מחובר' : '🔴 מתחבר...'}
-            </div>
-          </div>
-        </header>
-        
-        <main class="max-w-7xl mx-auto px-4 py-6">
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-              <div class="text-2xl font-bold">\${stats.total}</div>
-              <div class="text-sm text-slate-400">סה״כ</div>
-            </div>
-            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-              <div class="text-2xl font-bold text-amber-400">\${stats.new + stats.published}</div>
-              <div class="text-sm text-slate-400">ממתינים</div>
-            </div>
-            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-              <div class="text-2xl font-bold text-purple-400">\${stats.active}</div>
-              <div class="text-sm text-slate-400">פעילים</div>
-            </div>
-            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-              <div class="text-2xl font-bold text-emerald-400">\${stats.delivered}</div>
-              <div class="text-sm text-slate-400">נמסרו</div>
-            </div>
-            <div class="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-              <div class="text-2xl font-bold text-emerald-400">\${formatCurrency(stats.revenue)}</div>
-              <div class="text-sm text-slate-400">הכנסות</div>
-            </div>
-          </div>
-          
-          <div class="flex items-center justify-between mb-6">
-            <h2 class="text-lg font-bold">📦 הזמנות (\${orders.length})</h2>
-            <button onclick="showNewOrderForm()" class="bg-gradient-to-r from-emerald-500 to-blue-500 text-white px-4 py-2 rounded-xl font-medium flex items-center gap-2">➕ הזמנה חדשה</button>
-          </div>
-          
-          <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            \${orders.map(order => \`
-              <div class="bg-slate-800/60 rounded-2xl border border-slate-700/50 overflow-hidden">
-                <div class="p-4 border-b border-slate-700/50 flex items-center justify-between">
-                  <div class="flex items-center gap-3">
-                    <span class="text-lg font-bold font-mono">\${order.id}</span>
-                    <span class="px-3 py-1 rounded-full text-xs font-medium border \${getStatusColor(order.status)}">\${getStatusText(order.status)}</span>
-                  </div>
-                </div>
-                <div class="p-4 space-y-3">
-                  <div class="flex items-start gap-3">
-                    <div class="p-2 bg-blue-500/20 rounded-lg">👤</div>
-                    <div><div class="text-white font-medium">\${order.senderName}</div><div class="text-sm text-slate-400">\${order.senderPhone}</div></div>
-                  </div>
-                  <div class="flex items-start gap-3">
-                    <div class="p-2 bg-amber-500/20 rounded-lg">📍</div>
-                    <div><div class="text-xs text-slate-500">איסוף</div><div class="text-sm text-slate-300">\${order.pickupAddress}</div></div>
-                  </div>
-                  <div class="flex items-start gap-3">
-                    <div class="p-2 bg-emerald-500/20 rounded-lg">🏠</div>
-                    <div><div class="text-xs text-slate-500">מסירה</div><div class="text-sm text-slate-300">\${order.deliveryAddress}</div></div>
-                  </div>
-                  <div class="flex justify-between pt-2 border-t border-slate-700/50">
-                    <div><div class="text-xs text-slate-500">מחיר</div><div class="text-lg font-bold">\${formatCurrency(order.price)}</div></div>
-                    <div class="text-left"><div class="text-xs text-slate-500">לשליח</div><div class="text-lg font-bold text-emerald-400">\${formatCurrency(order.courierPayout)}</div></div>
-                  </div>
-                  \${order.courier ? \`<div class="bg-slate-700/50 rounded-xl p-3"><div class="text-xs text-slate-500">שליח</div><div class="text-white font-medium">\${order.courier.name}</div><div class="text-sm text-slate-400">\${order.courier.phone}</div></div>\` : ''}
-                  \${order.status === 'new' ? \`
-                    <div class="flex gap-2 pt-2">
-                      <button onclick="publishOrder('\${order.id}')" class="flex-1 bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-2 rounded-xl font-medium">📤 פרסם</button>
-                      <button onclick="cancelOrder('\${order.id}')" class="px-4 bg-red-500/20 text-red-400 rounded-xl">✕</button>
-                    </div>
-                  \` : ''}
-                  \${order.status === 'published' ? \`
-                    <button onclick="cancelOrder('\${order.id}')" class="w-full bg-red-500/20 text-red-400 py-2 rounded-xl font-medium">❌ בטל משלוח</button>
-                  \` : ''}
-                  \${order.status === 'taken' ? \`
-                    <button onclick="cancelOrder('\${order.id}')" class="w-full bg-red-500/20 text-red-400 py-2 rounded-xl font-medium">❌ בטל משלוח</button>
-                  \` : ''}
-                </div>
-              </div>
-            \`).join('')}
-          </div>
-          
-          \${orders.length === 0 ? '<div class="text-center py-12"><div class="text-6xl mb-4">📦</div><h3 class="text-lg font-medium mb-2">אין הזמנות</h3><p class="text-slate-400">לחץ "הזמנה חדשה" להתחיל</p></div>' : ''}
-        </main>
-        <div id="modal"></div>
-      \`;
-    }
-    
-    function publishOrder(id) { send('publish', { orderId: id }); showToast('מפרסם...', 'info'); }
-    function cancelOrder(id) { if (confirm('האם לבטל את המשלוח?')) { send('cancel', { orderId: id }); } }
-    
-    function showNewOrderForm() {
-      document.getElementById('modal').innerHTML = \`
-        <div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div class="p-5 border-b border-slate-700 flex items-center justify-between">
-              <h2 class="text-xl font-bold">הזמנה חדשה</h2>
-              <button onclick="closeModal()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400">✕</button>
-            </div>
-            <form onsubmit="submitOrder(event)" class="p-5 space-y-4">
-              <div class="grid grid-cols-2 gap-4">
-                <div><label class="block text-sm text-slate-400 mb-1">שם שולח</label><input type="text" id="senderName" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:border-emerald-500 focus:outline-none" required></div>
-                <div><label class="block text-sm text-slate-400 mb-1">טלפון שולח</label><input type="tel" id="senderPhone" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:border-emerald-500 focus:outline-none" required></div>
-              </div>
-              <div><label class="block text-sm text-slate-400 mb-1">כתובת איסוף</label><input type="text" id="pickupAddress" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:border-emerald-500 focus:outline-none" required></div>
-              <div class="grid grid-cols-2 gap-4">
-                <div><label class="block text-sm text-slate-400 mb-1">שם מקבל</label><input type="text" id="receiverName" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:border-emerald-500 focus:outline-none" required></div>
-                <div><label class="block text-sm text-slate-400 mb-1">טלפון מקבל</label><input type="tel" id="receiverPhone" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:border-emerald-500 focus:outline-none" required></div>
-              </div>
-              <div><label class="block text-sm text-slate-400 mb-1">כתובת מסירה</label><input type="text" id="deliveryAddress" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:border-emerald-500 focus:outline-none" required></div>
-              <div><label class="block text-sm text-slate-400 mb-1">פרטים נוספים</label><textarea id="details" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:border-emerald-500 focus:outline-none h-20 resize-none"></textarea></div>
-              <div class="grid grid-cols-2 gap-4">
-                <div><label class="block text-sm text-slate-400 mb-1">מחיר (₪)</label><input type="number" id="price" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:border-emerald-500 focus:outline-none" required></div>
-                <div><label class="block text-sm text-slate-400 mb-1">עדיפות</label><select id="priority" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:border-emerald-500 focus:outline-none"><option value="normal">רגיל</option><option value="express">אקספרס</option><option value="urgent">דחוף</option></select></div>
-              </div>
-              <button type="submit" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-xl font-bold">צור הזמנה</button>
-            </form>
-          </div>
+  document.getElementById('app').innerHTML=\`
+<header class="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+  <div class="max-w-7xl mx-auto px-4 py-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3"><div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-xl flex items-center justify-center text-xl">🚚</div><div><h1 class="text-lg font-bold text-white">M.M.H Delivery</h1><p class="text-xs text-slate-500">v3.0</p></div></div>
+      <div class="flex items-center gap-3"><div class="px-3 py-1 rounded-full text-sm \${connected?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${connected?'🟢 מחובר':'🔴 מתחבר...'}</div><span class="text-sm text-slate-300">\${user.name}</span><button onclick="logout()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400">🚪</button></div>
+    </div>
+    <div class="flex gap-1 mt-3 overflow-x-auto pb-1">
+      <button onclick="setTab('orders')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='orders'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">📦 הזמנות</button>
+      <button onclick="setTab('couriers')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='couriers'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">🏍️ שליחים</button>
+      <button onclick="setTab('stats')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='stats'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">📊 סטטיסטיקות</button>
+      \${user.role==='admin'?'<button onclick="setTab(\\'users\\')" class="px-4 py-2 rounded-lg text-sm font-medium '+(currentTab==='users'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800')+'">👥 משתמשים</button>':''}
+    </div>
+  </div>
+</header>
+<main class="max-w-7xl mx-auto px-4 py-6">
+  \${currentTab==='orders'?renderOrders(fo):''}
+  \${currentTab==='couriers'?renderCouriers():''}
+  \${currentTab==='stats'?renderStats():''}
+  \${currentTab==='users'?renderUsers():''}
+</main>
+<div id="modal"></div>\`;
+}
+
+function renderOrders(fo){
+  return \`
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold">\${stats.total||0}</div><div class="text-sm text-slate-400">סה״כ</div></div>
+  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-amber-400">\${(parseInt(stats.new)||0)+(parseInt(stats.published)||0)}</div><div class="text-sm text-slate-400">ממתינים</div></div>
+  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-purple-400">\${stats.active||0}</div><div class="text-sm text-slate-400">פעילים</div></div>
+  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-emerald-400">\${stats.delivered||0}</div><div class="text-sm text-slate-400">נמסרו</div></div>
+  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-emerald-400">\${fmt(stats.revenue)}</div><div class="text-sm text-slate-400">הכנסות</div></div>
+</div>
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+  <div class="flex gap-2 overflow-x-auto">
+    <button onclick="setFilter('all')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='all'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">הכל</button>
+    <button onclick="setFilter('active')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='active'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">פעילים</button>
+    <button onclick="setFilter('delivered')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='delivered'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">נמסרו</button>
+    <button onclick="setFilter('cancelled')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='cancelled'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">בוטלו</button>
+  </div>
+  <div class="flex gap-2">
+    <input type="text" placeholder="🔍 חיפוש..." value="\${search}" onchange="search=this.value;render()" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white w-40">
+    <button onclick="showNewOrderModal()" class="bg-gradient-to-r from-emerald-500 to-blue-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium">➕ הזמנה</button>
+  </div>
+</div>
+<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+  \${fo.map(o=>\`
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+      <div class="p-3 border-b border-slate-700/50 flex items-center justify-between">
+        <div class="flex items-center gap-2"><span class="font-bold font-mono">\${o.orderNumber}</span><span class="px-2 py-0.5 rounded-full text-xs border \${statusColor(o.status)}">\${statusText(o.status)}</span></div>
+        <span class="text-xs text-slate-500">\${fmtDate(o.createdAt)}</span>
+      </div>
+      <div class="p-3 space-y-2 text-sm">
+        <div class="flex gap-2"><span class="text-slate-500">👤</span><span>\${o.senderName} - \${o.senderPhone}</span></div>
+        <div class="flex gap-2"><span class="text-slate-500">📍</span><span class="text-slate-300">\${o.pickupAddress}</span></div>
+        <div class="flex gap-2"><span class="text-slate-500">🏠</span><span class="text-slate-300">\${o.deliveryAddress}</span></div>
+        <div class="flex justify-between pt-2 border-t border-slate-700/50">
+          <div><span class="text-slate-500">מחיר:</span> <span class="font-bold">\${fmt(o.price)}</span></div>
+          <div><span class="text-slate-500">לשליח:</span> <span class="font-bold text-emerald-400">\${fmt(o.courierPayout)}</span></div>
         </div>
-      \`;
-    }
-    
-    function closeModal() { document.getElementById('modal').innerHTML = ''; }
-    
-    function submitOrder(e) {
-      e.preventDefault();
-      send('create_order', { data: {
-        senderName: document.getElementById('senderName').value,
-        senderPhone: document.getElementById('senderPhone').value,
-        pickupAddress: document.getElementById('pickupAddress').value,
-        receiverName: document.getElementById('receiverName').value,
-        receiverPhone: document.getElementById('receiverPhone').value,
-        deliveryAddress: document.getElementById('deliveryAddress').value,
-        details: document.getElementById('details').value,
-        price: parseInt(document.getElementById('price').value) || 0,
-        priority: document.getElementById('priority').value
-      }});
-      closeModal();
-      showToast('יוצר הזמנה...', 'info');
-    }
-    
-    connectWebSocket();
-    render();
-  </script>
+        \${o.courier?\`<div class="bg-slate-700/50 rounded-lg p-2 text-xs"><span class="text-slate-500">שליח:</span> \${o.courier.name} - \${o.courier.phone}</div>\`:''}
+        \${o.status==='new'?\`<div class="flex gap-2 pt-2"><button onclick="publishOrder(\${o.id})" class="flex-1 bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-2 rounded-lg text-sm font-medium">📤 פרסם</button><button onclick="cancelOrder(\${o.id})" class="px-3 bg-red-500/20 text-red-400 rounded-lg">✕</button></div>\`:''}
+        \${['published','taken'].includes(o.status)?\`<button onclick="cancelOrder(\${o.id})" class="w-full bg-red-500/20 text-red-400 py-2 rounded-lg text-sm">❌ בטל</button>\`:''}
+      </div>
+    </div>\`).join('')}
+</div>
+\${fo.length===0?'<div class="text-center py-12 text-slate-400">אין הזמנות להצגה</div>':''}\`;
+}
+
+function renderCouriers(){
+  return \`
+<div class="mb-6 flex justify-between items-center"><h2 class="text-xl font-bold">🏍️ שליחים (\${couriers.length})</h2></div>
+<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+  \${couriers.map(c=>\`
+    <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-3"><div class="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">🏍️</div><div><div class="font-bold">\${c.first_name} \${c.last_name}</div><div class="text-sm text-slate-400">\${c.phone}</div></div></div>
+        <span class="px-2 py-1 rounded text-xs \${c.status==='active'?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${c.status==='active'?'פעיל':'לא פעיל'}</span>
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-center text-sm">
+        <div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold">\${c.total_deliveries||0}</div><div class="text-xs text-slate-400">משלוחים</div></div>
+        <div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold text-emerald-400">\${fmt(c.total_earned)}</div><div class="text-xs text-slate-400">סה״כ</div></div>
+        <div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold text-amber-400">\${fmt(c.balance)}</div><div class="text-xs text-slate-400">יתרה</div></div>
+      </div>
+      \${parseFloat(c.balance)>0?\`<button onclick="showPaymentModal(\${c.id},'\${c.first_name} \${c.last_name}',\${c.balance})" class="w-full mt-3 bg-emerald-500/20 text-emerald-400 py-2 rounded-lg text-sm">💳 שלם</button>\`:''}
+    </div>\`).join('')}
+</div>\`;
+}
+
+function renderStats(){
+  return \`
+<h2 class="text-xl font-bold mb-6">📊 סטטיסטיקות (30 יום)</h2>
+<div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold">\${stats.total||0}</div><div class="text-slate-400 mt-2">סה״כ הזמנות</div></div>
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold text-emerald-400">\${stats.delivered||0}</div><div class="text-slate-400 mt-2">נמסרו</div></div>
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold text-emerald-400">\${fmt(stats.revenue)}</div><div class="text-slate-400 mt-2">הכנסות</div></div>
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold text-blue-400">\${fmt(stats.commission)}</div><div class="text-slate-400 mt-2">עמלות</div></div>
+</div>\`;
+}
+
+function renderUsers(){
+  return \`
+<div class="mb-6 flex justify-between items-center"><h2 class="text-xl font-bold">👥 משתמשים (\${users.length})</h2><button onclick="showNewUserModal()" class="bg-gradient-to-r from-emerald-500 to-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium">➕ משתמש</button></div>
+<div class="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-700/50"><tr><th class="text-right p-3">שם</th><th class="text-right p-3">משתמש</th><th class="text-right p-3">תפקיד</th><th class="text-right p-3">טלפון</th><th class="text-right p-3">סטטוס</th></tr></thead>
+    <tbody>\${users.map(u=>\`<tr class="border-t border-slate-700/50"><td class="p-3">\${u.name}</td><td class="p-3 text-slate-400">\${u.username}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.role==='admin'?'bg-purple-500/20 text-purple-400':'bg-blue-500/20 text-blue-400'}">\${u.role==='admin'?'מנהל':u.role==='manager'?'מנהל משמרת':'נציג'}</span></td><td class="p-3 text-slate-400">\${u.phone||'-'}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.active?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${u.active?'פעיל':'לא פעיל'}</span></td></tr>\`).join('')}</tbody>
+  </table>
+</div>\`;
+}
+
+function showNewOrderModal(){
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">הזמנה חדשה</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><div class="grid grid-cols-2 gap-3"><input type="text" id="senderName" placeholder="שם שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="senderPhone" placeholder="טלפון שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="pickupAddress" placeholder="כתובת איסוף" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><div class="grid grid-cols-2 gap-3"><input type="text" id="receiverName" placeholder="שם מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="receiverPhone" placeholder="טלפון מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="deliveryAddress" placeholder="כתובת מסירה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><textarea id="details" placeholder="פרטים נוספים" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none"></textarea><div class="grid grid-cols-2 gap-3"><input type="number" id="price" placeholder="מחיר ₪" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="priority" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="normal">רגיל</option><option value="express">אקספרס</option><option value="urgent">דחוף</option></select></div><button onclick="submitOrder()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">צור הזמנה</button></div></div></div>\`;
+}
+
+function submitOrder(){createOrder({senderName:document.getElementById('senderName').value,senderPhone:document.getElementById('senderPhone').value,pickupAddress:document.getElementById('pickupAddress').value,receiverName:document.getElementById('receiverName').value,receiverPhone:document.getElementById('receiverPhone').value,deliveryAddress:document.getElementById('deliveryAddress').value,details:document.getElementById('details').value,price:parseInt(document.getElementById('price').value)||0,priority:document.getElementById('priority').value});}
+
+function showNewUserModal(){
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">משתמש חדש</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><input type="text" id="newUserName" placeholder="שם מלא" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="text" id="newUsername" placeholder="שם משתמש" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="password" id="newPassword" placeholder="סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="newUserPhone" placeholder="טלפון" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="newUserRole" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="agent">נציג</option><option value="manager">מנהל משמרת</option><option value="admin">מנהל</option></select><button onclick="submitUser()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">צור משתמש</button></div></div></div>\`;
+}
+
+function submitUser(){createUser({name:document.getElementById('newUserName').value,username:document.getElementById('newUsername').value,password:document.getElementById('newPassword').value,phone:document.getElementById('newUserPhone').value,role:document.getElementById('newUserRole').value});}
+
+function showPaymentModal(id,name,balance){
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">💳 תשלום</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-4"><div class="text-center"><div class="text-lg">\${name}</div><div class="text-2xl font-bold text-amber-400 mt-2">יתרה: \${fmt(balance)}</div></div><input type="number" id="paymentAmount" placeholder="סכום" value="\${balance}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="paymentMethod" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="cash">מזומן</option><option value="transfer">העברה</option><option value="bit">ביט</option></select><input type="text" id="paymentNotes" placeholder="הערות" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><button onclick="submitPayment(\${id})" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">אשר תשלום</button></div></div></div>\`;
+}
+
+function submitPayment(id){createPayment({courier_id:id,amount:parseFloat(document.getElementById('paymentAmount').value)||0,method:document.getElementById('paymentMethod').value,notes:document.getElementById('paymentNotes').value});}
+
+if(token)connectWS();
+render();
+</script>
 </body>
 </html>`);
 });
 
 // ==================== START ====================
 server.listen(CONFIG.PORT, '0.0.0.0', () => {
-  console.log('\\n╔══════════════════════════════════════════════════════════════╗');
-  console.log('║     🚚  M.M.H Delivery System v2.0  🚚                       ║');
-  console.log('║     Server running on port ' + CONFIG.PORT + '                              ║');
-  console.log('║     Public URL: ' + CONFIG.PUBLIC_URL);
-  console.log('╚══════════════════════════════════════════════════════════════╝\\n');
+  console.log('');
+  console.log('╔══════════════════════════════════════════════════════════════╗');
+  console.log('║     🚚  M.M.H Delivery System Pro v3.0  🚚                   ║');
+  console.log('╠══════════════════════════════════════════════════════════════╣');
+  console.log('║  Server: http://localhost:' + CONFIG.PORT + '                             ║');
+  console.log('║  Public: ' + CONFIG.PUBLIC_URL.padEnd(43) + '║');
+  console.log('╚══════════════════════════════════════════════════════════════╝');
+  console.log('');
 });
