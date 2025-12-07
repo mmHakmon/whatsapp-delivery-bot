@@ -361,11 +361,6 @@ app.post('/api/take/:orderId', async (req, res) => {
   fullDetails += '📍 *כתובת איסוף:*\n' + order.pickupAddress + '\n\n';
   fullDetails += '🔗 *ניווט לאיסוף:*\nhttps://waze.com/ul?q=' + encodeURIComponent(order.pickupAddress) + '\n';
   fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
-  fullDetails += '📥 *פרטי המקבל:*\n';
-  fullDetails += '👤 שם: ' + order.receiverName + '\n';
-  fullDetails += '📞 טלפון: ' + order.receiverPhone + '\n\n';
-  fullDetails += '🏠 *כתובת מסירה:*\n' + order.deliveryAddress + '\n';
-  fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
   if (order.details) fullDetails += '📝 *פרטים:*\n' + order.details + '\n━━━━━━━━━━━━━━━━━━━━\n';
   fullDetails += '💰 *תשלום אחרי עמלה:* ₪' + order.courierPayout + '\n';
   fullDetails += '━━━━━━━━━━━━━━━━━━━━\n\n';
