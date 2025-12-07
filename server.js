@@ -353,7 +353,7 @@ app.post('/api/take/:orderId', async (req, res) => {
   // לינקים לעדכון סטטוס
   const pickupUrl = CONFIG.PUBLIC_URL + '/status/' + order.id + '/pickup';
   
-  let fullDetails = '✅ *תפסת את המשלוח ' + order.id + '!*\n\n';
+  let fullDetails = '✅ *תפסת את המשלוח ' + order.id + '!*\n';
   fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
   fullDetails += '📤 *פרטי השולח:*\n';
   fullDetails += '👤 שם: ' + order.senderName + '\n';
@@ -367,7 +367,7 @@ app.post('/api/take/:orderId', async (req, res) => {
   fullDetails += '🏠 *כתובת מסירה:*\n' + order.deliveryAddress + '\n';
   fullDetails += '━━━━━━━━━━━━━━━━━━━━\n';
   if (order.details) fullDetails += '📝 *פרטים:*\n' + order.details + '\n━━━━━━━━━━━━━━━━━━━━\n';
-  fullDetails += '💰 *תשלום:* ₪' + order.courierPayout + '\n';
+  fullDetails += '💰 *תשלום אחרי עמלה:* ₪' + order.courierPayout + '\n';
   fullDetails += '━━━━━━━━━━━━━━━━━━━━\n\n';
   fullDetails += '📦 *אספת? לחץ כאן:*\n' + pickupUrl + '\n\n';
   fullDetails += 'בהצלחה! 🚀';
