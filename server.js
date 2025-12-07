@@ -19,7 +19,7 @@ const CONFIG = {
     API_URL: 'https://gate.whapi.cloud',
     TOKEN: process.env.WHAPI_TOKEN || 'a52q50FVgRAJNQaP4y165EoHx6fDixXw',
     COURIERS_GROUP_ID: process.env.COURIERS_GROUP_ID || '120363404988099203@g.us',
-  },/
+  },
   COMMISSION_RATE: parseFloat(process.env.COMMISSION_RATE) || 0.25,
 };
 
