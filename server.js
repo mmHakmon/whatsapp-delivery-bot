@@ -721,6 +721,194 @@ app.get('/api/orders/stats', requireAuth, async (req, res) => {
   try { res.json(await getStats()); } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
 });
 
+// ==================== REPORTS & EXPORT APIs ====================
+
+// גרף הכנסות יומי (30 יום אחרונים)
+app.get('/api/reports/daily', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT 
+        DATE(created_at) as date,
+        COUNT(*) as orders,
+        COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN price END), 0) as revenue,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN commission END), 0) as profit
+      FROM orders 
+      WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+      GROUP BY DATE(created_at)
+      ORDER BY date DESC
+    `);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// גרף הכנסות שבועי (12 שבועות אחרונים)
+app.get('/api/reports/weekly', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT 
+        DATE_TRUNC('week', created_at) as week,
+        COUNT(*) as orders,
+        COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN price END), 0) as revenue,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN commission END), 0) as profit
+      FROM orders 
+      WHERE created_at >= CURRENT_DATE - INTERVAL '12 weeks'
+      GROUP BY DATE_TRUNC('week', created_at)
+      ORDER BY week DESC
+    `);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// דוח שליחים מפורט
+app.get('/api/reports/couriers', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT 
+        c.id, c.first_name, c.last_name, c.phone, c.status,
+        c.total_deliveries, c.total_earned, c.balance,
+        COUNT(CASE WHEN o.status='delivered' AND o.delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as monthly_deliveries,
+        COALESCE(SUM(CASE WHEN o.status='delivered' AND o.delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN o.courier_payout END), 0) as monthly_earned
+      FROM couriers c
+      LEFT JOIN orders o ON c.id = o.courier_id
+      GROUP BY c.id
+      ORDER BY monthly_deliveries DESC
+    `);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// ייצוא הזמנות לאקסל (CSV)
+app.get('/api/export/orders', async (req, res) => {
+  // אימות מ-header או מ-query
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  if (!token) return res.status(401).json({ error: 'נדרשת התחברות' });
+  const user = verifyToken(token);
+  if (!user) return res.status(401).json({ error: 'טוקן לא תקין' });
+  
+  try {
+    const { from, to, status } = req.query;
+    let q = `SELECT o.*, c.first_name as courier_fn, c.last_name as courier_ln, c.phone as courier_phone
+             FROM orders o LEFT JOIN couriers c ON o.courier_id = c.id WHERE 1=1`;
+    const params = [];
+    let i = 1;
+    
+    if (from) { q += ` AND o.created_at >= $${i++}`; params.push(from); }
+    if (to) { q += ` AND o.created_at <= $${i++}`; params.push(to + ' 23:59:59'); }
+    if (status && status !== 'all') { q += ` AND o.status = $${i++}`; params.push(status); }
+    q += ' ORDER BY o.created_at DESC';
+    
+    const r = await pool.query(q, params);
+    
+    // יצירת CSV
+    const headers = ['מספר הזמנה', 'תאריך', 'שולח', 'טלפון שולח', 'כתובת איסוף', 'מקבל', 'טלפון מקבל', 'כתובת מסירה', 'מחיר', 'עמלה', 'לשליח', 'סטטוס', 'שליח'];
+    const statusHeb = { new: 'חדש', published: 'פורסם', taken: 'נתפס', picked: 'נאסף', delivered: 'נמסר', cancelled: 'בוטל' };
+    
+    let csv = '\uFEFF' + headers.join(',') + '\n'; // BOM for Hebrew
+    r.rows.forEach(o => {
+      csv += [
+        o.order_number,
+        new Date(o.created_at).toLocaleString('he-IL'),
+        `"${(o.sender_name||'').replace(/"/g,'""')}"`,
+        o.sender_phone,
+        `"${(o.pickup_address||'').replace(/"/g,'""')}"`,
+        `"${(o.receiver_name||'').replace(/"/g,'""')}"`,
+        o.receiver_phone,
+        `"${(o.delivery_address||'').replace(/"/g,'""')}"`,
+        o.price,
+        o.commission,
+        o.courier_payout,
+        statusHeb[o.status] || o.status,
+        o.courier_fn ? `"${o.courier_fn} ${o.courier_ln}"` : ''
+      ].join(',') + '\n';
+    });
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=orders-${new Date().toISOString().split('T')[0]}.csv`);
+    res.send(csv);
+  } catch (e) { console.error(e); res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// ייצוא שליחים לאקסל (CSV)
+app.get('/api/export/couriers', async (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  if (!token) return res.status(401).json({ error: 'נדרשת התחברות' });
+  const user = verifyToken(token);
+  if (!user) return res.status(401).json({ error: 'טוקן לא תקין' });
+  
+  try {
+    const r = await pool.query(`
+      SELECT c.*, 
+        COUNT(CASE WHEN o.status='delivered' THEN 1 END) as completed_orders,
+        COALESCE(SUM(CASE WHEN o.status='delivered' THEN o.courier_payout END), 0) as total_earnings
+      FROM couriers c
+      LEFT JOIN orders o ON c.id = o.courier_id
+      GROUP BY c.id
+      ORDER BY c.first_name
+    `);
+    
+    const headers = ['שם פרטי', 'שם משפחה', 'ת.ז', 'טלפון', 'סטטוס', 'משלוחים', 'סה"כ הרוויח', 'יתרה לתשלום'];
+    const statusHeb = { active: 'פעיל', inactive: 'לא פעיל' };
+    
+    let csv = '\uFEFF' + headers.join(',') + '\n';
+    r.rows.forEach(c => {
+      csv += [
+        `"${c.first_name}"`,
+        `"${c.last_name}"`,
+        c.id_number,
+        c.phone,
+        statusHeb[c.status] || c.status,
+        c.total_deliveries,
+        c.total_earned,
+        c.balance
+      ].join(',') + '\n';
+    });
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=couriers-${new Date().toISOString().split('T')[0]}.csv`);
+    res.send(csv);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// ייצוא תשלומים לאקסל (CSV)
+app.get('/api/export/payments', async (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+  if (!token) return res.status(401).json({ error: 'נדרשת התחברות' });
+  const user = verifyToken(token);
+  if (!user || !['admin','manager'].includes(user.role)) return res.status(403).json({ error: 'אין הרשאה' });
+  
+  try {
+    const r = await pool.query(`
+      SELECT p.*, c.first_name, c.last_name, c.phone, u.name as created_by_name
+      FROM payments p 
+      JOIN couriers c ON p.courier_id = c.id
+      LEFT JOIN users u ON p.created_by = u.id
+      ORDER BY p.created_at DESC
+    `);
+    
+    const headers = ['תאריך', 'שליח', 'טלפון', 'סכום', 'אמצעי תשלום', 'הערות', 'בוצע ע"י'];
+    const methodHeb = { cash: 'מזומן', transfer: 'העברה', bit: 'ביט' };
+    
+    let csv = '\uFEFF' + headers.join(',') + '\n';
+    r.rows.forEach(p => {
+      csv += [
+        new Date(p.created_at).toLocaleString('he-IL'),
+        `"${p.first_name} ${p.last_name}"`,
+        p.phone,
+        p.amount,
+        methodHeb[p.method] || p.method,
+        `"${(p.notes || '').replace(/"/g,'""')}"`,
+        `"${p.created_by_name || ''}"`
+      ].join(',') + '\n';
+    });
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=payments-${new Date().toISOString().split('T')[0]}.csv`);
+    res.send(csv);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
 app.post('/api/orders', requireAuth, async (req, res) => {
   try {
     const order = await createOrder(req.body, req.user.id);
@@ -992,13 +1180,63 @@ app.get('/', (req, res) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>M.M.H Delivery</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>*{font-family:system-ui,-apple-system,sans-serif}</style>
+  <style>
+    *{font-family:system-ui,-apple-system,sans-serif}
+    .light-mode{background:linear-gradient(to bottom right,#f1f5f9,#e2e8f0,#f1f5f9)!important}
+    .light-mode .bg-slate-900{background-color:#ffffff!important}
+    .light-mode .bg-slate-900\\/80{background-color:rgba(255,255,255,0.9)!important}
+    .light-mode .bg-slate-800{background-color:#f8fafc!important}
+    .light-mode .bg-slate-800\\/60{background-color:rgba(248,250,252,0.8)!important}
+    .light-mode .bg-slate-800\\/50{background-color:rgba(248,250,252,0.7)!important}
+    .light-mode .bg-slate-700{background-color:#e2e8f0!important}
+    .light-mode .bg-slate-700\\/50{background-color:rgba(226,232,240,0.5)!important}
+    .light-mode .border-slate-700{border-color:#cbd5e1!important}
+    .light-mode .border-slate-700\\/50{border-color:rgba(203,213,225,0.5)!important}
+    .light-mode .text-white{color:#1e293b!important}
+    .light-mode .text-slate-300{color:#475569!important}
+    .light-mode .text-slate-400{color:#64748b!important}
+    .light-mode .text-slate-500{color:#94a3b8!important}
+    .light-mode input,.light-mode select,.light-mode textarea{background-color:#ffffff!important;border-color:#cbd5e1!important;color:#1e293b!important}
+  </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
 <div id="app"></div>
+<audio id="notificationSound" preload="auto"><source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNBrv+AAAAAAAAAAAAAAAAAAAAAP/7UMQAA8AAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tQxBKAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV" type="audio/mpeg"></audio>
 <script>
 const API='',WS_URL='${wsUrl}';
 let token=localStorage.getItem('token'),refreshToken=localStorage.getItem('refreshToken'),user=JSON.parse(localStorage.getItem('user')||'null'),orders=[],stats={},couriers=[],users=[],ws=null,connected=false,currentTab='orders',filter='all',search='',pending2FA=null;
+
+// מצב לילה/יום
+let darkMode=localStorage.getItem('darkMode')!=='false';
+function toggleDarkMode(){darkMode=!darkMode;localStorage.setItem('darkMode',darkMode);applyTheme();}
+function applyTheme(){document.body.classList.toggle('light-mode',!darkMode);}
+applyTheme();
+
+// התראות Push
+let notificationsEnabled=localStorage.getItem('notifications')==='true';
+async function toggleNotifications(){
+  if(!notificationsEnabled){
+    if('Notification' in window){
+      const permission=await Notification.requestPermission();
+      if(permission==='granted'){notificationsEnabled=true;localStorage.setItem('notifications','true');showToast('🔔 התראות הופעלו');}
+      else{showToast('❌ ההתראות נחסמו בדפדפן');}
+    }else{showToast('❌ הדפדפן לא תומך בהתראות');}
+  }else{notificationsEnabled=false;localStorage.setItem('notifications','false');showToast('🔕 התראות כובו');}
+  render();
+}
+function showNotification(title,body){
+  if(!notificationsEnabled)return;
+  try{
+    new Notification(title,{body,icon:'🚚',badge:'🚚'});
+    document.getElementById('notificationSound')?.play().catch(()=>{});
+  }catch(e){}
+}
+
+// חיפוש מתקדם
+let advancedSearch={courier:'',dateFrom:'',dateTo:'',minPrice:'',maxPrice:''};
+function toggleAdvancedSearch(){document.getElementById('advancedSearchPanel')?.classList.toggle('hidden');}
+function applyAdvancedSearch(){render();}
+function clearAdvancedSearch(){advancedSearch={courier:'',dateFrom:'',dateTo:'',minPrice:'',maxPrice:''};render();}
 
 // רענון אוטומטי של טוקן
 async function refreshAccessToken(){
@@ -1049,7 +1287,7 @@ function logout(){
 function connectWS(){
   if(!token)return;ws=new WebSocket(WS_URL);
   ws.onopen=()=>{connected=true;ws.send(JSON.stringify({type:'auth',token}));render();};
-  ws.onmessage=(e)=>{const m=JSON.parse(e.data);if(m.type==='init'){orders=m.data.orders||[];stats=m.data.stats||{};render();}else if(m.type==='new_order'){if(!orders.find(o=>o.id===m.data.order.id)){orders.unshift(m.data.order);showToast('🆕 '+m.data.order.orderNumber);}render();}else if(m.type==='order_updated'){orders=orders.map(o=>o.id===m.data.order.id?m.data.order:o);render();}else if(m.type==='order_deleted'){orders=orders.filter(o=>o.id!==m.data.orderId);render();}else if(m.type==='stats_updated'){stats=m.data;render();}else if(m.type==='refresh'){location.reload();}};
+  ws.onmessage=(e)=>{const m=JSON.parse(e.data);if(m.type==='init'){orders=m.data.orders||[];stats=m.data.stats||{};render();}else if(m.type==='new_order'){if(!orders.find(o=>o.id===m.data.order.id)){orders.unshift(m.data.order);showToast('🆕 '+m.data.order.orderNumber);showNotification('🚚 משלוח חדש!',m.data.order.orderNumber+' - '+m.data.order.pickupAddress);}render();}else if(m.type==='order_updated'){const prev=orders.find(o=>o.id===m.data.order.id);if(prev?.status!==m.data.order.status){if(m.data.order.status==='taken')showNotification('🏍️ משלוח נתפס',m.data.order.orderNumber);if(m.data.order.status==='delivered')showNotification('✅ משלוח נמסר',m.data.order.orderNumber);}orders=orders.map(o=>o.id===m.data.order.id?m.data.order:o);render();}else if(m.type==='order_deleted'){orders=orders.filter(o=>o.id!==m.data.orderId);render();}else if(m.type==='stats_updated'){stats=m.data;render();}else if(m.type==='refresh'){location.reload();}};
   ws.onclose=()=>{connected=false;render();setTimeout(connectWS,3000);};
 }
 
@@ -1096,19 +1334,35 @@ function renderLogin(){
 }
 
 function renderDashboard(){
-  const fo=orders.filter(o=>{if(filter==='active')return['new','published','taken','picked'].includes(o.status);if(filter==='delivered')return o.status==='delivered';if(filter==='cancelled')return o.status==='cancelled';return true;}).filter(o=>{if(!search)return true;const s=search.toLowerCase();return o.orderNumber?.toLowerCase().includes(s)||o.senderName?.toLowerCase().includes(s)||o.receiverName?.toLowerCase().includes(s)||o.pickupAddress?.toLowerCase().includes(s)||o.deliveryAddress?.toLowerCase().includes(s);});
+  // סינון מתקדם
+  let fo=orders.filter(o=>{if(filter==='active')return['new','published','taken','picked'].includes(o.status);if(filter==='delivered')return o.status==='delivered';if(filter==='cancelled')return o.status==='cancelled';return true;});
+  // חיפוש טקסט רגיל
+  fo=fo.filter(o=>{if(!search)return true;const s=search.toLowerCase();return o.orderNumber?.toLowerCase().includes(s)||o.senderName?.toLowerCase().includes(s)||o.receiverName?.toLowerCase().includes(s)||o.pickupAddress?.toLowerCase().includes(s)||o.deliveryAddress?.toLowerCase().includes(s);});
+  // חיפוש מתקדם
+  if(advancedSearch.courier)fo=fo.filter(o=>o.courier?.name?.includes(advancedSearch.courier));
+  if(advancedSearch.dateFrom)fo=fo.filter(o=>new Date(o.createdAt)>=new Date(advancedSearch.dateFrom));
+  if(advancedSearch.dateTo)fo=fo.filter(o=>new Date(o.createdAt)<=new Date(advancedSearch.dateTo+' 23:59:59'));
+  if(advancedSearch.minPrice)fo=fo.filter(o=>o.price>=parseFloat(advancedSearch.minPrice));
+  if(advancedSearch.maxPrice)fo=fo.filter(o=>o.price<=parseFloat(advancedSearch.maxPrice));
   
   document.getElementById('app').innerHTML=\`
 <header class="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
   <div class="max-w-7xl mx-auto px-4 py-3">
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3"><div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-xl flex items-center justify-center text-xl">🚚</div><div><h1 class="text-lg font-bold text-white">M.M.H Delivery</h1><p class="text-xs text-slate-500">🔒 v4.0</p></div></div>
-      <div class="flex items-center gap-3"><div class="px-3 py-1 rounded-full text-sm \${connected?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${connected?'🟢 מחובר':'🔴 מתחבר...'}</div><span class="text-sm text-slate-300">\${user.name}</span><button onclick="logout()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400">🚪</button></div>
+      <div class="flex items-center gap-2">
+        <button onclick="toggleNotifications()" class="p-2 hover:bg-slate-700 rounded-lg \${notificationsEnabled?'text-amber-400':'text-slate-500'}" title="התראות">\${notificationsEnabled?'🔔':'🔕'}</button>
+        <button onclick="toggleDarkMode()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400" title="מצב לילה/יום">\${darkMode?'🌙':'☀️'}</button>
+        <div class="px-3 py-1 rounded-full text-sm \${connected?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${connected?'🟢':'🔴'}</div>
+        <span class="text-sm text-slate-300 hidden md:inline">\${user.name}</span>
+        <button onclick="logout()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400">🚪</button>
+      </div>
     </div>
     <div class="flex gap-1 mt-3 overflow-x-auto pb-1">
       <button onclick="setTab('orders')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='orders'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">📦 הזמנות</button>
       <button onclick="setTab('couriers')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='couriers'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">🏍️ שליחים</button>
       <button onclick="setTab('stats')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='stats'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">📊 סטטיסטיקות</button>
+      <button onclick="setTab('reports')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='reports'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">📈 דוחות</button>
       \${user.role==='admin'?'<button onclick="setTab(\\'users\\')" class="px-4 py-2 rounded-lg text-sm font-medium '+(currentTab==='users'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800')+'">👥 משתמשים</button>':''}
       \${user.role==='admin'?'<button onclick="setTab(\\'admin\\')" class="px-4 py-2 rounded-lg text-sm font-medium '+(currentTab==='admin'?'bg-red-700 text-white':'text-red-400 hover:bg-slate-800')+'">⚙️ כלים</button>':''}
     </div>
@@ -1118,6 +1372,7 @@ function renderDashboard(){
   \${currentTab==='orders'?renderOrders(fo):''}
   \${currentTab==='couriers'?renderCouriers():''}
   \${currentTab==='stats'?renderStats():''}
+  \${currentTab==='reports'?renderReports():''}
   \${currentTab==='users'?renderUsers():''}
   \${currentTab==='admin'?renderAdmin():''}
 </main>
@@ -1125,6 +1380,7 @@ function renderDashboard(){
 }
 
 function renderOrders(fo){
+  const hasAdvancedFilters=advancedSearch.courier||advancedSearch.dateFrom||advancedSearch.dateTo||advancedSearch.minPrice||advancedSearch.maxPrice;
   return \`
 <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
   <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold">\${stats.total||0}</div><div class="text-sm text-slate-400">סה״כ</div></div>
@@ -1133,7 +1389,7 @@ function renderOrders(fo){
   <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-emerald-400">\${stats.delivered||0}</div><div class="text-sm text-slate-400">נמסרו</div></div>
   <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-emerald-400">\${fmt(stats.revenue)}</div><div class="text-sm text-slate-400">הכנסות</div></div>
 </div>
-<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
   <div class="flex gap-2 overflow-x-auto">
     <button onclick="setFilter('all')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='all'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">הכל</button>
     <button onclick="setFilter('active')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='active'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">פעילים</button>
@@ -1142,8 +1398,39 @@ function renderOrders(fo){
   </div>
   <div class="flex gap-2">
     <input type="text" placeholder="🔍 חיפוש..." value="\${search}" onchange="search=this.value;render()" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white w-40">
+    <button onclick="toggleAdvancedSearch()" class="px-3 py-1.5 rounded-lg text-sm \${hasAdvancedFilters?'bg-amber-500/20 text-amber-400 border border-amber-500':'bg-slate-800/50 text-slate-400'}">🔎</button>
     <button onclick="showNewOrderModal()" class="bg-gradient-to-r from-emerald-500 to-blue-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium">➕ הזמנה</button>
   </div>
+</div>
+<!-- פאנל חיפוש מתקדם -->
+<div id="advancedSearchPanel" class="hidden bg-slate-800/60 rounded-xl border border-slate-700/50 p-4 mb-6">
+  <div class="flex justify-between items-center mb-3">
+    <h3 class="font-bold text-sm">🔎 חיפוש מתקדם</h3>
+    <button onclick="clearAdvancedSearch()" class="text-xs text-slate-400 hover:text-white">נקה הכל</button>
+  </div>
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+    <div>
+      <label class="text-xs text-slate-400 block mb-1">שליח</label>
+      <input type="text" placeholder="שם שליח" value="\${advancedSearch.courier}" onchange="advancedSearch.courier=this.value;render()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-white">
+    </div>
+    <div>
+      <label class="text-xs text-slate-400 block mb-1">מתאריך</label>
+      <input type="date" value="\${advancedSearch.dateFrom}" onchange="advancedSearch.dateFrom=this.value;render()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-white">
+    </div>
+    <div>
+      <label class="text-xs text-slate-400 block mb-1">עד תאריך</label>
+      <input type="date" value="\${advancedSearch.dateTo}" onchange="advancedSearch.dateTo=this.value;render()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-white">
+    </div>
+    <div>
+      <label class="text-xs text-slate-400 block mb-1">מחיר מינימום</label>
+      <input type="number" placeholder="₪" value="\${advancedSearch.minPrice}" onchange="advancedSearch.minPrice=this.value;render()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-white">
+    </div>
+    <div>
+      <label class="text-xs text-slate-400 block mb-1">מחיר מקסימום</label>
+      <input type="number" placeholder="₪" value="\${advancedSearch.maxPrice}" onchange="advancedSearch.maxPrice=this.value;render()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-sm text-white">
+    </div>
+  </div>
+  \${hasAdvancedFilters?'<div class="mt-3 text-xs text-amber-400">🔍 מציג '+fo.length+' תוצאות</div>':''}
 </div>
 <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
   \${fo.map(o=>\`
@@ -1206,6 +1493,128 @@ function renderStats(){
   <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-3xl font-bold text-purple-400">\${fmt(parseFloat(stats.total_payout||0)-parseFloat(stats.total_paid||0))}</div><div class="text-slate-400 mt-2">יתרה לתשלום</div></div>
   <div class="bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-xl border border-emerald-500/50 p-6 text-center"><div class="text-3xl font-bold text-emerald-400">\${fmt(stats.commission)}</div><div class="text-emerald-300 mt-2 font-medium">💎 רווח נקי (25%)</div></div>
 </div>\`;
+}
+
+let chartData=null,chartPeriod='daily';
+
+async function loadChartData(){
+  chartData=await api('/api/reports/'+chartPeriod);
+  renderReportsChart();
+}
+
+function renderReportsChart(){
+  if(!chartData||!chartData.length){document.getElementById('chartArea').innerHTML='<div class="text-center py-12 text-slate-400">אין נתונים להצגה</div>';return;}
+  const maxRevenue=Math.max(...chartData.map(d=>parseFloat(d.revenue)||0));
+  const barWidth=100/chartData.length;
+  document.getElementById('chartArea').innerHTML=\`
+    <div class="flex items-end justify-around h-64 border-b border-slate-700 pb-2">
+      \${chartData.slice().reverse().map((d,i)=>{
+        const height=maxRevenue>0?((parseFloat(d.revenue)||0)/maxRevenue*100):0;
+        const date=chartPeriod==='daily'?new Date(d.date).toLocaleDateString('he-IL',{day:'numeric',month:'numeric'}):new Date(d.week).toLocaleDateString('he-IL',{day:'numeric',month:'numeric'});
+        return \`<div class="flex flex-col items-center" style="width:\${barWidth}%">
+          <div class="text-xs text-emerald-400 mb-1">\${d.delivered||0}</div>
+          <div class="w-full max-w-8 bg-gradient-to-t from-emerald-500 to-blue-500 rounded-t transition-all" style="height:\${height}%"></div>
+          <div class="text-xs text-slate-500 mt-2 transform -rotate-45 origin-top-right">\${date}</div>
+        </div>\`;
+      }).join('')}
+    </div>
+    <div class="flex justify-between mt-4 text-sm">
+      <div class="text-slate-400">סה״כ הכנסות: <span class="text-emerald-400 font-bold">\${fmt(chartData.reduce((s,d)=>s+(parseFloat(d.revenue)||0),0))}</span></div>
+      <div class="text-slate-400">סה״כ משלוחים: <span class="text-white font-bold">\${chartData.reduce((s,d)=>s+(parseInt(d.delivered)||0),0)}</span></div>
+      <div class="text-slate-400">רווח נקי: <span class="text-emerald-400 font-bold">\${fmt(chartData.reduce((s,d)=>s+(parseFloat(d.profit)||0),0))}</span></div>
+    </div>
+  \`;
+}
+
+function renderReports(){
+  if(!chartData)loadChartData();
+  return \`
+<h2 class="text-xl font-bold mb-6">📈 דוחות וייצוא</h2>
+
+<div class="grid lg:grid-cols-3 gap-6 mb-6">
+  <!-- גרף -->
+  <div class="lg:col-span-2 bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="font-bold">📊 גרף הכנסות</h3>
+      <div class="flex gap-2">
+        <button onclick="chartPeriod='daily';loadChartData()" class="px-3 py-1 rounded text-sm \${chartPeriod==='daily'?'bg-emerald-500 text-white':'bg-slate-700 text-slate-400'}">יומי</button>
+        <button onclick="chartPeriod='weekly';loadChartData()" class="px-3 py-1 rounded text-sm \${chartPeriod==='weekly'?'bg-emerald-500 text-white':'bg-slate-700 text-slate-400'}">שבועי</button>
+      </div>
+    </div>
+    <div id="chartArea" class="min-h-64"></div>
+  </div>
+
+  <!-- ייצוא -->
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
+    <h3 class="font-bold mb-4">📥 ייצוא לאקסל</h3>
+    <div class="space-y-3">
+      <button onclick="exportOrders()" class="w-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 py-3 rounded-lg text-sm hover:bg-emerald-500/30 flex items-center justify-center gap-2">
+        <span>📦</span> ייצוא הזמנות
+      </button>
+      <button onclick="exportCouriers()" class="w-full bg-blue-500/20 text-blue-400 border border-blue-500/50 py-3 rounded-lg text-sm hover:bg-blue-500/30 flex items-center justify-center gap-2">
+        <span>🏍️</span> ייצוא שליחים
+      </button>
+      <button onclick="exportPayments()" class="w-full bg-purple-500/20 text-purple-400 border border-purple-500/50 py-3 rounded-lg text-sm hover:bg-purple-500/30 flex items-center justify-center gap-2">
+        <span>💳</span> ייצוא תשלומים
+      </button>
+    </div>
+    
+    <div class="mt-6 pt-4 border-t border-slate-700">
+      <h4 class="text-sm font-medium text-slate-400 mb-3">סינון הזמנות לייצוא:</h4>
+      <div class="space-y-2">
+        <input type="date" id="exportFrom" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white">
+        <input type="date" id="exportTo" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white">
+        <select id="exportStatus" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white">
+          <option value="all">כל הסטטוסים</option>
+          <option value="delivered">נמסרו</option>
+          <option value="cancelled">בוטלו</option>
+        </select>
+        <button onclick="exportOrdersFiltered()" class="w-full bg-amber-500/20 text-amber-400 border border-amber-500/50 py-2 rounded-lg text-sm hover:bg-amber-500/30">
+          📥 ייצוא מסונן
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- טבלת שליחים מובילים -->
+<div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
+  <h3 class="font-bold mb-4">🏆 שליחים מובילים (30 יום)</h3>
+  <div id="topCouriers" class="text-center py-4 text-slate-400">טוען...</div>
+</div>
+<script>loadTopCouriers()</script>\`;
+}
+
+async function loadTopCouriers(){
+  const data=await api('/api/reports/couriers');
+  const top=data.slice(0,10);
+  document.getElementById('topCouriers').innerHTML=top.length?\`
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead><tr class="text-slate-400 border-b border-slate-700"><th class="text-right p-2">#</th><th class="text-right p-2">שליח</th><th class="text-right p-2">טלפון</th><th class="text-right p-2">משלוחים (חודש)</th><th class="text-right p-2">הרוויח (חודש)</th><th class="text-right p-2">יתרה</th></tr></thead>
+        <tbody>\${top.map((c,i)=>\`
+          <tr class="border-b border-slate-700/50">
+            <td class="p-2">\${i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1}</td>
+            <td class="p-2 font-medium">\${c.first_name} \${c.last_name}</td>
+            <td class="p-2 text-slate-400">\${c.phone}</td>
+            <td class="p-2 text-emerald-400 font-bold">\${c.monthly_deliveries||0}</td>
+            <td class="p-2 text-emerald-400">\${fmt(c.monthly_earned)}</td>
+            <td class="p-2 text-amber-400">\${fmt(c.balance)}</td>
+          </tr>
+        \`).join('')}</tbody>
+      </table>
+    </div>
+  \`:'<div class="text-slate-400">אין נתונים</div>';
+}
+
+function exportOrders(){window.location.href=API+'/api/export/orders?token='+token;}
+function exportCouriers(){window.location.href=API+'/api/export/couriers?token='+token;}
+function exportPayments(){window.location.href=API+'/api/export/payments?token='+token;}
+function exportOrdersFiltered(){
+  const from=document.getElementById('exportFrom')?.value||'';
+  const to=document.getElementById('exportTo')?.value||'';
+  const status=document.getElementById('exportStatus')?.value||'all';
+  window.location.href=API+'/api/export/orders?from='+from+'&to='+to+'&status='+status;
 }
 
 function renderUsers(){
