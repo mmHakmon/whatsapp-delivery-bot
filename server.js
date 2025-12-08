@@ -48,6 +48,7 @@ const CONFIG = {
     PRICE_PER_KM: parseFloat(process.env.PRICE_PER_KM) || 2.5, // מחיר לק"מ נוסף
     FREE_KM: parseFloat(process.env.FREE_KM) || 1,             // ק"מ ראשון חינם
     MIN_PRICE: parseFloat(process.env.MIN_PRICE) || 75,        // מחיר מינימום
+    VAT_RATE: parseFloat(process.env.VAT_RATE) || 0.18,        // מע"מ 18%
   }
 };
 
@@ -1095,23 +1096,30 @@ const calculateDistance = async (origin, destination) => {
   }
 };
 
-// חישוב מחיר לפי מרחק
+// חישוב מחיר לפי מרחק (כולל מע"מ)
 const calculatePriceByDistance = (distanceKm) => {
-  const { BASE_PRICE, PRICE_PER_KM, FREE_KM, MIN_PRICE } = CONFIG.PRICING;
+  const { BASE_PRICE, PRICE_PER_KM, FREE_KM, MIN_PRICE, VAT_RATE } = CONFIG.PRICING;
   
   // ק"מ לחיוב (אחרי הק"מ הראשון החינמי)
   const chargeableKm = Math.max(0, distanceKm - FREE_KM);
   
-  // חישוב מחיר: בסיס + (ק"מ נוספים × מחיר לק"מ)
-  let price = BASE_PRICE + (chargeableKm * PRICE_PER_KM);
+  // חישוב מחיר לפני מע"מ: בסיס + (ק"מ נוספים × מחיר לק"מ)
+  let priceBeforeVat = BASE_PRICE + (chargeableKm * PRICE_PER_KM);
   
-  // עיגול למעלה לשקל שלם
-  price = Math.ceil(price);
+  // מינימום לפני מע"מ
+  priceBeforeVat = Math.max(priceBeforeVat, MIN_PRICE);
   
-  // מינימום
-  price = Math.max(price, MIN_PRICE);
+  // חישוב מע"מ
+  const vat = priceBeforeVat * VAT_RATE;
   
-  return price;
+  // מחיר סופי כולל מע"מ - עיגול למעלה לשקל שלם
+  const priceWithVat = Math.ceil(priceBeforeVat + vat);
+  
+  return {
+    priceBeforeVat: Math.round(priceBeforeVat),
+    vat: Math.round(vat),
+    price: priceWithVat
+  };
 };
 
 // חישוב מחיר אוטומטי
@@ -1133,11 +1141,15 @@ app.post('/api/calculate-price', requireAuth, async (req, res) => {
     const distance = await calculateDistance(pickupAddress, deliveryAddress);
     
     if (!distance) {
-      // אם Google נכשל, נחזיר מחיר בסיס
-      const price = CONFIG.PRICING.BASE_PRICE;
+      // אם Google נכשל, נחזיר מחיר בסיס + מע"מ
+      const priceBeforeVat = CONFIG.PRICING.BASE_PRICE;
+      const vat = Math.round(priceBeforeVat * CONFIG.PRICING.VAT_RATE);
+      const price = priceBeforeVat + vat;
       return res.json({ 
         success: true,
         price,
+        priceBeforeVat,
+        vat,
         commission: Math.round(price * CONFIG.COMMISSION),
         payout: price - Math.round(price * CONFIG.COMMISSION),
         distance: null,
@@ -1145,14 +1157,17 @@ app.post('/api/calculate-price', requireAuth, async (req, res) => {
       });
     }
     
-    // חישוב מחיר לפי מרחק
-    const price = calculatePriceByDistance(distance.distanceKm);
-    const commission = Math.round(price * CONFIG.COMMISSION);
-    const payout = price - commission;
+    // חישוב מחיר לפי מרחק (כולל מע"מ)
+    const priceData = calculatePriceByDistance(distance.distanceKm);
+    const commission = Math.round(priceData.price * CONFIG.COMMISSION);
+    const payout = priceData.price - commission;
     
     res.json({ 
       success: true,
-      price,
+      price: priceData.price,
+      priceBeforeVat: priceData.priceBeforeVat,
+      vat: priceData.vat,
+      vatRate: CONFIG.PRICING.VAT_RATE * 100,
       commission,
       payout,
       distance: {
@@ -1165,15 +1180,20 @@ app.post('/api/calculate-price', requireAuth, async (req, res) => {
         basePrice: CONFIG.PRICING.BASE_PRICE,
         pricePerKm: CONFIG.PRICING.PRICE_PER_KM,
         freeKm: CONFIG.PRICING.FREE_KM,
-        chargeableKm: Math.max(0, distance.distanceKm - CONFIG.PRICING.FREE_KM).toFixed(1)
+        chargeableKm: Math.max(0, distance.distanceKm - CONFIG.PRICING.FREE_KM).toFixed(1),
+        vatRate: CONFIG.PRICING.VAT_RATE * 100 + '%'
       }
     });
   } catch (e) { 
     console.error('Calculate price error:', e);
-    const price = CONFIG.PRICING.BASE_PRICE;
+    const priceBeforeVat = CONFIG.PRICING.BASE_PRICE;
+    const vat = Math.round(priceBeforeVat * CONFIG.PRICING.VAT_RATE);
+    const price = priceBeforeVat + vat;
     res.json({ 
       success: false,
       price,
+      priceBeforeVat,
+      vat,
       commission: Math.round(price * CONFIG.COMMISSION),
       payout: price - Math.round(price * CONFIG.COMMISSION),
       error: 'שגיאה בחישוב'
@@ -2004,9 +2024,17 @@ function showNewOrderModal(){
         <span class="text-gray-400">זמן משוער:</span>
         <span id="calcDuration" class="text-white font-medium">-</span>
       </div>
+      <div class="flex justify-between items-center mt-1 pt-1 border-t border-dark-500">
+        <span class="text-gray-400">לפני מע"מ:</span>
+        <span id="calcPriceBeforeVat" class="text-white">-</span>
+      </div>
       <div class="flex justify-between items-center mt-1">
-        <span class="text-gray-400">מחיר מחושב:</span>
-        <span id="calcPrice" class="text-mmh-400 font-bold">-</span>
+        <span class="text-gray-400">מע"מ (18%):</span>
+        <span id="calcVat" class="text-white">-</span>
+      </div>
+      <div class="flex justify-between items-center mt-1 pt-1 border-t border-dark-500">
+        <span class="text-gray-400 font-bold">סה"כ כולל מע"מ:</span>
+        <span id="calcPrice" class="text-mmh-400 font-bold text-lg">-</span>
       </div>
     </div>
     
@@ -2044,11 +2072,13 @@ async function calculatePriceForOrder(){
       document.getElementById('priceCalcResult').classList.remove('hidden');
       document.getElementById('calcDistance').textContent = r.distance.text;
       document.getElementById('calcDuration').textContent = r.distance.duration;
+      document.getElementById('calcPriceBeforeVat').textContent = '₪' + r.priceBeforeVat;
+      document.getElementById('calcVat').textContent = '₪' + r.vat;
       document.getElementById('calcPrice').textContent = '₪' + r.price;
       document.getElementById('price').value = r.price;
-      showToast('✅ מחיר חושב: ₪' + r.price);
+      showToast('✅ מחיר כולל מע"מ: ₪' + r.price);
     } else {
-      document.getElementById('price').value = r.price || 75;
+      document.getElementById('price').value = r.price || 89;
       showToast('⚠️ ' + (r.note || 'מחיר בסיס הוגדר'));
     }
   } catch(e){
