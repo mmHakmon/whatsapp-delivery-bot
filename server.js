@@ -333,12 +333,24 @@ const sendWhatsApp = async (to, message) => {
 const sendWhatsAppImage = async (to, imageUrl, caption) => {
   if (!CONFIG.WHAPI.TOKEN) { console.log('📱 WA Image:', caption.substring(0, 50)); return; }
   try {
-    await axios.post(CONFIG.WHAPI.API_URL + '/messages/image', { 
-      to, 
-      media: { url: imageUrl },
+    // Whapi format - image with caption
+    const response = await axios.post(CONFIG.WHAPI.API_URL + '/messages/image', { 
+      to: to,
+      media: imageUrl,  // URL ישיר, לא אובייקט
       caption: caption
-    }, { headers: { Authorization: 'Bearer ' + CONFIG.WHAPI.TOKEN } });
-  } catch (e) { console.error('WA Image error:', e.message); }
+    }, { 
+      headers: { 
+        'Authorization': 'Bearer ' + CONFIG.WHAPI.TOKEN,
+        'Content-Type': 'application/json'
+      } 
+    });
+    console.log('📷 WA Image sent successfully');
+  } catch (e) { 
+    console.error('WA Image error:', e.response?.data || e.message);
+    // אם נכשל, ננסה לשלוח טקסט רגיל
+    console.log('📱 Falling back to text message...');
+    await sendWhatsApp(to, caption);
+  }
 };
 
 // ==================== DB HELPERS ====================
