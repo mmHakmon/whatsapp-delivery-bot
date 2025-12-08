@@ -39,7 +39,7 @@ const CONFIG = {
     TOKEN: process.env.WHAPI_TOKEN,
     GROUP_ID: process.env.COURIERS_GROUP_ID,
   },
-  GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || 'AIzaSyAsjRq5dOUsIamcrzvONHeBZtYuDKIu6U4',
+  GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || '',
   COMMISSION: parseFloat(process.env.COMMISSION_RATE) || 0.25,
   NODE_ENV: process.env.NODE_ENV || 'development',
   // מחירון משלוחים
