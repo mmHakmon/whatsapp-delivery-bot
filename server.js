@@ -46,7 +46,7 @@ const CONFIG = {
   PRICING: {
     BASE_PRICE: parseFloat(process.env.BASE_PRICE) || 75,      // מחיר בסיס
     PRICE_PER_KM: parseFloat(process.env.PRICE_PER_KM) || 2.5, // מחיר לק"מ נוסף
-    FREE_KM: parseFloat(process.env.FREE_KM) || 1,             // ק"מ ראשון חינם
+    FREE_KM: parseFloat(process.env.FREE_KM) || 0,             // ק"מ ראשון חינם
     MIN_PRICE: parseFloat(process.env.MIN_PRICE) || 75,        // מחיר מינימום
   }
 };
@@ -475,18 +475,27 @@ const deliverOrder = async (orderNum) => {
 };
 
 const cancelOrder = async (id, reason, userId) => {
+  // קודם נשמור את הסטטוס הישן לפני העדכון
+  const check = await pool.query("SELECT status, order_number FROM orders WHERE id=$1", [id]);
+  const oldStatus = check.rows[0]?.status;
+  const orderNum = check.rows[0]?.order_number;
+  
   const r = await pool.query("UPDATE orders SET status='cancelled',cancelled_at=NOW(),cancel_reason=$1 WHERE id=$2 RETURNING *",[reason,id]);
   const o = r.rows[0]; if (!o) return;
   
+  // שלח הודעה לשליח אם היה מוקצה
   if (o.courier_id) {
     const cr = await pool.query("SELECT * FROM couriers WHERE id=$1",[o.courier_id]);
-    if (cr.rows[0]?.whatsapp_id) await sendWhatsApp(cr.rows[0].whatsapp_id, `❌ *המשלוח ${o.order_number} בוטל*`);
+    if (cr.rows[0]?.whatsapp_id) await sendWhatsApp(cr.rows[0].whatsapp_id, `❌ *המשלוח ${o.order_number} בוטל*\n\n${reason ? 'סיבה: ' + reason : ''}`);
   }
-  if (CONFIG.WHAPI.GROUP_ID && ['published','taken','picked'].includes(o.status)) 
-    await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, `❌ המשלוח ${o.order_number} בוטל`);
+  
+  // שלח הודעה לקבוצה אם המשלוח היה מפורסם/נתפס/נאסף
+  if (CONFIG.WHAPI.GROUP_ID && ['published','taken','picked'].includes(oldStatus)) {
+    await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, `❌ *המשלוח ${o.order_number} בוטל*${reason ? '\nסיבה: ' + reason : ''}`);
+  }
   
   broadcast({ type: 'order_updated', data: { order: formatOrder(o) } });
-  console.log('❌ Cancelled:', o.order_number);
+  console.log('❌ Cancelled:', o.order_number, '(was:', oldStatus, ')');
 };
 
 // ==================== API ROUTES ====================
@@ -1924,7 +1933,81 @@ async function adminDeleteAllPayments(){if(!confirm('למחוק את כל היס
 async function adminFullReset(){if(!confirm('לאפס את כל המערכת? פעולה זו בלתי הפיכה!'))return;if(!confirm('אתה בטוח לחלוטין?'))return;if(prompt('הקלד "אפס" לאישור')!=='אפס')return;const r=await api('/api/admin/reset','DELETE');if(r.success){showToast('המערכת אופסה');location.reload();}else alert(r.error);}
 
 function showNewOrderModal(){
-  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">הזמנה חדשה</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><div class="grid grid-cols-2 gap-3"><input type="text" id="senderName" placeholder="שם שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="senderPhone" placeholder="טלפון שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="pickupAddress" placeholder="כתובת איסוף" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><div class="grid grid-cols-2 gap-3"><input type="text" id="receiverName" placeholder="שם מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="receiverPhone" placeholder="טלפון מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="deliveryAddress" placeholder="כתובת מסירה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><textarea id="details" placeholder="פרטים נוספים" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none"></textarea><div class="grid grid-cols-2 gap-3"><input type="number" id="price" placeholder="מחיר ₪" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="priority" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="normal">רגיל</option><option value="express">אקספרס</option><option value="urgent">דחוף</option></select></div><button onclick="submitOrder()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">צור הזמנה</button></div></div></div>\`;
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">📦 הזמנה חדשה</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3">
+    <div class="grid grid-cols-2 gap-3">
+      <input type="text" id="senderName" placeholder="שם שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="tel" id="senderPhone" placeholder="טלפון שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    </div>
+    <input type="text" id="pickupAddress" placeholder="📍 כתובת איסוף" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    <div class="grid grid-cols-2 gap-3">
+      <input type="text" id="receiverName" placeholder="שם מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="tel" id="receiverPhone" placeholder="טלפון מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    </div>
+    <input type="text" id="deliveryAddress" placeholder="🏠 כתובת מסירה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    <textarea id="details" placeholder="פרטים נוספים" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none"></textarea>
+    
+    <div id="priceCalcResult" class="hidden bg-slate-700/50 rounded-lg p-3 text-sm">
+      <div class="flex justify-between items-center">
+        <span class="text-slate-400">מרחק:</span>
+        <span id="calcDistance" class="text-white font-medium">-</span>
+      </div>
+      <div class="flex justify-between items-center mt-1">
+        <span class="text-slate-400">זמן משוער:</span>
+        <span id="calcDuration" class="text-white font-medium">-</span>
+      </div>
+      <div class="flex justify-between items-center mt-1">
+        <span class="text-slate-400">מחיר מחושב:</span>
+        <span id="calcPrice" class="text-emerald-400 font-bold">-</span>
+      </div>
+    </div>
+    
+    <div class="grid grid-cols-3 gap-3">
+      <input type="number" id="price" placeholder="מחיר ₪" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <select id="priority" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+        <option value="normal">רגיל</option>
+        <option value="express">אקספרס</option>
+        <option value="urgent">דחוף</option>
+      </select>
+      <button type="button" onclick="calculatePriceForOrder()" class="bg-amber-500/20 text-amber-400 rounded-lg px-3 py-2 text-sm font-medium hover:bg-amber-500/30">🧮 חשב</button>
+    </div>
+    
+    <button onclick="submitOrder()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">✅ צור הזמנה</button>
+  </div></div></div>\`;
+}
+
+async function calculatePriceForOrder(){
+  const pickup = document.getElementById('pickupAddress').value;
+  const delivery = document.getElementById('deliveryAddress').value;
+  
+  if(!pickup || !delivery){
+    showToast('⚠️ יש להזין כתובות איסוף ומסירה','warning');
+    return;
+  }
+  
+  const btn = event.target;
+  btn.innerHTML = '⏳ מחשב...';
+  btn.disabled = true;
+  
+  try {
+    const r = await api('/api/calculate-price', 'POST', { pickupAddress: pickup, deliveryAddress: delivery });
+    
+    if(r.success && r.distance){
+      document.getElementById('priceCalcResult').classList.remove('hidden');
+      document.getElementById('calcDistance').textContent = r.distance.text;
+      document.getElementById('calcDuration').textContent = r.distance.duration;
+      document.getElementById('calcPrice').textContent = '₪' + r.price;
+      document.getElementById('price').value = r.price;
+      showToast('✅ מחיר חושב: ₪' + r.price);
+    } else {
+      document.getElementById('price').value = r.price || 75;
+      showToast('⚠️ ' + (r.note || 'מחיר בסיס הוגדר'));
+    }
+  } catch(e){
+    showToast('❌ שגיאה בחישוב','error');
+  } finally {
+    btn.innerHTML = '🧮 חשב';
+    btn.disabled = false;
+  }
 }
 
 function submitOrder(){createOrder({senderName:document.getElementById('senderName').value,senderPhone:document.getElementById('senderPhone').value,pickupAddress:document.getElementById('pickupAddress').value,receiverName:document.getElementById('receiverName').value,receiverPhone:document.getElementById('receiverPhone').value,deliveryAddress:document.getElementById('deliveryAddress').value,details:document.getElementById('details').value,price:parseInt(document.getElementById('price').value)||0,priority:document.getElementById('priority').value});}
@@ -1942,7 +2025,72 @@ function showPaymentModal(id,name,balance){
 function submitPayment(id){createPayment({courier_id:id,amount:parseFloat(document.getElementById('paymentAmount').value)||0,method:document.getElementById('paymentMethod').value,notes:document.getElementById('paymentNotes').value});}
 
 function showEditOrderModal(o){
-  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">✏️ עריכת הזמנה \${o.orderNumber}</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><div class="grid grid-cols-2 gap-3"><input type="text" id="editSenderName" placeholder="שם שולח" value="\${o.senderName||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="editSenderPhone" placeholder="טלפון שולח" value="\${o.senderPhone||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="editPickupAddress" placeholder="כתובת איסוף" value="\${o.pickupAddress||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><div class="grid grid-cols-2 gap-3"><input type="text" id="editReceiverName" placeholder="שם מקבל" value="\${o.receiverName||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="editReceiverPhone" placeholder="טלפון מקבל" value="\${o.receiverPhone||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="editDeliveryAddress" placeholder="כתובת מסירה" value="\${o.deliveryAddress||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><textarea id="editDetails" placeholder="פרטים נוספים" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none">\${o.details||''}</textarea><div class="grid grid-cols-2 gap-3"><input type="number" id="editPrice" placeholder="מחיר ₪" value="\${o.price||0}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="editPriority" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="normal" \${o.priority==='normal'?'selected':''}>רגיל</option><option value="express" \${o.priority==='express'?'selected':''}>אקספרס</option><option value="urgent" \${o.priority==='urgent'?'selected':''}>דחוף</option></select></div><button onclick="submitEditOrder(\${o.id})" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">💾 שמור שינויים</button></div></div></div>\`;
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">✏️ עריכת הזמנה \${o.orderNumber}</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3">
+    <div class="grid grid-cols-2 gap-3">
+      <input type="text" id="editSenderName" placeholder="שם שולח" value="\${o.senderName||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="tel" id="editSenderPhone" placeholder="טלפון שולח" value="\${o.senderPhone||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    </div>
+    <input type="text" id="editPickupAddress" placeholder="📍 כתובת איסוף" value="\${o.pickupAddress||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    <div class="grid grid-cols-2 gap-3">
+      <input type="text" id="editReceiverName" placeholder="שם מקבל" value="\${o.receiverName||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="tel" id="editReceiverPhone" placeholder="טלפון מקבל" value="\${o.receiverPhone||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    </div>
+    <input type="text" id="editDeliveryAddress" placeholder="🏠 כתובת מסירה" value="\${o.deliveryAddress||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    <textarea id="editDetails" placeholder="פרטים נוספים" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none">\${o.details||''}</textarea>
+    
+    <div id="editPriceCalcResult" class="hidden bg-slate-700/50 rounded-lg p-3 text-sm">
+      <div class="flex justify-between"><span class="text-slate-400">מרחק:</span><span id="editCalcDistance" class="text-white font-medium">-</span></div>
+      <div class="flex justify-between mt-1"><span class="text-slate-400">זמן:</span><span id="editCalcDuration" class="text-white font-medium">-</span></div>
+      <div class="flex justify-between mt-1"><span class="text-slate-400">מחיר מחושב:</span><span id="editCalcPrice" class="text-emerald-400 font-bold">-</span></div>
+    </div>
+    
+    <div class="grid grid-cols-3 gap-3">
+      <input type="number" id="editPrice" placeholder="מחיר ₪" value="\${o.price||0}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <select id="editPriority" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+        <option value="normal" \${o.priority==='normal'?'selected':''}>רגיל</option>
+        <option value="express" \${o.priority==='express'?'selected':''}>אקספרס</option>
+        <option value="urgent" \${o.priority==='urgent'?'selected':''}>דחוף</option>
+      </select>
+      <button type="button" onclick="calculatePriceForEdit()" class="bg-amber-500/20 text-amber-400 rounded-lg px-3 py-2 text-sm font-medium hover:bg-amber-500/30">🧮 חשב</button>
+    </div>
+    
+    <button onclick="submitEditOrder(\${o.id})" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">💾 שמור שינויים</button>
+  </div></div></div>\`;
+}
+
+async function calculatePriceForEdit(){
+  const pickup = document.getElementById('editPickupAddress').value;
+  const delivery = document.getElementById('editDeliveryAddress').value;
+  
+  if(!pickup || !delivery){
+    showToast('⚠️ יש להזין כתובות','warning');
+    return;
+  }
+  
+  const btn = event.target;
+  btn.innerHTML = '⏳';
+  btn.disabled = true;
+  
+  try {
+    const r = await api('/api/calculate-price', 'POST', { pickupAddress: pickup, deliveryAddress: delivery });
+    
+    if(r.success && r.distance){
+      document.getElementById('editPriceCalcResult').classList.remove('hidden');
+      document.getElementById('editCalcDistance').textContent = r.distance.text;
+      document.getElementById('editCalcDuration').textContent = r.distance.duration;
+      document.getElementById('editCalcPrice').textContent = '₪' + r.price;
+      document.getElementById('editPrice').value = r.price;
+      showToast('✅ מחיר חושב: ₪' + r.price);
+    } else {
+      document.getElementById('editPrice').value = r.price || 75;
+      showToast('⚠️ מחיר בסיס הוגדר');
+    }
+  } catch(e){
+    showToast('❌ שגיאה','error');
+  } finally {
+    btn.innerHTML = '🧮 חשב';
+    btn.disabled = false;
+  }
 }
 
 function submitEditOrder(id){updateOrder(id,{senderName:document.getElementById('editSenderName').value,senderPhone:document.getElementById('editSenderPhone').value,pickupAddress:document.getElementById('editPickupAddress').value,receiverName:document.getElementById('editReceiverName').value,receiverPhone:document.getElementById('editReceiverPhone').value,deliveryAddress:document.getElementById('editDeliveryAddress').value,details:document.getElementById('editDetails').value,price:parseInt(document.getElementById('editPrice').value)||0,priority:document.getElementById('editPriority').value});}
