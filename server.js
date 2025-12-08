@@ -441,7 +441,7 @@ const publishOrder = async (id) => {
 
 const takeOrder = async (orderNum, cd) => {
   const or = await pool.query("SELECT * FROM orders WHERE order_number=$1 AND status='published'",[orderNum]);
-  const o = or.rows[0]; if (!o) return { success: false, error: 'המשלוח כבר נתפס' };
+  const o = or.rows[0]; if (!o) return { success: false, error: 'המשלוח כבר נתפס, פעם הבאה תהיה מהיר יותר !' };
   
   let cr = await pool.query("SELECT * FROM couriers WHERE id_number=$1",[cd.idNumber]);
   if (!cr.rows[0]) {
