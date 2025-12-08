@@ -46,7 +46,7 @@ const CONFIG = {
   PRICING: {
     BASE_PRICE: parseFloat(process.env.BASE_PRICE) || 75,      // מחיר בסיס
     PRICE_PER_KM: parseFloat(process.env.PRICE_PER_KM) || 2.5, // מחיר לק"מ נוסף
-    FREE_KM: parseFloat(process.env.FREE_KM) || 0,             // ק"מ ראשון חינם
+    FREE_KM: parseFloat(process.env.FREE_KM) || 1,             // ק"מ ראשון חינם
     MIN_PRICE: parseFloat(process.env.MIN_PRICE) || 75,        // מחיר מינימום
   }
 };
@@ -160,6 +160,15 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' })); // הגבלת גודל בקשה
 app.use(rateLimit()); // Rate limiting גלובלי
+
+// ==================== STATIC LOGO ====================
+// הלוגו יכול להיות מקישור חיצוני או מקובץ סטטי
+const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/39WjvNZm/favicon.png';
+
+// Route לתמונת הלוגו (אם תרצה להשתמש בקובץ מקומי)
+app.get('/logo.png', (req, res) => {
+  res.redirect(LOGO_URL);
+});
 
 const server = http.createServer(app);
 
@@ -1661,13 +1670,16 @@ app.get('/', (req, res) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>M.M.H Delivery</title>
+  <link rel="icon" type="image/png" href="${process.env.LOGO_URL || '/logo.png'}">
+  <link rel="apple-touch-icon" href="${process.env.LOGO_URL || '/logo.png'}">
+  <meta name="theme-color" content="#0f172a">
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>*{font-family:system-ui,-apple-system,sans-serif}</style>
+  <style>*{font-family:system-ui,-apple-system,sans-serif}.logo-img{height:40px;width:auto;}</style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
 <div id="app"></div>
 <script>
-const API='',WS_URL='${wsUrl}';
+const API='',WS_URL='${wsUrl}',LOGO_URL='${process.env.LOGO_URL || '/logo.png'}';
 let token=localStorage.getItem('token'),refreshToken=localStorage.getItem('refreshToken'),user=JSON.parse(localStorage.getItem('user')||'null'),orders=[],stats={},couriers=[],users=[],ws=null,connected=false,currentTab='orders',filter='all',search='',pending2FA=null;
 
 // רענון אוטומטי של טוקן
@@ -1762,7 +1774,7 @@ function statusColor(s){const c={new:'slate',published:'amber',taken:'blue',pick
 function render(){if(!token||!user)renderLogin();else renderDashboard();}
 
 function renderLogin(){
-  document.getElementById('app').innerHTML=\`<div class="min-h-screen flex items-center justify-center p-4"><div class="bg-slate-800/80 backdrop-blur rounded-2xl p-8 w-full max-w-md border border-slate-700"><div class="text-center mb-8"><div class="text-5xl mb-4">🚚</div><h1 class="text-2xl font-bold text-emerald-400">M.M.H Delivery</h1><p class="text-slate-400 mt-2">מערכת ניהול משלוחים</p><p class="text-xs text-slate-500 mt-1">🔒 גרסה מאובטחת v4.0</p></div><div id="loginError" class="hidden bg-red-500/20 border border-red-500 text-red-400 rounded-lg p-3 mb-4 text-center"></div><div class="space-y-4"><input type="text" id="username" placeholder="שם משתמש" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"><input type="password" id="password" placeholder="סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none" onkeypress="if(event.key==='Enter')login()"><div id="twoFactorSection" class="hidden"><input type="text" id="twoFactorCode" placeholder="קוד אימות (6 ספרות)" maxlength="6" class="w-full bg-slate-900 border border-amber-500 rounded-xl px-4 py-3 text-white text-center text-xl tracking-widest focus:border-amber-400 focus:outline-none" onkeypress="if(event.key==='Enter')login()"></div><button onclick="login()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-xl font-bold">התחבר</button></div></div></div>\`;
+  document.getElementById('app').innerHTML=\`<div class="min-h-screen flex items-center justify-center p-4"><div class="bg-slate-800/80 backdrop-blur rounded-2xl p-8 w-full max-w-md border border-slate-700"><div class="text-center mb-8"><img src="\${LOGO_URL}" alt="M.M.H" class="h-20 w-auto mx-auto mb-4 rounded-lg" onerror="this.onerror=null;this.innerHTML='🚚';this.style.fontSize='50px';"><h1 class="text-2xl font-bold text-emerald-400">M.M.H Delivery</h1><p class="text-slate-400 mt-2">מערכת ניהול משלוחים</p><p class="text-xs text-slate-500 mt-1">🔒 גרסה מאובטחת v5.0</p></div><div id="loginError" class="hidden bg-red-500/20 border border-red-500 text-red-400 rounded-lg p-3 mb-4 text-center"></div><div class="space-y-4"><input type="text" id="username" placeholder="שם משתמש" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"><input type="password" id="password" placeholder="סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none" onkeypress="if(event.key==='Enter')login()"><div id="twoFactorSection" class="hidden"><input type="text" id="twoFactorCode" placeholder="קוד אימות (6 ספרות)" maxlength="6" class="w-full bg-slate-900 border border-amber-500 rounded-xl px-4 py-3 text-white text-center text-xl tracking-widest focus:border-amber-400 focus:outline-none" onkeypress="if(event.key==='Enter')login()"></div><button onclick="login()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-xl font-bold">התחבר</button></div></div></div>\`;
 }
 
 function renderDashboard(){
@@ -1772,7 +1784,7 @@ function renderDashboard(){
 <header class="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
   <div class="max-w-7xl mx-auto px-4 py-3">
     <div class="flex items-center justify-between">
-      <div class="flex items-center gap-3"><div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-xl flex items-center justify-center text-xl">🚚</div><div><h1 class="text-lg font-bold text-white">M.M.H Delivery</h1><p class="text-xs text-slate-500">🔒 v4.0</p></div></div>
+      <div class="flex items-center gap-3"><img src="\${LOGO_URL}" alt="M.M.H" class="h-10 w-auto rounded-lg" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%2310b981%22 width=%2240%22 height=%2240%22 rx=%228%22/><text x=%2220%22 y=%2228%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2216%22>🚚</text></svg>';"><div><h1 class="text-lg font-bold text-white">M.M.H Delivery</h1><p class="text-xs text-slate-500">🔒 v5.0</p></div></div>
       <div class="flex items-center gap-3"><div class="px-3 py-1 rounded-full text-sm \${connected?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${connected?'🟢 מחובר':'🔴 מתחבר...'}</div><span class="text-sm text-slate-300">\${user.name}</span><button onclick="logout()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400">🚪</button></div>
     </div>
     <div class="flex gap-1 mt-3 overflow-x-auto pb-1">
