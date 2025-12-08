@@ -1719,7 +1719,7 @@ render();
 server.listen(CONFIG.PORT, '0.0.0.0', () => {
   console.log('');
   console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log('║     🚚  M.M.H Delivery System Pro v3.0  🚚                   ║');
+  console.log('║     🚚  M.M.H Delivery System Pro v4.0  🚚                   ║');
   console.log('╠══════════════════════════════════════════════════════════════╣');
   console.log('║  Server: http://localhost:' + CONFIG.PORT + '                             ║');
   console.log('║  Public: ' + CONFIG.PUBLIC_URL.padEnd(43) + '║');
