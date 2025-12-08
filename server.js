@@ -123,16 +123,27 @@ const getOrders = async (filters = {}) => {
 };
 
 const getStats = async () => {
-  const r = await pool.query(`
+  const ordersStats = await pool.query(`
     SELECT COUNT(*) as total,
       COUNT(CASE WHEN status='new' THEN 1 END) as new,
       COUNT(CASE WHEN status='published' THEN 1 END) as published,
       COUNT(CASE WHEN status IN ('taken','picked') THEN 1 END) as active,
       COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered,
       COALESCE(SUM(CASE WHEN status='delivered' THEN price END),0) as revenue,
-      COALESCE(SUM(CASE WHEN status='delivered' THEN commission END),0) as commission
+      COALESCE(SUM(CASE WHEN status='delivered' THEN commission END),0) as commission,
+      COALESCE(SUM(CASE WHEN status='delivered' THEN courier_payout END),0) as total_payout
     FROM orders WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'`);
-  return r.rows[0];
+  
+  // קבל סה"כ תשלומים שבוצעו לשליחים ב-30 יום
+  const paymentsStats = await pool.query(`
+    SELECT COALESCE(SUM(amount),0) as total_paid
+    FROM payments WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'`);
+  
+  return {
+    ...ordersStats.rows[0],
+    total_paid: paymentsStats.rows[0].total_paid,
+    net_profit: parseFloat(ordersStats.rows[0].commission) // הרווח נקי = העמלות שלנו
+  };
 };
 
 const formatOrder = (o) => ({
@@ -194,9 +205,12 @@ const takeOrder = async (orderNum, cd) => {
   msg += `📍 *כתובת איסוף:*\n${o.pickup_address}\n\n`;
   msg += `🔗 *ניווט:*\nhttps://waze.com/ul?q=${encodeURIComponent(o.pickup_address)}\n`;
   msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `📥 *פרטי המקבל:*\n👤 שם: ${o.receiver_name}\n📞 טלפון: ${o.receiver_phone}\n\n`;
+  msg += `🏠 *כתובת מסירה:*\n${o.delivery_address}\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
   if (o.details) msg += `📝 *פרטים:*\n${o.details}\n━━━━━━━━━━━━━━━━━━━━\n`;
   msg += `💰 *תשלום אחרי עמלה:* ₪${o.courier_payout}\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━\n\n📦 *אספת? לחץ כאן:*\n${pickupUrl}\n\n רק לאחר אישור איסוף החבילה ימסרו לך פרטי המסירה באופן אוטומטי!! 🚀`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n\n📦 *אספת? לחץ כאן:*\n${pickupUrl}\n\nבהצלחה! 🚀`;
   
   await sendWhatsApp(waId, msg);
   if (CONFIG.WHAPI.GROUP_ID) await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, `✅ המשלוח ${o.order_number} נתפס על ידי ${cd.firstName} ${cd.lastName}`);
@@ -302,6 +316,51 @@ app.post('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
   }
 });
 
+// עדכון משתמש
+app.put('/api/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { name, role, phone, email, active } = req.body;
+    await pool.query("UPDATE users SET name=$1,role=$2,phone=$3,email=$4,active=$5 WHERE id=$6",
+      [name,role,phone,email,active,req.params.id]);
+    res.json({ success:true });
+  } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+// שינוי סיסמה למשתמש (אדמין בלבד)
+app.put('/api/users/:id/password', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password || password.length < 4) return res.json({ success:false, error:'סיסמה חייבת להכיל לפחות 4 תווים' });
+    const hash = await bcrypt.hash(password, 10);
+    await pool.query("UPDATE users SET password=$1 WHERE id=$2",[hash,req.params.id]);
+    res.json({ success:true });
+  } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+// שינוי סיסמה עצמית
+app.put('/api/auth/change-password', requireAuth, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const r = await pool.query("SELECT password FROM users WHERE id=$1",[req.user.id]);
+    if (!r.rows[0] || !(await bcrypt.compare(oldPassword, r.rows[0].password)))
+      return res.json({ success:false, error:'סיסמה נוכחית שגויה' });
+    if (!newPassword || newPassword.length < 4) return res.json({ success:false, error:'סיסמה חייבת להכיל לפחות 4 תווים' });
+    const hash = await bcrypt.hash(newPassword, 10);
+    await pool.query("UPDATE users SET password=$1 WHERE id=$2",[hash,req.user.id]);
+    res.json({ success:true });
+  } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+// מחיקת משתמש
+app.delete('/api/users/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    // לא ניתן למחוק את עצמך
+    if (parseInt(req.params.id) === req.user.id) return res.json({ success:false, error:'לא ניתן למחוק את עצמך' });
+    await pool.query("DELETE FROM users WHERE id=$1",[req.params.id]);
+    res.json({ success:true });
+  } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
 app.get('/api/couriers', requireAuth, async (req, res) => {
   try { const r = await pool.query("SELECT * FROM couriers ORDER BY created_at DESC"); res.json(r.rows); }
   catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
@@ -348,6 +407,44 @@ app.post('/api/orders/:id/publish', requireAuth, async (req, res) => {
 app.post('/api/orders/:id/cancel', requireAuth, async (req, res) => {
   try { await cancelOrder(req.params.id, req.body.reason, req.user.id); res.json({ success:true }); }
   catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+// עריכת הזמנה (רק אם סטטוס new או published)
+app.put('/api/orders/:id', requireAuth, async (req, res) => {
+  try {
+    const { senderName, senderPhone, pickupAddress, receiverName, receiverPhone, deliveryAddress, details, price, priority } = req.body;
+    const check = await pool.query("SELECT status FROM orders WHERE id=$1",[req.params.id]);
+    if (!check.rows[0]) return res.json({ success:false, error:'הזמנה לא נמצאה' });
+    if (!['new','published'].includes(check.rows[0].status)) 
+      return res.json({ success:false, error:'לא ניתן לערוך הזמנה שכבר נתפסה' });
+    
+    const comm = Math.round(price * CONFIG.COMMISSION);
+    const payout = price - comm;
+    
+    await pool.query(`UPDATE orders SET sender_name=$1,sender_phone=$2,pickup_address=$3,
+      receiver_name=$4,receiver_phone=$5,delivery_address=$6,details=$7,price=$8,priority=$9,
+      commission=$10,courier_payout=$11 WHERE id=$12`,
+      [senderName,senderPhone,pickupAddress,receiverName,receiverPhone,deliveryAddress,details,price,priority,comm,payout,req.params.id]);
+    
+    const upd = await pool.query(`SELECT o.*,c.first_name as cfn,c.last_name as cln,c.phone as cph FROM orders o 
+      LEFT JOIN couriers c ON o.courier_id=c.id WHERE o.id=$1`,[req.params.id]);
+    broadcast({ type: 'order_updated', data: { order: formatOrder(upd.rows[0]) } });
+    res.json({ success:true });
+  } catch (e) { console.error(e); res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+// מחיקת הזמנה (רק אם new או cancelled - אדמין בלבד)
+app.delete('/api/orders/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const check = await pool.query("SELECT status FROM orders WHERE id=$1",[req.params.id]);
+    if (!check.rows[0]) return res.json({ success:false, error:'הזמנה לא נמצאה' });
+    if (!['new','cancelled'].includes(check.rows[0].status)) 
+      return res.json({ success:false, error:'ניתן למחוק רק הזמנות חדשות או מבוטלות' });
+    
+    await pool.query("DELETE FROM orders WHERE id=$1",[req.params.id]);
+    broadcast({ type: 'order_deleted', data: { orderId: parseInt(req.params.id) } });
+    res.json({ success:true });
+  } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
 });
 
 app.get('/api/payments', requireAuth, requireRole('admin','manager'), async (req, res) => {
@@ -489,7 +586,7 @@ function logout(){token=null;user=null;localStorage.removeItem('token');localSto
 function connectWS(){
   if(!token)return;ws=new WebSocket(WS_URL);
   ws.onopen=()=>{connected=true;ws.send(JSON.stringify({type:'auth',token}));render();};
-  ws.onmessage=(e)=>{const m=JSON.parse(e.data);if(m.type==='init'){orders=m.data.orders||[];stats=m.data.stats||{};render();}else if(m.type==='new_order'){orders.unshift(m.data.order);showToast('🆕 '+m.data.order.orderNumber);render();}else if(m.type==='order_updated'){orders=orders.map(o=>o.id===m.data.order.id?m.data.order:o);render();}else if(m.type==='stats_updated'){stats=m.data;render();}};
+  ws.onmessage=(e)=>{const m=JSON.parse(e.data);if(m.type==='init'){orders=m.data.orders||[];stats=m.data.stats||{};render();}else if(m.type==='new_order'){if(!orders.find(o=>o.id===m.data.order.id)){orders.unshift(m.data.order);showToast('🆕 '+m.data.order.orderNumber);}render();}else if(m.type==='order_updated'){orders=orders.map(o=>o.id===m.data.order.id?m.data.order:o);render();}else if(m.type==='order_deleted'){orders=orders.filter(o=>o.id!==m.data.orderId);render();}else if(m.type==='stats_updated'){stats=m.data;render();}};
   ws.onclose=()=>{connected=false;render();setTimeout(connectWS,3000);};
 }
 
@@ -500,7 +597,13 @@ async function loadUsers(){if(user?.role==='admin'){users=await api('/api/users'
 async function createOrder(d){const r=await api('/api/orders','POST',d);if(r.success){closeModal();showToast('✅ נוצר');}}
 async function publishOrder(id){await api('/api/orders/'+id+'/publish','POST');showToast('📤 פורסם');}
 async function cancelOrder(id){if(!confirm('לבטל?'))return;await api('/api/orders/'+id+'/cancel','POST',{reason:'ביטול'});showToast('❌ בוטל');}
+async function deleteOrder(id){if(!confirm('למחוק לצמיתות?'))return;const r=await api('/api/orders/'+id,'DELETE');if(r.success)showToast('🗑️ נמחק');else alert(r.error);}
+async function editOrder(id){const o=orders.find(x=>x.id===id);if(!o)return;showEditOrderModal(o);}
+async function updateOrder(id,d){const r=await api('/api/orders/'+id,'PUT',d);if(r.success){closeModal();showToast('✅ עודכן');}else alert(r.error);}
 async function createUser(d){const r=await api('/api/users','POST',d);if(r.success){closeModal();showToast('✅ נוצר');loadUsers();}else alert(r.error);}
+async function updateUser(id,d){const r=await api('/api/users/'+id,'PUT',d);if(r.success){closeModal();showToast('✅ עודכן');loadUsers();}else alert(r.error);}
+async function changeUserPassword(id,pwd){const r=await api('/api/users/'+id+'/password','PUT',{password:pwd});if(r.success){closeModal();showToast('✅ סיסמה עודכנה');}else alert(r.error);}
+async function deleteUser(id){if(!confirm('למחוק משתמש?'))return;const r=await api('/api/users/'+id,'DELETE');if(r.success){showToast('🗑️ נמחק');loadUsers();}else alert(r.error);}
 async function createPayment(d){const r=await api('/api/payments','POST',d);if(r.success){closeModal();showToast('✅ תשלום נרשם');loadCouriers();}}
 
 function showToast(m){const t=document.createElement('div');t.className='fixed top-4 left-1/2 -translate-x-1/2 bg-slate-700 text-white px-6 py-3 rounded-xl shadow-lg z-50';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
@@ -582,8 +685,10 @@ function renderOrders(fo){
           <div><span class="text-slate-500">לשליח:</span> <span class="font-bold text-emerald-400">\${fmt(o.courierPayout)}</span></div>
         </div>
         \${o.courier?\`<div class="bg-slate-700/50 rounded-lg p-2 text-xs"><span class="text-slate-500">שליח:</span> \${o.courier.name} - \${o.courier.phone}</div>\`:''}
-        \${o.status==='new'?\`<div class="flex gap-2 pt-2"><button onclick="publishOrder(\${o.id})" class="flex-1 bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-2 rounded-lg text-sm font-medium">📤 פרסם</button><button onclick="cancelOrder(\${o.id})" class="px-3 bg-red-500/20 text-red-400 rounded-lg">✕</button></div>\`:''}
-        \${['published','taken'].includes(o.status)?\`<button onclick="cancelOrder(\${o.id})" class="w-full bg-red-500/20 text-red-400 py-2 rounded-lg text-sm">❌ בטל</button>\`:''}
+        \${o.status==='new'?\`<div class="flex gap-2 pt-2"><button onclick="publishOrder(\${o.id})" class="flex-1 bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-2 rounded-lg text-sm font-medium">📤 פרסם</button><button onclick="editOrder(\${o.id})" class="px-3 bg-blue-500/20 text-blue-400 rounded-lg">✏️</button><button onclick="cancelOrder(\${o.id})" class="px-3 bg-red-500/20 text-red-400 rounded-lg">✕</button></div>\`:''}
+        \${o.status==='published'?\`<div class="flex gap-2 pt-2"><button onclick="editOrder(\${o.id})" class="flex-1 bg-blue-500/20 text-blue-400 py-2 rounded-lg text-sm">✏️ ערוך</button><button onclick="cancelOrder(\${o.id})" class="flex-1 bg-red-500/20 text-red-400 py-2 rounded-lg text-sm">❌ בטל</button></div>\`:''}
+        \${o.status==='taken'||o.status==='picked'?\`<button onclick="cancelOrder(\${o.id})" class="w-full bg-red-500/20 text-red-400 py-2 rounded-lg text-sm">❌ בטל</button>\`:''}
+        \${o.status==='cancelled'&&user.role==='admin'?\`<button onclick="deleteOrder(\${o.id})" class="w-full bg-red-500/20 text-red-400 py-2 rounded-lg text-sm">🗑️ מחק</button>\`:''}
       </div>
     </div>\`).join('')}
 </div>
@@ -613,11 +718,17 @@ function renderCouriers(){
 function renderStats(){
   return \`
 <h2 class="text-xl font-bold mb-6">📊 סטטיסטיקות (30 יום)</h2>
-<div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
   <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold">\${stats.total||0}</div><div class="text-slate-400 mt-2">סה״כ הזמנות</div></div>
   <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold text-emerald-400">\${stats.delivered||0}</div><div class="text-slate-400 mt-2">נמסרו</div></div>
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold text-emerald-400">\${fmt(stats.revenue)}</div><div class="text-slate-400 mt-2">הכנסות</div></div>
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold text-blue-400">\${fmt(stats.commission)}</div><div class="text-slate-400 mt-2">עמלות</div></div>
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold text-emerald-400">\${fmt(stats.revenue)}</div><div class="text-slate-400 mt-2">הכנסות ברוטו</div></div>
+</div>
+<h3 class="text-lg font-bold mb-4">💰 ניתוח רווחיות</h3>
+<div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-3xl font-bold text-amber-400">\${fmt(stats.total_payout)}</div><div class="text-slate-400 mt-2">לתשלום לשליחים</div></div>
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-3xl font-bold text-blue-400">\${fmt(stats.total_paid)}</div><div class="text-slate-400 mt-2">שולם לשליחים</div></div>
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-3xl font-bold text-purple-400">\${fmt(parseFloat(stats.total_payout||0)-parseFloat(stats.total_paid||0))}</div><div class="text-slate-400 mt-2">יתרה לתשלום</div></div>
+  <div class="bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-xl border border-emerald-500/50 p-6 text-center"><div class="text-3xl font-bold text-emerald-400">\${fmt(stats.commission)}</div><div class="text-emerald-300 mt-2 font-medium">💎 רווח נקי (25%)</div></div>
 </div>\`;
 }
 
@@ -626,8 +737,8 @@ function renderUsers(){
 <div class="mb-6 flex justify-between items-center"><h2 class="text-xl font-bold">👥 משתמשים (\${users.length})</h2><button onclick="showNewUserModal()" class="bg-gradient-to-r from-emerald-500 to-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium">➕ משתמש</button></div>
 <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
   <table class="w-full text-sm">
-    <thead class="bg-slate-700/50"><tr><th class="text-right p-3">שם</th><th class="text-right p-3">משתמש</th><th class="text-right p-3">תפקיד</th><th class="text-right p-3">טלפון</th><th class="text-right p-3">סטטוס</th></tr></thead>
-    <tbody>\${users.map(u=>\`<tr class="border-t border-slate-700/50"><td class="p-3">\${u.name}</td><td class="p-3 text-slate-400">\${u.username}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.role==='admin'?'bg-purple-500/20 text-purple-400':'bg-blue-500/20 text-blue-400'}">\${u.role==='admin'?'מנהל':u.role==='manager'?'מנהל משמרת':'נציג'}</span></td><td class="p-3 text-slate-400">\${u.phone||'-'}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.active?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${u.active?'פעיל':'לא פעיל'}</span></td></tr>\`).join('')}</tbody>
+    <thead class="bg-slate-700/50"><tr><th class="text-right p-3">שם</th><th class="text-right p-3">משתמש</th><th class="text-right p-3">תפקיד</th><th class="text-right p-3">טלפון</th><th class="text-right p-3">סטטוס</th><th class="text-right p-3">פעולות</th></tr></thead>
+    <tbody>\${users.map(u=>\`<tr class="border-t border-slate-700/50"><td class="p-3">\${u.name}</td><td class="p-3 text-slate-400">\${u.username}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.role==='admin'?'bg-purple-500/20 text-purple-400':'bg-blue-500/20 text-blue-400'}">\${u.role==='admin'?'מנהל':u.role==='manager'?'מנהל משמרת':'נציג'}</span></td><td class="p-3 text-slate-400">\${u.phone||'-'}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.active?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${u.active?'פעיל':'לא פעיל'}</span></td><td class="p-3"><div class="flex gap-1"><button onclick="showEditUserModal(\${u.id})" class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">✏️</button><button onclick="showChangePasswordModal(\${u.id},'\\'\${u.name}\\'')" class="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">🔑</button>\${u.id!==user.id?'<button onclick="deleteUser('+u.id+')" class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">🗑️</button>':''}</div></td></tr>\`).join('')}</tbody>
   </table>
 </div>\`;
 }
@@ -649,6 +760,25 @@ function showPaymentModal(id,name,balance){
 }
 
 function submitPayment(id){createPayment({courier_id:id,amount:parseFloat(document.getElementById('paymentAmount').value)||0,method:document.getElementById('paymentMethod').value,notes:document.getElementById('paymentNotes').value});}
+
+function showEditOrderModal(o){
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">✏️ עריכת הזמנה \${o.orderNumber}</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><div class="grid grid-cols-2 gap-3"><input type="text" id="editSenderName" placeholder="שם שולח" value="\${o.senderName||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="editSenderPhone" placeholder="טלפון שולח" value="\${o.senderPhone||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="editPickupAddress" placeholder="כתובת איסוף" value="\${o.pickupAddress||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><div class="grid grid-cols-2 gap-3"><input type="text" id="editReceiverName" placeholder="שם מקבל" value="\${o.receiverName||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="editReceiverPhone" placeholder="טלפון מקבל" value="\${o.receiverPhone||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="editDeliveryAddress" placeholder="כתובת מסירה" value="\${o.deliveryAddress||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><textarea id="editDetails" placeholder="פרטים נוספים" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none">\${o.details||''}</textarea><div class="grid grid-cols-2 gap-3"><input type="number" id="editPrice" placeholder="מחיר ₪" value="\${o.price||0}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="editPriority" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="normal" \${o.priority==='normal'?'selected':''}>רגיל</option><option value="express" \${o.priority==='express'?'selected':''}>אקספרס</option><option value="urgent" \${o.priority==='urgent'?'selected':''}>דחוף</option></select></div><button onclick="submitEditOrder(\${o.id})" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">💾 שמור שינויים</button></div></div></div>\`;
+}
+
+function submitEditOrder(id){updateOrder(id,{senderName:document.getElementById('editSenderName').value,senderPhone:document.getElementById('editSenderPhone').value,pickupAddress:document.getElementById('editPickupAddress').value,receiverName:document.getElementById('editReceiverName').value,receiverPhone:document.getElementById('editReceiverPhone').value,deliveryAddress:document.getElementById('editDeliveryAddress').value,details:document.getElementById('editDetails').value,price:parseInt(document.getElementById('editPrice').value)||0,priority:document.getElementById('editPriority').value});}
+
+function showEditUserModal(id){
+  const u=users.find(x=>x.id===id);if(!u)return;
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">✏️ עריכת משתמש</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><input type="text" id="editUserName" placeholder="שם מלא" value="\${u.name}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="editUserPhone" placeholder="טלפון" value="\${u.phone||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="email" id="editUserEmail" placeholder="אימייל" value="\${u.email||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="editUserRole" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="agent" \${u.role==='agent'?'selected':''}>נציג</option><option value="manager" \${u.role==='manager'?'selected':''}>מנהל משמרת</option><option value="admin" \${u.role==='admin'?'selected':''}>מנהל</option></select><select id="editUserActive" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="true" \${u.active?'selected':''}>פעיל</option><option value="false" \${!u.active?'selected':''}>לא פעיל</option></select><button onclick="submitEditUser(\${u.id})" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">💾 שמור</button></div></div></div>\`;
+}
+
+function submitEditUser(id){updateUser(id,{name:document.getElementById('editUserName').value,phone:document.getElementById('editUserPhone').value,email:document.getElementById('editUserEmail').value,role:document.getElementById('editUserRole').value,active:document.getElementById('editUserActive').value==='true'});}
+
+function showChangePasswordModal(id,name){
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">🔑 שינוי סיסמה</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><div class="text-center mb-4"><div class="text-slate-400">עבור: <span class="text-white">\${name}</span></div></div><input type="password" id="newUserPassword" placeholder="סיסמה חדשה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="password" id="confirmUserPassword" placeholder="אישור סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><button onclick="submitChangePassword(\${id})" class="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 rounded-lg font-bold">🔑 שנה סיסמה</button></div></div></div>\`;
+}
+
+function submitChangePassword(id){const p1=document.getElementById('newUserPassword').value,p2=document.getElementById('confirmUserPassword').value;if(p1!==p2){alert('הסיסמאות לא תואמות');return;}changeUserPassword(id,p1);}
 
 if(token)connectWS();
 render();
