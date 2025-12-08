@@ -426,7 +426,7 @@ const publishOrder = async (id) => {
   msg += `📍 *איסוף:* ${o.pickup_address}\n`;
   msg += `🏠 *יעד:* ${o.delivery_address}\n`;
   if (o.details) msg += `📝 *פרטים:* ${o.details}\n`;
-  msg += `\n💰 *תשלום:* ₪${o.courier_payout}\n\n`;
+  msg += `\n💰 *תשלום אחרי עמלה:* ₪${o.courier_payout}\n\n`;
   msg += `👇 *לתפיסה:*\n${url}`;
   
   if (CONFIG.WHAPI.GROUP_ID) {
@@ -441,7 +441,7 @@ const publishOrder = async (id) => {
 
 const takeOrder = async (orderNum, cd) => {
   const or = await pool.query("SELECT * FROM orders WHERE order_number=$1 AND status='published'",[orderNum]);
-  const o = or.rows[0]; if (!o) return { success: false, error: 'המשלוח כבר נתפס, פעם הבאה תהיה מהיר יותר !' };
+  const o = or.rows[0]; if (!o) return { success: false, error: 'המשלוח כבר נתפס !' };
   
   let cr = await pool.query("SELECT * FROM couriers WHERE id_number=$1",[cd.idNumber]);
   if (!cr.rows[0]) {
@@ -458,9 +458,6 @@ const takeOrder = async (orderNum, cd) => {
   msg += `📤 *פרטי השולח:*\n👤 שם: ${o.sender_name}\n📞 טלפון: ${o.sender_phone}\n\n`;
   msg += `📍 *כתובת איסוף:*\n${o.pickup_address}\n\n`;
   msg += `🔗 *ניווט:*\nhttps://waze.com/ul?q=${encodeURIComponent(o.pickup_address)}\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━\n`;
-  msg += `📥 *פרטי המקבל:*\n👤 שם: ${o.receiver_name}\n📞 טלפון: ${o.receiver_phone}\n\n`;
-  msg += `🏠 *כתובת מסירה:*\n${o.delivery_address}\n`;
   msg += `━━━━━━━━━━━━━━━━━━━━\n`;
   if (o.details) msg += `📝 *פרטים:*\n${o.details}\n━━━━━━━━━━━━━━━━━━━━\n`;
   msg += `💰 *תשלום אחרי עמלה:* ₪${o.courier_payout}\n`;
@@ -1532,7 +1529,7 @@ app.get('/take/:orderNumber', async (req, res) => {
     const r = await pool.query("SELECT * FROM orders WHERE order_number=$1",[req.params.orderNumber]);
     const o = r.rows[0];
     if (!o) return res.send(statusHTML('❌','הזמנה לא נמצאה','','#ef4444'));
-    if (o.status !== 'published') return res.send(statusHTML('🏍️','המשלוח נתפס!','מישהו הספיק לפניך','#f59e0b'));
+    if (o.status !== 'published') return res.send(statusHTML('🏍️','המשלוח נתפס!','מישהו הספיק לפניך, פעם הבאה תהיה מהיר יותר!','#f59e0b'));
     res.send(takeOrderHTML(o));
   } catch (e) { res.status(500).send(statusHTML('❌','שגיאה','','#ef4444')); }
 });
