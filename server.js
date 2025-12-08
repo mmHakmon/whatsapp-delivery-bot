@@ -426,7 +426,7 @@ const publishOrder = async (id) => {
   msg += `📍 *איסוף:* ${o.pickup_address}\n`;
   msg += `🏠 *יעד:* ${o.delivery_address}\n`;
   if (o.details) msg += `📝 *פרטים:* ${o.details}\n`;
-  msg += `\n💰 *תשלום אחרי עמלה:* ₪${o.courier_payout}\n\n`;
+  msg += `\n💰 *תשלום סופי לאחר קיזוז עמלה:* ₪${o.courier_payout}\n\n`;
   msg += `👇 *לתפיסה:*\n${url}`;
   
   if (CONFIG.WHAPI.GROUP_ID) {
@@ -461,7 +461,7 @@ const takeOrder = async (orderNum, cd) => {
   msg += `━━━━━━━━━━━━━━━━━━━━\n`;
   if (o.details) msg += `📝 *פרטים:*\n${o.details}\n━━━━━━━━━━━━━━━━━━━━\n`;
   msg += `💰 *תשלום אחרי עמלה:* ₪${o.courier_payout}\n`;
-  msg += `━━━━━━━━━━━━━━━━━━━━\n\n📦 *אספת? לחץ כאן:*\n${pickupUrl}\n\nבהצלחה! 🚀`;
+  msg += `━━━━━━━━━━━━━━━━━━━━\n\n📦 *אספת? תסמן – ואני אתן לך את פרטי המסירה:*\n${pickupUrl}\n\nסעו בזהירות הכי חשוב ! ! 🚀`;
   
   await sendWhatsApp(waId, msg);
   if (CONFIG.WHAPI.GROUP_ID) await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, `✅ המשלוח ${o.order_number} נתפס על ידי ${cd.firstName} ${cd.lastName}`);
@@ -484,7 +484,7 @@ const pickupOrder = async (orderNum) => {
     msg += `🏠 *כתובת מסירה:*\n${o.delivery_address}\n\n`;
     msg += `👤 *מקבל:* ${o.receiver_name}\n📞 *טלפון:* ${o.receiver_phone}\n\n`;
     msg += `🔗 *ניווט:*\nhttps://waze.com/ul?q=${encodeURIComponent(o.delivery_address)}\n\n`;
-    msg += `━━━━━━━━━━━━━━━━━━━━\n📬 *מסרת? לחץ כאן:*\n${url}`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n📬 *סיימת מסירה? תפנק בלחיצה — והכסף בדרך אליך.:*\n${url}`;
     await sendWhatsApp(cr.rows[0].whatsapp_id, msg);
   }
   
