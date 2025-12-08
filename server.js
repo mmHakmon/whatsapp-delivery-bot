@@ -329,6 +329,18 @@ const sendWhatsApp = async (to, message) => {
   } catch (e) { console.error('WA error:', e.message); }
 };
 
+// שליחת הודעה עם תמונה
+const sendWhatsAppImage = async (to, imageUrl, caption) => {
+  if (!CONFIG.WHAPI.TOKEN) { console.log('📱 WA Image:', caption.substring(0, 50)); return; }
+  try {
+    await axios.post(CONFIG.WHAPI.API_URL + '/messages/image', { 
+      to, 
+      media: { url: imageUrl },
+      caption: caption
+    }, { headers: { Authorization: 'Bearer ' + CONFIG.WHAPI.TOKEN } });
+  } catch (e) { console.error('WA Image error:', e.message); }
+};
+
 // ==================== DB HELPERS ====================
 const getOrders = async (filters = {}) => {
   let q = `SELECT o.*, c.first_name as cfn, c.last_name as cln, c.phone as cph 
@@ -397,10 +409,20 @@ const publishOrder = async (id) => {
   const o = r.rows[0]; if (!o) return;
   const url = CONFIG.PUBLIC_URL + '/take/' + o.order_number;
   const emoji = {normal:'📦',express:'⚡',urgent:'🚨'}[o.priority]||'📦';
-  let msg = `${emoji} *משלוח חדש - ${o.order_number}*\n\n📍 *איסוף:* ${o.pickup_address}\n🏠 *יעד:* ${o.delivery_address}\n`;
+  
+  let msg = `${emoji} *משלוח חדש - ${o.order_number}*\n\n`;
+  msg += `📍 *איסוף:* ${o.pickup_address}\n`;
+  msg += `🏠 *יעד:* ${o.delivery_address}\n`;
   if (o.details) msg += `📝 *פרטים:* ${o.details}\n`;
-  msg += `\n💰 *תשלום:* ₪${o.courier_payout}\n\n👇 *לתפיסה:*\n${url}`;
-  if (CONFIG.WHAPI.GROUP_ID) await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, msg);
+  msg += `\n💰 *תשלום:* ₪${o.courier_payout}\n\n`;
+  msg += `👇 *לתפיסה:*\n${url}`;
+  
+  if (CONFIG.WHAPI.GROUP_ID) {
+    const logoUrl = process.env.LOGO_URL || 'https://i.ibb.co/39WjvNZm/favicon.png';
+    // שליחה עם תמונת הלוגו
+    await sendWhatsAppImage(CONFIG.WHAPI.GROUP_ID, logoUrl, msg);
+  }
+  
   broadcast({ type: 'order_updated', data: { order: formatOrder(o) } });
   console.log('📤 Published:', o.order_number);
 };
