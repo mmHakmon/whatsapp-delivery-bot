@@ -545,12 +545,26 @@ app.delete('/api/admin/orders/all', requireAuth, requireRole('admin'), async (re
   } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
 });
 
-// מחיקת הזמנות שהושלמו בלבד
+// מחיקת הזמנות שהושלמו בלבד + עדכון סטטיסטיקות שליחים
 app.delete('/api/admin/orders/delivered', requireAuth, requireRole('admin'), async (req, res) => {
   try {
+    // שמור את הסכומים לפני מחיקה כדי לעדכן שליחים
+    await pool.query(`
+      UPDATE couriers c SET 
+        total_deliveries = total_deliveries - COALESCE((
+          SELECT COUNT(*) FROM orders WHERE courier_id = c.id AND status = 'delivered'
+        ), 0),
+        total_earned = total_earned - COALESCE((
+          SELECT SUM(courier_payout) FROM orders WHERE courier_id = c.id AND status = 'delivered'
+        ), 0),
+        balance = balance - COALESCE((
+          SELECT SUM(courier_payout) FROM orders WHERE courier_id = c.id AND status = 'delivered'
+        ), 0)
+    `);
     const r = await pool.query("DELETE FROM orders WHERE status='delivered' RETURNING id");
+    broadcast({ type: 'refresh' });
     res.json({ success: true, deleted: r.rowCount });
-  } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
+  } catch (e) { console.error(e); res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
 });
 
 // מחיקת הזמנות מבוטלות בלבד
@@ -570,10 +584,25 @@ app.delete('/api/admin/couriers/all', requireAuth, requireRole('admin'), async (
   } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
 });
 
-// מחיקת כל התשלומים
+// איפוס סטטיסטיקות שליחים (בלי למחוק אותם)
+app.post('/api/admin/couriers/reset-stats', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    await pool.query("UPDATE couriers SET total_deliveries=0, total_earned=0, balance=0");
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
+});
+
+// מחיקת כל התשלומים + איפוס יתרות
 app.delete('/api/admin/payments/all', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const r = await pool.query("DELETE FROM payments RETURNING id");
+    // איפוס יתרות שליחים - מחשב מחדש לפי הזמנות שנמסרו
+    await pool.query(`
+      UPDATE couriers c SET balance = COALESCE((
+        SELECT SUM(courier_payout) FROM orders 
+        WHERE courier_id = c.id AND status = 'delivered'
+      ), 0)
+    `);
     res.json({ success: true, deleted: r.rowCount });
   } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
 });
@@ -836,6 +865,7 @@ function renderAdmin(){
   <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
     <h3 class="font-bold text-lg mb-4">🏍️ ניהול שליחים</h3>
     <div class="space-y-3">
+      <button onclick="adminResetCourierStats()" class="w-full bg-blue-500/20 text-blue-400 border border-blue-500/50 py-3 rounded-lg text-sm hover:bg-blue-500/30">🔄 אפס סטטיסטיקות שליחים</button>
       <button onclick="adminDeleteAllPayments()" class="w-full bg-amber-500/20 text-amber-400 border border-amber-500/50 py-3 rounded-lg text-sm hover:bg-amber-500/30">🗑️ מחק היסטוריית תשלומים</button>
       <button onclick="adminDeleteAllCouriers()" class="w-full bg-red-500/20 text-red-400 border border-red-500/50 py-3 rounded-lg text-sm hover:bg-red-500/30">💣 מחק את כל השליחים</button>
     </div>
@@ -853,7 +883,8 @@ async function adminDeleteDelivered(){if(!confirm('למחוק את כל ההזמ
 async function adminDeleteCancelled(){if(!confirm('למחוק את כל ההזמנות המבוטלות?'))return;const r=await api('/api/admin/orders/cancelled','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' הזמנות');location.reload();}else alert(r.error);}
 async function adminDeleteAllOrders(){if(!confirm('למחוק את כל ההזמנות? פעולה זו בלתי הפיכה!'))return;if(!confirm('אתה בטוח? זה ימחק הכל!'))return;const r=await api('/api/admin/orders/all','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' הזמנות');location.reload();}else alert(r.error);}
 async function adminDeleteAllCouriers(){if(!confirm('למחוק את כל השליחים?'))return;const r=await api('/api/admin/couriers/all','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' שליחים');loadCouriers();}else alert(r.error);}
-async function adminDeleteAllPayments(){if(!confirm('למחוק את כל היסטוריית התשלומים?'))return;const r=await api('/api/admin/payments/all','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' תשלומים');}else alert(r.error);}
+async function adminResetCourierStats(){if(!confirm('לאפס סטטיסטיקות של כל השליחים? (משלוחים, רווחים, יתרות)'))return;const r=await api('/api/admin/couriers/reset-stats','POST');if(r.success){showToast('סטטיסטיקות אופסו');loadCouriers();}else alert(r.error);}
+async function adminDeleteAllPayments(){if(!confirm('למחוק את כל היסטוריית התשלומים?'))return;const r=await api('/api/admin/payments/all','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' תשלומים');loadCouriers();}else alert(r.error);}
 async function adminFullReset(){if(!confirm('לאפס את כל המערכת? פעולה זו בלתי הפיכה!'))return;if(!confirm('אתה בטוח לחלוטין?'))return;if(prompt('הקלד "אפס" לאישור')!=='אפס')return;const r=await api('/api/admin/reset','DELETE');if(r.success){showToast('המערכת אופסה');location.reload();}else alert(r.error);}
 
 function showNewOrderModal(){
