@@ -1672,11 +1672,48 @@ app.get('/', (req, res) => {
   <title>M.M.H Delivery</title>
   <link rel="icon" type="image/png" href="${process.env.LOGO_URL || '/logo.png'}">
   <link rel="apple-touch-icon" href="${process.env.LOGO_URL || '/logo.png'}">
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0a0f1a">
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>*{font-family:system-ui,-apple-system,sans-serif}.logo-img{height:40px;width:auto;}</style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            mmh: {
+              50: '#e6f7fa',
+              100: '#cceff5',
+              200: '#99dfeb',
+              300: '#66cfe1',
+              400: '#33bfd7',
+              500: '#00afcd',
+              600: '#008ca4',
+              700: '#00697b',
+              800: '#004652',
+              900: '#002329',
+            },
+            dark: {
+              900: '#0a0f1a',
+              800: '#0f1525',
+              700: '#151c2c',
+              600: '#1a2236',
+              500: '#242d3d',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    *{font-family:system-ui,-apple-system,sans-serif}
+    .logo-img{height:50px;width:auto;}
+    .logo-img-login{height:100px;width:auto;}
+    .gradient-mmh{background:linear-gradient(135deg,#00afcd,#0077b6)}
+    .text-mmh{color:#00afcd}
+    .bg-mmh{background-color:#00afcd}
+    .border-mmh{border-color:#00afcd}
+  </style>
 </head>
-<body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+<body class="min-h-screen bg-gradient-to-br from-dark-900 via-dark-800 to-dark-900 text-white">
 <div id="app"></div>
 <script>
 const API='',WS_URL='${wsUrl}',LOGO_URL='${process.env.LOGO_URL || '/logo.png'}';
@@ -1762,7 +1799,7 @@ async function changeUserPassword(id,pwd){const r=await api('/api/users/'+id+'/p
 async function deleteUser(id){if(!confirm('למחוק משתמש?'))return;const r=await api('/api/users/'+id,'DELETE');if(r.success){showToast('🗑️ נמחק');loadUsers();}else alert(r.error);}
 async function createPayment(d){const r=await api('/api/payments','POST',d);if(r.success){closeModal();showToast('✅ תשלום נרשם');loadCouriers();}}
 
-function showToast(m){const t=document.createElement('div');t.className='fixed top-4 left-1/2 -translate-x-1/2 bg-slate-700 text-white px-6 py-3 rounded-xl shadow-lg z-50';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
+function showToast(m){const t=document.createElement('div');t.className='fixed top-4 left-1/2 -translate-x-1/2 bg-dark-600 text-white px-6 py-3 rounded-xl shadow-lg z-50';t.textContent=m;document.body.appendChild(t);setTimeout(()=>t.remove(),3000);}
 function closeModal(){document.getElementById('modal').innerHTML='';}
 function setTab(t){currentTab=t;if(t==='couriers')loadCouriers();if(t==='users')loadUsers();render();}
 function setFilter(f){filter=f;render();}
@@ -1774,25 +1811,25 @@ function statusColor(s){const c={new:'slate',published:'amber',taken:'blue',pick
 function render(){if(!token||!user)renderLogin();else renderDashboard();}
 
 function renderLogin(){
-  document.getElementById('app').innerHTML=\`<div class="min-h-screen flex items-center justify-center p-4"><div class="bg-slate-800/80 backdrop-blur rounded-2xl p-8 w-full max-w-md border border-slate-700"><div class="text-center mb-8"><img src="\${LOGO_URL}" alt="M.M.H" class="h-20 w-auto mx-auto mb-4 rounded-lg" onerror="this.onerror=null;this.innerHTML='🚚';this.style.fontSize='50px';"><h1 class="text-2xl font-bold text-emerald-400">M.M.H Delivery</h1><p class="text-slate-400 mt-2">מערכת ניהול משלוחים</p><p class="text-xs text-slate-500 mt-1">🔒 גרסה מאובטחת v5.0</p></div><div id="loginError" class="hidden bg-red-500/20 border border-red-500 text-red-400 rounded-lg p-3 mb-4 text-center"></div><div class="space-y-4"><input type="text" id="username" placeholder="שם משתמש" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"><input type="password" id="password" placeholder="סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none" onkeypress="if(event.key==='Enter')login()"><div id="twoFactorSection" class="hidden"><input type="text" id="twoFactorCode" placeholder="קוד אימות (6 ספרות)" maxlength="6" class="w-full bg-slate-900 border border-amber-500 rounded-xl px-4 py-3 text-white text-center text-xl tracking-widest focus:border-amber-400 focus:outline-none" onkeypress="if(event.key==='Enter')login()"></div><button onclick="login()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-xl font-bold">התחבר</button></div></div></div>\`;
+  document.getElementById('app').innerHTML=\`<div class="min-h-screen flex items-center justify-center p-4"><div class="bg-dark-700/90 backdrop-blur rounded-2xl p-8 w-full max-w-md border border-dark-500 shadow-2xl"><div class="text-center mb-8"><img src="\${LOGO_URL}" alt="M.M.H" class="h-24 w-auto mx-auto mb-6" onerror="this.style.display='none';"><h1 class="text-3xl font-bold text-mmh">M.M.H Delivery</h1><p class="text-gray-400 mt-2">מערכת ניהול משלוחים</p><p class="text-xs text-gray-500 mt-1">🔒 גרסה מאובטחת v5.0</p></div><div id="loginError" class="hidden bg-red-500/20 border border-red-500 text-red-400 rounded-lg p-3 mb-4 text-center"></div><div class="space-y-4"><input type="text" id="username" placeholder="שם משתמש" class="w-full bg-dark-900 border border-dark-500 rounded-xl px-4 py-3 text-white focus:border-mmh-500 focus:outline-none focus:ring-1 focus:ring-mmh-500 transition"><input type="password" id="password" placeholder="סיסמה" class="w-full bg-dark-900 border border-dark-500 rounded-xl px-4 py-3 text-white focus:border-mmh-500 focus:outline-none focus:ring-1 focus:ring-mmh-500 transition" onkeypress="if(event.key==='Enter')login()"><div id="twoFactorSection" class="hidden"><input type="text" id="twoFactorCode" placeholder="קוד אימות (6 ספרות)" maxlength="6" class="w-full bg-dark-900 border border-amber-500 rounded-xl px-4 py-3 text-white text-center text-xl tracking-widest focus:border-amber-400 focus:outline-none" onkeypress="if(event.key==='Enter')login()"></div><button onclick="login()" class="w-full gradient-mmh text-white py-3 rounded-xl font-bold hover:opacity-90 transition shadow-lg">התחבר</button></div></div></div>\`;
 }
 
 function renderDashboard(){
   const fo=orders.filter(o=>{if(filter==='active')return['new','published','taken','picked'].includes(o.status);if(filter==='delivered')return o.status==='delivered';if(filter==='cancelled')return o.status==='cancelled';return true;}).filter(o=>{if(!search)return true;const s=search.toLowerCase();return o.orderNumber?.toLowerCase().includes(s)||o.senderName?.toLowerCase().includes(s)||o.receiverName?.toLowerCase().includes(s)||o.pickupAddress?.toLowerCase().includes(s)||o.deliveryAddress?.toLowerCase().includes(s);});
   
   document.getElementById('app').innerHTML=\`
-<header class="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
+<header class="border-b border-dark-500 bg-dark-800/90 backdrop-blur sticky top-0 z-40">
   <div class="max-w-7xl mx-auto px-4 py-3">
     <div class="flex items-center justify-between">
-      <div class="flex items-center gap-3"><img src="\${LOGO_URL}" alt="M.M.H" class="h-10 w-auto rounded-lg" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%2310b981%22 width=%2240%22 height=%2240%22 rx=%228%22/><text x=%2220%22 y=%2228%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2216%22>🚚</text></svg>';"><div><h1 class="text-lg font-bold text-white">M.M.H Delivery</h1><p class="text-xs text-slate-500">🔒 v5.0</p></div></div>
-      <div class="flex items-center gap-3"><div class="px-3 py-1 rounded-full text-sm \${connected?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${connected?'🟢 מחובר':'🔴 מתחבר...'}</div><span class="text-sm text-slate-300">\${user.name}</span><button onclick="logout()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400">🚪</button></div>
+      <div class="flex items-center gap-3"><img src="\${LOGO_URL}" alt="M.M.H" class="h-12 w-auto" onerror="this.onerror=null;this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect fill=%22%2300afcd%22 width=%2240%22 height=%2240%22 rx=%228%22/><text x=%2220%22 y=%2228%22 text-anchor=%22middle%22 fill=%22white%22 font-size=%2216%22>🚚</text></svg>';"><div><h1 class="text-lg font-bold text-white">M.M.H Delivery</h1><p class="text-xs text-mmh">🔒 v5.0</p></div></div>
+      <div class="flex items-center gap-3"><div class="px-3 py-1 rounded-full text-sm \${connected?'bg-mmh-500/20 text-mmh-400':'bg-red-500/20 text-red-400'}">\${connected?'🟢 מחובר':'🔴 מתחבר...'}</div><span class="text-sm text-gray-300">\${user.name}</span><button onclick="logout()" class="p-2 hover:bg-dark-600 rounded-lg text-gray-400 transition">🚪</button></div>
     </div>
     <div class="flex gap-1 mt-3 overflow-x-auto pb-1">
-      <button onclick="setTab('orders')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='orders'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">📦 הזמנות</button>
-      <button onclick="setTab('couriers')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='couriers'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">🏍️ שליחים</button>
-      <button onclick="setTab('stats')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='stats'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">📊 סטטיסטיקות</button>
-      \${user.role==='admin'?'<button onclick="setTab(\\'users\\')" class="px-4 py-2 rounded-lg text-sm font-medium '+(currentTab==='users'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800')+'">👥 משתמשים</button>':''}
-      \${user.role==='admin'?'<button onclick="setTab(\\'admin\\')" class="px-4 py-2 rounded-lg text-sm font-medium '+(currentTab==='admin'?'bg-red-700 text-white':'text-red-400 hover:bg-slate-800')+'">⚙️ כלים</button>':''}
+      <button onclick="setTab('orders')" class="px-4 py-2 rounded-lg text-sm font-medium transition \${currentTab==='orders'?'bg-mmh-500 text-white':'text-gray-400 hover:bg-dark-600'}">📦 הזמנות</button>
+      <button onclick="setTab('couriers')" class="px-4 py-2 rounded-lg text-sm font-medium transition \${currentTab==='couriers'?'bg-mmh-500 text-white':'text-gray-400 hover:bg-dark-600'}">🏍️ שליחים</button>
+      <button onclick="setTab('stats')" class="px-4 py-2 rounded-lg text-sm font-medium transition \${currentTab==='stats'?'bg-mmh-500 text-white':'text-gray-400 hover:bg-dark-600'}">📊 סטטיסטיקות</button>
+      \${user.role==='admin'?'<button onclick="setTab(\\'users\\')" class="px-4 py-2 rounded-lg text-sm font-medium transition '+(currentTab==='users'?'bg-mmh-500 text-white':'text-gray-400 hover:bg-dark-600')+'">👥 משתמשים</button>':''}
+      \${user.role==='admin'?'<button onclick="setTab(\\'admin\\')" class="px-4 py-2 rounded-lg text-sm font-medium transition '+(currentTab==='admin'?'bg-red-600 text-white':'text-red-400 hover:bg-dark-600')+'">⚙️ כלים</button>':''}
     </div>
   </div>
 </header>
@@ -1809,48 +1846,48 @@ function renderDashboard(){
 function renderOrders(fo){
   return \`
 <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold">\${stats.total||0}</div><div class="text-sm text-slate-400">סה״כ</div></div>
-  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-amber-400">\${(parseInt(stats.new)||0)+(parseInt(stats.published)||0)}</div><div class="text-sm text-slate-400">ממתינים</div></div>
-  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-purple-400">\${stats.active||0}</div><div class="text-sm text-slate-400">פעילים</div></div>
-  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-emerald-400">\${stats.delivered||0}</div><div class="text-sm text-slate-400">נמסרו</div></div>
-  <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50"><div class="text-2xl font-bold text-emerald-400">\${fmt(stats.revenue)}</div><div class="text-sm text-slate-400">הכנסות</div></div>
+  <div class="bg-dark-700/50 rounded-xl p-4 border border-dark-500/50"><div class="text-2xl font-bold">\${stats.total||0}</div><div class="text-sm text-gray-400">סה״כ</div></div>
+  <div class="bg-dark-700/50 rounded-xl p-4 border border-dark-500/50"><div class="text-2xl font-bold text-amber-400">\${(parseInt(stats.new)||0)+(parseInt(stats.published)||0)}</div><div class="text-sm text-gray-400">ממתינים</div></div>
+  <div class="bg-dark-700/50 rounded-xl p-4 border border-dark-500/50"><div class="text-2xl font-bold text-purple-400">\${stats.active||0}</div><div class="text-sm text-gray-400">פעילים</div></div>
+  <div class="bg-dark-700/50 rounded-xl p-4 border border-dark-500/50"><div class="text-2xl font-bold text-mmh-400">\${stats.delivered||0}</div><div class="text-sm text-gray-400">נמסרו</div></div>
+  <div class="bg-dark-700/50 rounded-xl p-4 border border-dark-500/50"><div class="text-2xl font-bold text-mmh-400">\${fmt(stats.revenue)}</div><div class="text-sm text-gray-400">הכנסות</div></div>
 </div>
 <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
   <div class="flex gap-2 overflow-x-auto">
-    <button onclick="setFilter('all')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='all'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">הכל</button>
-    <button onclick="setFilter('active')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='active'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">פעילים</button>
-    <button onclick="setFilter('delivered')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='delivered'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">נמסרו</button>
-    <button onclick="setFilter('cancelled')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='cancelled'?'bg-slate-700 text-white':'bg-slate-800/50 text-slate-400'}">בוטלו</button>
+    <button onclick="setFilter('all')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='all'?'bg-dark-600 text-white':'bg-dark-700/50 text-gray-400'}">הכל</button>
+    <button onclick="setFilter('active')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='active'?'bg-dark-600 text-white':'bg-dark-700/50 text-gray-400'}">פעילים</button>
+    <button onclick="setFilter('delivered')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='delivered'?'bg-dark-600 text-white':'bg-dark-700/50 text-gray-400'}">נמסרו</button>
+    <button onclick="setFilter('cancelled')" class="px-3 py-1.5 rounded-lg text-sm \${filter==='cancelled'?'bg-dark-600 text-white':'bg-dark-700/50 text-gray-400'}">בוטלו</button>
   </div>
   <div class="flex gap-2">
-    <input type="text" placeholder="🔍 חיפוש..." value="\${search}" onchange="search=this.value;render()" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white w-40">
-    <button onclick="showNewOrderModal()" class="bg-gradient-to-r from-emerald-500 to-blue-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium">➕ הזמנה</button>
+    <input type="text" placeholder="🔍 חיפוש..." value="\${search}" onchange="search=this.value;render()" class="bg-dark-700 border border-dark-500 rounded-lg px-3 py-1.5 text-sm text-white w-40">
+    <button onclick="showNewOrderModal()" class="bg-gradient-to-r from-mmh-500 to-mmh-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium">➕ הזמנה</button>
   </div>
 </div>
 <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
   \${fo.map(o=>\`
-    <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
-      <div class="p-3 border-b border-slate-700/50 flex items-center justify-between">
+    <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 overflow-hidden">
+      <div class="p-3 border-b border-dark-500/50 flex items-center justify-between">
         <div class="flex items-center gap-2"><span class="font-bold font-mono">\${o.orderNumber}</span><span class="px-2 py-0.5 rounded-full text-xs border \${statusColor(o.status)}">\${statusText(o.status)}</span></div>
         <span class="text-xs text-slate-500">\${fmtDate(o.createdAt)}</span>
       </div>
       <div class="p-3 space-y-2 text-sm">
         <div class="flex gap-2"><span class="text-slate-500">👤</span><span>\${o.senderName} - \${o.senderPhone}</span></div>
-        <div class="flex gap-2"><span class="text-slate-500">📍</span><span class="text-slate-300">\${o.pickupAddress}</span></div>
-        <div class="flex gap-2"><span class="text-slate-500">🏠</span><span class="text-slate-300">\${o.deliveryAddress}</span></div>
-        <div class="flex justify-between pt-2 border-t border-slate-700/50">
+        <div class="flex gap-2"><span class="text-slate-500">📍</span><span class="text-gray-300">\${o.pickupAddress}</span></div>
+        <div class="flex gap-2"><span class="text-slate-500">🏠</span><span class="text-gray-300">\${o.deliveryAddress}</span></div>
+        <div class="flex justify-between pt-2 border-t border-dark-500/50">
           <div><span class="text-slate-500">מחיר:</span> <span class="font-bold">\${fmt(o.price)}</span></div>
-          <div><span class="text-slate-500">לשליח:</span> <span class="font-bold text-emerald-400">\${fmt(o.courierPayout)}</span></div>
+          <div><span class="text-slate-500">לשליח:</span> <span class="font-bold text-mmh-400">\${fmt(o.courierPayout)}</span></div>
         </div>
-        \${o.courier?\`<div class="bg-slate-700/50 rounded-lg p-2 text-xs"><span class="text-slate-500">שליח:</span> \${o.courier.name} - \${o.courier.phone}</div>\`:''}
-        \${o.status==='new'?\`<div class="flex gap-2 pt-2"><button onclick="publishOrder(\${o.id})" class="flex-1 bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-2 rounded-lg text-sm font-medium">📤 פרסם</button><button onclick="editOrder(\${o.id})" class="px-3 bg-blue-500/20 text-blue-400 rounded-lg">✏️</button><button onclick="cancelOrder(\${o.id})" class="px-3 bg-red-500/20 text-red-400 rounded-lg">✕</button></div>\`:''}
+        \${o.courier?\`<div class="bg-dark-600/50 rounded-lg p-2 text-xs"><span class="text-slate-500">שליח:</span> \${o.courier.name} - \${o.courier.phone}</div>\`:''}
+        \${o.status==='new'?\`<div class="flex gap-2 pt-2"><button onclick="publishOrder(\${o.id})" class="flex-1 bg-gradient-to-r from-mmh-500 to-mmh-600 text-white py-2 rounded-lg text-sm font-medium">📤 פרסם</button><button onclick="editOrder(\${o.id})" class="px-3 bg-blue-500/20 text-blue-400 rounded-lg">✏️</button><button onclick="cancelOrder(\${o.id})" class="px-3 bg-red-500/20 text-red-400 rounded-lg">✕</button></div>\`:''}
         \${o.status==='published'?\`<div class="flex gap-2 pt-2"><button onclick="editOrder(\${o.id})" class="flex-1 bg-blue-500/20 text-blue-400 py-2 rounded-lg text-sm">✏️ ערוך</button><button onclick="cancelOrder(\${o.id})" class="flex-1 bg-red-500/20 text-red-400 py-2 rounded-lg text-sm">❌ בטל</button></div>\`:''}
         \${o.status==='taken'||o.status==='picked'?\`<button onclick="cancelOrder(\${o.id})" class="w-full bg-red-500/20 text-red-400 py-2 rounded-lg text-sm">❌ בטל</button>\`:''}
         \${o.status==='cancelled'&&user.role==='admin'?\`<button onclick="deleteOrder(\${o.id})" class="w-full bg-red-500/20 text-red-400 py-2 rounded-lg text-sm">🗑️ מחק</button>\`:''}
       </div>
     </div>\`).join('')}
 </div>
-\${fo.length===0?'<div class="text-center py-12 text-slate-400">אין הזמנות להצגה</div>':''}\`;
+\${fo.length===0?'<div class="text-center py-12 text-gray-400">אין הזמנות להצגה</div>':''}\`;
 }
 
 function renderCouriers(){
@@ -1858,17 +1895,17 @@ function renderCouriers(){
 <div class="mb-6 flex justify-between items-center"><h2 class="text-xl font-bold">🏍️ שליחים (\${couriers.length})</h2></div>
 <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
   \${couriers.map(c=>\`
-    <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4">
+    <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 p-4">
       <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-3"><div class="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">🏍️</div><div><div class="font-bold">\${c.first_name} \${c.last_name}</div><div class="text-sm text-slate-400">\${c.phone}</div></div></div>
-        <span class="px-2 py-1 rounded text-xs \${c.status==='active'?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${c.status==='active'?'פעיל':'לא פעיל'}</span>
+        <div class="flex items-center gap-3"><div class="w-10 h-10 bg-dark-600 rounded-full flex items-center justify-center">🏍️</div><div><div class="font-bold">\${c.first_name} \${c.last_name}</div><div class="text-sm text-gray-400">\${c.phone}</div></div></div>
+        <span class="px-2 py-1 rounded text-xs \${c.status==='active'?'bg-mmh-500/20 text-mmh-400':'bg-red-500/20 text-red-400'}">\${c.status==='active'?'פעיל':'לא פעיל'}</span>
       </div>
       <div class="grid grid-cols-3 gap-2 text-center text-sm">
-        <div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold">\${c.total_deliveries||0}</div><div class="text-xs text-slate-400">משלוחים</div></div>
-        <div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold text-emerald-400">\${fmt(c.total_earned)}</div><div class="text-xs text-slate-400">סה״כ</div></div>
-        <div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold text-amber-400">\${fmt(c.balance)}</div><div class="text-xs text-slate-400">יתרה</div></div>
+        <div class="bg-dark-600/50 rounded-lg p-2"><div class="font-bold">\${c.total_deliveries||0}</div><div class="text-xs text-gray-400">משלוחים</div></div>
+        <div class="bg-dark-600/50 rounded-lg p-2"><div class="font-bold text-mmh-400">\${fmt(c.total_earned)}</div><div class="text-xs text-gray-400">סה״כ</div></div>
+        <div class="bg-dark-600/50 rounded-lg p-2"><div class="font-bold text-amber-400">\${fmt(c.balance)}</div><div class="text-xs text-gray-400">יתרה</div></div>
       </div>
-      \${parseFloat(c.balance)>0?\`<button onclick="showPaymentModal(\${c.id},'\${c.first_name} \${c.last_name}',\${c.balance})" class="w-full mt-3 bg-emerald-500/20 text-emerald-400 py-2 rounded-lg text-sm">💳 שלם</button>\`:''}
+      \${parseFloat(c.balance)>0?\`<button onclick="showPaymentModal(\${c.id},'\${c.first_name} \${c.last_name}',\${c.balance})" class="w-full mt-3 bg-mmh-500/20 text-mmh-400 py-2 rounded-lg text-sm">💳 שלם</button>\`:''}
     </div>\`).join('')}
 </div>\`;
 }
@@ -1877,26 +1914,26 @@ function renderStats(){
   return \`
 <h2 class="text-xl font-bold mb-6">📊 סטטיסטיקות (30 יום)</h2>
 <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold">\${stats.total||0}</div><div class="text-slate-400 mt-2">סה״כ הזמנות</div></div>
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold text-emerald-400">\${stats.delivered||0}</div><div class="text-slate-400 mt-2">נמסרו</div></div>
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-4xl font-bold text-emerald-400">\${fmt(stats.revenue)}</div><div class="text-slate-400 mt-2">הכנסות ברוטו</div></div>
+  <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 p-6 text-center"><div class="text-4xl font-bold">\${stats.total||0}</div><div class="text-gray-400 mt-2">סה״כ הזמנות</div></div>
+  <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 p-6 text-center"><div class="text-4xl font-bold text-mmh-400">\${stats.delivered||0}</div><div class="text-gray-400 mt-2">נמסרו</div></div>
+  <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 p-6 text-center"><div class="text-4xl font-bold text-mmh-400">\${fmt(stats.revenue)}</div><div class="text-gray-400 mt-2">הכנסות ברוטו</div></div>
 </div>
 <h3 class="text-lg font-bold mb-4">💰 ניתוח רווחיות</h3>
 <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-3xl font-bold text-amber-400">\${fmt(stats.total_payout)}</div><div class="text-slate-400 mt-2">לתשלום לשליחים</div></div>
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-3xl font-bold text-blue-400">\${fmt(stats.total_paid)}</div><div class="text-slate-400 mt-2">שולם לשליחים</div></div>
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6 text-center"><div class="text-3xl font-bold text-purple-400">\${fmt(parseFloat(stats.total_payout||0)-parseFloat(stats.total_paid||0))}</div><div class="text-slate-400 mt-2">יתרה לתשלום</div></div>
-  <div class="bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-xl border border-emerald-500/50 p-6 text-center"><div class="text-3xl font-bold text-emerald-400">\${fmt(stats.commission)}</div><div class="text-emerald-300 mt-2 font-medium">💎 רווח נקי (25%)</div></div>
+  <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 p-6 text-center"><div class="text-3xl font-bold text-amber-400">\${fmt(stats.total_payout)}</div><div class="text-gray-400 mt-2">לתשלום לשליחים</div></div>
+  <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 p-6 text-center"><div class="text-3xl font-bold text-blue-400">\${fmt(stats.total_paid)}</div><div class="text-gray-400 mt-2">שולם לשליחים</div></div>
+  <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 p-6 text-center"><div class="text-3xl font-bold text-purple-400">\${fmt(parseFloat(stats.total_payout||0)-parseFloat(stats.total_paid||0))}</div><div class="text-gray-400 mt-2">יתרה לתשלום</div></div>
+  <div class="bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-xl border border-emerald-500/50 p-6 text-center"><div class="text-3xl font-bold text-mmh-400">\${fmt(stats.commission)}</div><div class="text-emerald-300 mt-2 font-medium">💎 רווח נקי (25%)</div></div>
 </div>\`;
 }
 
 function renderUsers(){
   return \`
-<div class="mb-6 flex justify-between items-center"><h2 class="text-xl font-bold">👥 משתמשים (\${users.length})</h2><button onclick="showNewUserModal()" class="bg-gradient-to-r from-emerald-500 to-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium">➕ משתמש</button></div>
-<div class="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
+<div class="mb-6 flex justify-between items-center"><h2 class="text-xl font-bold">👥 משתמשים (\${users.length})</h2><button onclick="showNewUserModal()" class="bg-gradient-to-r from-mmh-500 to-mmh-600 text-white px-4 py-2 rounded-lg text-sm font-medium">➕ משתמש</button></div>
+<div class="bg-dark-700/60 rounded-xl border border-dark-500/50 overflow-hidden">
   <table class="w-full text-sm">
-    <thead class="bg-slate-700/50"><tr><th class="text-right p-3">שם</th><th class="text-right p-3">משתמש</th><th class="text-right p-3">תפקיד</th><th class="text-right p-3">טלפון</th><th class="text-right p-3">סטטוס</th><th class="text-right p-3">פעולות</th></tr></thead>
-    <tbody>\${users.map(u=>\`<tr class="border-t border-slate-700/50"><td class="p-3">\${u.name}</td><td class="p-3 text-slate-400">\${u.username}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.role==='admin'?'bg-purple-500/20 text-purple-400':'bg-blue-500/20 text-blue-400'}">\${u.role==='admin'?'מנהל':u.role==='manager'?'מנהל משמרת':'נציג'}</span></td><td class="p-3 text-slate-400">\${u.phone||'-'}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.active?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${u.active?'פעיל':'לא פעיל'}</span></td><td class="p-3"><div class="flex gap-1"><button onclick="showEditUserModal(\${u.id})" class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">✏️</button><button onclick="showChangePasswordModal(\${u.id},'\${u.name}')" class="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">🔑</button>\${u.id!==user.id?'<button onclick="deleteUser('+u.id+')" class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">🗑️</button>':''}</div></td></tr>\`).join('')}</tbody>
+    <thead class="bg-dark-600/50"><tr><th class="text-right p-3">שם</th><th class="text-right p-3">משתמש</th><th class="text-right p-3">תפקיד</th><th class="text-right p-3">טלפון</th><th class="text-right p-3">סטטוס</th><th class="text-right p-3">פעולות</th></tr></thead>
+    <tbody>\${users.map(u=>\`<tr class="border-t border-dark-500/50"><td class="p-3">\${u.name}</td><td class="p-3 text-gray-400">\${u.username}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.role==='admin'?'bg-purple-500/20 text-purple-400':'bg-blue-500/20 text-blue-400'}">\${u.role==='admin'?'מנהל':u.role==='manager'?'מנהל משמרת':'נציג'}</span></td><td class="p-3 text-gray-400">\${u.phone||'-'}</td><td class="p-3"><span class="px-2 py-1 rounded text-xs \${u.active?'bg-mmh-500/20 text-mmh-400':'bg-red-500/20 text-red-400'}">\${u.active?'פעיל':'לא פעיל'}</span></td><td class="p-3"><div class="flex gap-1"><button onclick="showEditUserModal(\${u.id})" class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">✏️</button><button onclick="showChangePasswordModal(\${u.id},'\${u.name}')" class="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">🔑</button>\${u.id!==user.id?'<button onclick="deleteUser('+u.id+')" class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">🗑️</button>':''}</div></td></tr>\`).join('')}</tbody>
   </table>
 </div>\`;
 }
@@ -1910,7 +1947,7 @@ function renderAdmin(){
 </div>
 
 <div class="grid md:grid-cols-2 gap-6">
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
+  <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 p-6">
     <h3 class="font-bold text-lg mb-4">📦 ניהול הזמנות</h3>
     <div class="space-y-3">
       <button onclick="adminDeleteDelivered()" class="w-full bg-amber-500/20 text-amber-400 border border-amber-500/50 py-3 rounded-lg text-sm hover:bg-amber-500/30">🗑️ מחק הזמנות שנמסרו</button>
@@ -1919,7 +1956,7 @@ function renderAdmin(){
     </div>
   </div>
 
-  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
+  <div class="bg-dark-700/60 rounded-xl border border-dark-500/50 p-6">
     <h3 class="font-bold text-lg mb-4">🏍️ ניהול שליחים</h3>
     <div class="space-y-3">
       <button onclick="adminResetCourierStats()" class="w-full bg-blue-500/20 text-blue-400 border border-blue-500/50 py-3 rounded-lg text-sm hover:bg-blue-500/30">🔄 אפס סטטיסטיקות שליחים</button>
@@ -1928,9 +1965,9 @@ function renderAdmin(){
     </div>
   </div>
 
-  <div class="bg-slate-800/60 rounded-xl border border-red-500/50 p-6 md:col-span-2">
+  <div class="bg-dark-700/60 rounded-xl border border-red-500/50 p-6 md:col-span-2">
     <h3 class="font-bold text-lg mb-4 text-red-400">🔴 איפוס מלא</h3>
-    <p class="text-sm text-slate-400 mb-4">מוחק את כל ההזמנות, השליחים, התשלומים והלוגים. המשתמשים נשארים.</p>
+    <p class="text-sm text-gray-400 mb-4">מוחק את כל ההזמנות, השליחים, התשלומים והלוגים. המשתמשים נשארים.</p>
     <button onclick="adminFullReset()" class="w-full bg-red-600 text-white py-3 rounded-lg text-sm font-bold hover:bg-red-700">⚠️ אפס את כל המערכת</button>
   </div>
 </div>\`;
@@ -1945,37 +1982,37 @@ async function adminDeleteAllPayments(){if(!confirm('למחוק את כל היס
 async function adminFullReset(){if(!confirm('לאפס את כל המערכת? פעולה זו בלתי הפיכה!'))return;if(!confirm('אתה בטוח לחלוטין?'))return;if(prompt('הקלד "אפס" לאישור')!=='אפס')return;const r=await api('/api/admin/reset','DELETE');if(r.success){showToast('המערכת אופסה');location.reload();}else alert(r.error);}
 
 function showNewOrderModal(){
-  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">📦 הזמנה חדשה</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3">
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-dark-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-dark-500 flex justify-between items-center"><h2 class="text-lg font-bold">📦 הזמנה חדשה</h2><button onclick="closeModal()" class="text-gray-400 hover:text-white">✕</button></div><div class="p-4 space-y-3">
     <div class="grid grid-cols-2 gap-3">
-      <input type="text" id="senderName" placeholder="שם שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-      <input type="tel" id="senderPhone" placeholder="טלפון שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="text" id="senderName" placeholder="שם שולח" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="tel" id="senderPhone" placeholder="טלפון שולח" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
     </div>
-    <input type="text" id="pickupAddress" placeholder="📍 כתובת איסוף" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    <input type="text" id="pickupAddress" placeholder="📍 כתובת איסוף" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
     <div class="grid grid-cols-2 gap-3">
-      <input type="text" id="receiverName" placeholder="שם מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-      <input type="tel" id="receiverPhone" placeholder="טלפון מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="text" id="receiverName" placeholder="שם מקבל" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="tel" id="receiverPhone" placeholder="טלפון מקבל" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
     </div>
-    <input type="text" id="deliveryAddress" placeholder="🏠 כתובת מסירה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-    <textarea id="details" placeholder="פרטים נוספים" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none"></textarea>
+    <input type="text" id="deliveryAddress" placeholder="🏠 כתובת מסירה" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
+    <textarea id="details" placeholder="פרטים נוספים" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none"></textarea>
     
-    <div id="priceCalcResult" class="hidden bg-slate-700/50 rounded-lg p-3 text-sm">
+    <div id="priceCalcResult" class="hidden bg-dark-600/50 rounded-lg p-3 text-sm">
       <div class="flex justify-between items-center">
-        <span class="text-slate-400">מרחק:</span>
+        <span class="text-gray-400">מרחק:</span>
         <span id="calcDistance" class="text-white font-medium">-</span>
       </div>
       <div class="flex justify-between items-center mt-1">
-        <span class="text-slate-400">זמן משוער:</span>
+        <span class="text-gray-400">זמן משוער:</span>
         <span id="calcDuration" class="text-white font-medium">-</span>
       </div>
       <div class="flex justify-between items-center mt-1">
-        <span class="text-slate-400">מחיר מחושב:</span>
-        <span id="calcPrice" class="text-emerald-400 font-bold">-</span>
+        <span class="text-gray-400">מחיר מחושב:</span>
+        <span id="calcPrice" class="text-mmh-400 font-bold">-</span>
       </div>
     </div>
     
     <div class="grid grid-cols-3 gap-3">
-      <input type="number" id="price" placeholder="מחיר ₪" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-      <select id="priority" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="number" id="price" placeholder="מחיר ₪" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
+      <select id="priority" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
         <option value="normal">רגיל</option>
         <option value="express">אקספרס</option>
         <option value="urgent">דחוף</option>
@@ -1983,7 +2020,7 @@ function showNewOrderModal(){
       <button type="button" onclick="calculatePriceForOrder()" class="bg-amber-500/20 text-amber-400 rounded-lg px-3 py-2 text-sm font-medium hover:bg-amber-500/30">🧮 חשב</button>
     </div>
     
-    <button onclick="submitOrder()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">✅ צור הזמנה</button>
+    <button onclick="submitOrder()" class="w-full bg-gradient-to-r from-mmh-500 to-mmh-600 text-white py-3 rounded-lg font-bold">✅ צור הזמנה</button>
   </div></div></div>\`;
 }
 
@@ -2025,40 +2062,40 @@ async function calculatePriceForOrder(){
 function submitOrder(){createOrder({senderName:document.getElementById('senderName').value,senderPhone:document.getElementById('senderPhone').value,pickupAddress:document.getElementById('pickupAddress').value,receiverName:document.getElementById('receiverName').value,receiverPhone:document.getElementById('receiverPhone').value,deliveryAddress:document.getElementById('deliveryAddress').value,details:document.getElementById('details').value,price:parseInt(document.getElementById('price').value)||0,priority:document.getElementById('priority').value});}
 
 function showNewUserModal(){
-  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">משתמש חדש</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><input type="text" id="newUserName" placeholder="שם מלא" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="text" id="newUsername" placeholder="שם משתמש" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="password" id="newPassword" placeholder="סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="newUserPhone" placeholder="טלפון" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="newUserRole" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="agent">נציג</option><option value="manager">מנהל משמרת</option><option value="admin">מנהל</option></select><button onclick="submitUser()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">צור משתמש</button></div></div></div>\`;
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-dark-700 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-dark-500 flex justify-between items-center"><h2 class="text-lg font-bold">משתמש חדש</h2><button onclick="closeModal()" class="text-gray-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><input type="text" id="newUserName" placeholder="שם מלא" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><input type="text" id="newUsername" placeholder="שם משתמש" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><input type="password" id="newPassword" placeholder="סיסמה" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="newUserPhone" placeholder="טלפון" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><select id="newUserRole" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><option value="agent">נציג</option><option value="manager">מנהל משמרת</option><option value="admin">מנהל</option></select><button onclick="submitUser()" class="w-full bg-gradient-to-r from-mmh-500 to-mmh-600 text-white py-3 rounded-lg font-bold">צור משתמש</button></div></div></div>\`;
 }
 
 function submitUser(){createUser({name:document.getElementById('newUserName').value,username:document.getElementById('newUsername').value,password:document.getElementById('newPassword').value,phone:document.getElementById('newUserPhone').value,role:document.getElementById('newUserRole').value});}
 
 function showPaymentModal(id,name,balance){
-  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">💳 תשלום</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-4"><div class="text-center"><div class="text-lg">\${name}</div><div class="text-2xl font-bold text-amber-400 mt-2">יתרה: \${fmt(balance)}</div></div><input type="number" id="paymentAmount" placeholder="סכום" value="\${balance}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="paymentMethod" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="cash">מזומן</option><option value="transfer">העברה</option><option value="bit">ביט</option></select><input type="text" id="paymentNotes" placeholder="הערות" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><button onclick="submitPayment(\${id})" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">אשר תשלום</button></div></div></div>\`;
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-dark-700 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-dark-500 flex justify-between items-center"><h2 class="text-lg font-bold">💳 תשלום</h2><button onclick="closeModal()" class="text-gray-400 hover:text-white">✕</button></div><div class="p-4 space-y-4"><div class="text-center"><div class="text-lg">\${name}</div><div class="text-2xl font-bold text-amber-400 mt-2">יתרה: \${fmt(balance)}</div></div><input type="number" id="paymentAmount" placeholder="סכום" value="\${balance}" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><select id="paymentMethod" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><option value="cash">מזומן</option><option value="transfer">העברה</option><option value="bit">ביט</option></select><input type="text" id="paymentNotes" placeholder="הערות" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><button onclick="submitPayment(\${id})" class="w-full bg-gradient-to-r from-mmh-500 to-mmh-600 text-white py-3 rounded-lg font-bold">אשר תשלום</button></div></div></div>\`;
 }
 
 function submitPayment(id){createPayment({courier_id:id,amount:parseFloat(document.getElementById('paymentAmount').value)||0,method:document.getElementById('paymentMethod').value,notes:document.getElementById('paymentNotes').value});}
 
 function showEditOrderModal(o){
-  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">✏️ עריכת הזמנה \${o.orderNumber}</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3">
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-dark-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-dark-500 flex justify-between items-center"><h2 class="text-lg font-bold">✏️ עריכת הזמנה \${o.orderNumber}</h2><button onclick="closeModal()" class="text-gray-400 hover:text-white">✕</button></div><div class="p-4 space-y-3">
     <div class="grid grid-cols-2 gap-3">
-      <input type="text" id="editSenderName" placeholder="שם שולח" value="\${o.senderName||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-      <input type="tel" id="editSenderPhone" placeholder="טלפון שולח" value="\${o.senderPhone||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="text" id="editSenderName" placeholder="שם שולח" value="\${o.senderName||''}" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="tel" id="editSenderPhone" placeholder="טלפון שולח" value="\${o.senderPhone||''}" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
     </div>
-    <input type="text" id="editPickupAddress" placeholder="📍 כתובת איסוף" value="\${o.pickupAddress||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+    <input type="text" id="editPickupAddress" placeholder="📍 כתובת איסוף" value="\${o.pickupAddress||''}" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
     <div class="grid grid-cols-2 gap-3">
-      <input type="text" id="editReceiverName" placeholder="שם מקבל" value="\${o.receiverName||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-      <input type="tel" id="editReceiverPhone" placeholder="טלפון מקבל" value="\${o.receiverPhone||''}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="text" id="editReceiverName" placeholder="שם מקבל" value="\${o.receiverName||''}" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="tel" id="editReceiverPhone" placeholder="טלפון מקבל" value="\${o.receiverPhone||''}" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
     </div>
-    <input type="text" id="editDeliveryAddress" placeholder="🏠 כתובת מסירה" value="\${o.deliveryAddress||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-    <textarea id="editDetails" placeholder="פרטים נוספים" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none">\${o.details||''}</textarea>
+    <input type="text" id="editDeliveryAddress" placeholder="🏠 כתובת מסירה" value="\${o.deliveryAddress||''}" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
+    <textarea id="editDetails" placeholder="פרטים נוספים" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none">\${o.details||''}</textarea>
     
-    <div id="editPriceCalcResult" class="hidden bg-slate-700/50 rounded-lg p-3 text-sm">
-      <div class="flex justify-between"><span class="text-slate-400">מרחק:</span><span id="editCalcDistance" class="text-white font-medium">-</span></div>
-      <div class="flex justify-between mt-1"><span class="text-slate-400">זמן:</span><span id="editCalcDuration" class="text-white font-medium">-</span></div>
-      <div class="flex justify-between mt-1"><span class="text-slate-400">מחיר מחושב:</span><span id="editCalcPrice" class="text-emerald-400 font-bold">-</span></div>
+    <div id="editPriceCalcResult" class="hidden bg-dark-600/50 rounded-lg p-3 text-sm">
+      <div class="flex justify-between"><span class="text-gray-400">מרחק:</span><span id="editCalcDistance" class="text-white font-medium">-</span></div>
+      <div class="flex justify-between mt-1"><span class="text-gray-400">זמן:</span><span id="editCalcDuration" class="text-white font-medium">-</span></div>
+      <div class="flex justify-between mt-1"><span class="text-gray-400">מחיר מחושב:</span><span id="editCalcPrice" class="text-mmh-400 font-bold">-</span></div>
     </div>
     
     <div class="grid grid-cols-3 gap-3">
-      <input type="number" id="editPrice" placeholder="מחיר ₪" value="\${o.price||0}" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
-      <select id="editPriority" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+      <input type="number" id="editPrice" placeholder="מחיר ₪" value="\${o.price||0}" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
+      <select id="editPriority" class="bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm">
         <option value="normal" \${o.priority==='normal'?'selected':''}>רגיל</option>
         <option value="express" \${o.priority==='express'?'selected':''}>אקספרס</option>
         <option value="urgent" \${o.priority==='urgent'?'selected':''}>דחוף</option>
@@ -2066,7 +2103,7 @@ function showEditOrderModal(o){
       <button type="button" onclick="calculatePriceForEdit()" class="bg-amber-500/20 text-amber-400 rounded-lg px-3 py-2 text-sm font-medium hover:bg-amber-500/30">🧮 חשב</button>
     </div>
     
-    <button onclick="submitEditOrder(\${o.id})" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">💾 שמור שינויים</button>
+    <button onclick="submitEditOrder(\${o.id})" class="w-full bg-gradient-to-r from-mmh-500 to-mmh-600 text-white py-3 rounded-lg font-bold">💾 שמור שינויים</button>
   </div></div></div>\`;
 }
 
@@ -2109,13 +2146,13 @@ function submitEditOrder(id){updateOrder(id,{senderName:document.getElementById(
 
 function showEditUserModal(id){
   const u=users.find(x=>x.id===id);if(!u)return;
-  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">✏️ עריכת משתמש</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><input type="text" id="editUserName" placeholder="שם מלא" value="\${u.name}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="editUserPhone" placeholder="טלפון" value="\${u.phone||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="email" id="editUserEmail" placeholder="אימייל" value="\${u.email||''}" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="editUserRole" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="agent" \${u.role==='agent'?'selected':''}>נציג</option><option value="manager" \${u.role==='manager'?'selected':''}>מנהל משמרת</option><option value="admin" \${u.role==='admin'?'selected':''}>מנהל</option></select><select id="editUserActive" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="true" \${u.active?'selected':''}>פעיל</option><option value="false" \${!u.active?'selected':''}>לא פעיל</option></select><button onclick="submitEditUser(\${u.id})" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">💾 שמור</button></div></div></div>\`;
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-dark-700 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-dark-500 flex justify-between items-center"><h2 class="text-lg font-bold">✏️ עריכת משתמש</h2><button onclick="closeModal()" class="text-gray-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><input type="text" id="editUserName" placeholder="שם מלא" value="\${u.name}" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="editUserPhone" placeholder="טלפון" value="\${u.phone||''}" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><input type="email" id="editUserEmail" placeholder="אימייל" value="\${u.email||''}" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><select id="editUserRole" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><option value="agent" \${u.role==='agent'?'selected':''}>נציג</option><option value="manager" \${u.role==='manager'?'selected':''}>מנהל משמרת</option><option value="admin" \${u.role==='admin'?'selected':''}>מנהל</option></select><select id="editUserActive" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><option value="true" \${u.active?'selected':''}>פעיל</option><option value="false" \${!u.active?'selected':''}>לא פעיל</option></select><button onclick="submitEditUser(\${u.id})" class="w-full bg-gradient-to-r from-mmh-500 to-mmh-600 text-white py-3 rounded-lg font-bold">💾 שמור</button></div></div></div>\`;
 }
 
 function submitEditUser(id){updateUser(id,{name:document.getElementById('editUserName').value,phone:document.getElementById('editUserPhone').value,email:document.getElementById('editUserEmail').value,role:document.getElementById('editUserRole').value,active:document.getElementById('editUserActive').value==='true'});}
 
 function showChangePasswordModal(id,name){
-  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">🔑 שינוי סיסמה</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><div class="text-center mb-4"><div class="text-slate-400">עבור: <span class="text-white">\${name}</span></div></div><input type="password" id="newUserPassword" placeholder="סיסמה חדשה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="password" id="confirmUserPassword" placeholder="אישור סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><button onclick="submitChangePassword(\${id})" class="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 rounded-lg font-bold">🔑 שנה סיסמה</button></div></div></div>\`;
+  document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-dark-700 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-dark-500 flex justify-between items-center"><h2 class="text-lg font-bold">🔑 שינוי סיסמה</h2><button onclick="closeModal()" class="text-gray-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><div class="text-center mb-4"><div class="text-gray-400">עבור: <span class="text-white">\${name}</span></div></div><input type="password" id="newUserPassword" placeholder="סיסמה חדשה" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><input type="password" id="confirmUserPassword" placeholder="אישור סיסמה" class="w-full bg-dark-900 border border-dark-500 rounded-lg px-3 py-2 text-white text-sm"><button onclick="submitChangePassword(\${id})" class="w-full bg-gradient-to-r from-amber-500 to-orange-500 text-white py-3 rounded-lg font-bold">🔑 שנה סיסמה</button></div></div></div>\`;
 }
 
 function submitChangePassword(id){const p1=document.getElementById('newUserPassword').value,p2=document.getElementById('confirmUserPassword').value;if(p1!==p2){alert('הסיסמאות לא תואמות');return;}changeUserPassword(id,p1);}
