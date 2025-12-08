@@ -39,8 +39,16 @@ const CONFIG = {
     TOKEN: process.env.WHAPI_TOKEN,
     GROUP_ID: process.env.COURIERS_GROUP_ID,
   },
+  GOOGLE_API_KEY: process.env.GOOGLE_API_KEY || 'AIzaSyAsjRq5dOUsIamcrzvONHeBZtYuDKIu6U4',
   COMMISSION: parseFloat(process.env.COMMISSION_RATE) || 0.25,
   NODE_ENV: process.env.NODE_ENV || 'development',
+  // מחירון משלוחים
+  PRICING: {
+    BASE_PRICE: parseFloat(process.env.BASE_PRICE) || 75,      // מחיר בסיס
+    PRICE_PER_KM: parseFloat(process.env.PRICE_PER_KM) || 2.5, // מחיר לק"מ נוסף
+    FREE_KM: parseFloat(process.env.FREE_KM) || 1,             // ק"מ ראשון חינם
+    MIN_PRICE: parseFloat(process.env.MIN_PRICE) || 75,        // מחיר מינימום
+  }
 };
 
 // ==================== DATABASE ====================
@@ -789,9 +797,662 @@ app.post('/api/payments', requireAuth, requireRole('admin','manager'), async (re
     const { courier_id, amount, method, notes } = req.body;
     await pool.query("INSERT INTO payments (courier_id,amount,method,notes,created_by) VALUES ($1,$2,$3,$4,$5)",[courier_id,amount,method,notes,req.user.id]);
     await pool.query("UPDATE couriers SET balance=balance-$1 WHERE id=$2",[amount,courier_id]);
+    await logActivity(req.user.id, 'PAYMENT', `תשלום ₪${amount} לשליח #${courier_id}`, { courier_id, amount, method });
     res.json({ success:true });
   } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
 });
+
+// ==================== ACTIVITY LOG ====================
+const logActivity = async (userId, action, description, details = {}) => {
+  try {
+    await pool.query(
+      "INSERT INTO activity_log (user_id, action, description, details) VALUES ($1,$2,$3,$4)",
+      [userId, action, description, JSON.stringify(details)]
+    );
+  } catch (e) { console.error('Log error:', e); }
+};
+
+app.get('/api/activity-log', requireAuth, requireRole('admin','manager'), async (req, res) => {
+  try {
+    const { limit = 100, action, userId, from, to } = req.query;
+    let q = `SELECT a.*, u.name as user_name FROM activity_log a 
+             LEFT JOIN users u ON a.user_id = u.id WHERE 1=1`;
+    const p = [];
+    let i = 1;
+    if (action) { q += ` AND a.action = $${i++}`; p.push(action); }
+    if (userId) { q += ` AND a.user_id = $${i++}`; p.push(userId); }
+    if (from) { q += ` AND a.created_at >= $${i++}`; p.push(from); }
+    if (to) { q += ` AND a.created_at <= $${i++}`; p.push(to); }
+    q += ` ORDER BY a.created_at DESC LIMIT $${i}`;
+    p.push(parseInt(limit));
+    const r = await pool.query(q, p);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// ==================== REPORTS ====================
+app.get('/api/reports/daily', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT DATE(created_at) as date,
+        COUNT(*) as total,
+        COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN price END),0) as revenue,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN commission END),0) as profit
+      FROM orders WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+      GROUP BY DATE(created_at) ORDER BY date DESC
+    `);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+app.get('/api/reports/weekly', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT DATE_TRUNC('week', created_at) as week,
+        COUNT(*) as total,
+        COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN price END),0) as revenue,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN commission END),0) as profit
+      FROM orders WHERE created_at >= CURRENT_DATE - INTERVAL '12 weeks'
+      GROUP BY DATE_TRUNC('week', created_at) ORDER BY week DESC
+    `);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+app.get('/api/reports/couriers', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT c.*, 
+        COUNT(CASE WHEN o.status='delivered' AND o.delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as monthly_deliveries,
+        COALESCE(SUM(CASE WHEN o.status='delivered' AND o.delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN o.courier_payout END),0) as monthly_earned
+      FROM couriers c
+      LEFT JOIN orders o ON c.id = o.courier_id
+      GROUP BY c.id ORDER BY monthly_deliveries DESC
+    `);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+app.get('/api/reports/hourly', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT EXTRACT(HOUR FROM created_at) as hour,
+        COUNT(*) as total,
+        COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered
+      FROM orders WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'
+      GROUP BY EXTRACT(HOUR FROM created_at) ORDER BY hour
+    `);
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// ==================== EXPORT ====================
+app.get('/api/export/orders', requireAuth, async (req, res) => {
+  try {
+    const { from, to, status } = req.query;
+    let q = `SELECT o.*, c.first_name as courier_first, c.last_name as courier_last, c.phone as courier_phone
+             FROM orders o LEFT JOIN couriers c ON o.courier_id = c.id WHERE 1=1`;
+    const p = [];
+    let i = 1;
+    if (from) { q += ` AND o.created_at >= $${i++}`; p.push(from); }
+    if (to) { q += ` AND o.created_at <= $${i++}`; p.push(to + ' 23:59:59'); }
+    if (status && status !== 'all') { q += ` AND o.status = $${i++}`; p.push(status); }
+    q += ' ORDER BY o.created_at DESC';
+    const r = await pool.query(q, p);
+    
+    const BOM = '\uFEFF';
+    let csv = BOM + 'מספר הזמנה,תאריך,שולח,טלפון שולח,כתובת איסוף,מקבל,טלפון מקבל,כתובת מסירה,מחיר,עמלה,לשליח,סטטוס,שליח\n';
+    r.rows.forEach(o => {
+      const status = {new:'חדש',published:'מפורסם',taken:'נתפס',picked:'נאסף',delivered:'נמסר',cancelled:'בוטל'}[o.status]||o.status;
+      const courier = o.courier_first ? `${o.courier_first} ${o.courier_last}` : '';
+      csv += `"${o.order_number}","${new Date(o.created_at).toLocaleString('he-IL')}","${o.sender_name||''}","${o.sender_phone||''}","${o.pickup_address||''}","${o.receiver_name||''}","${o.receiver_phone||''}","${o.delivery_address||''}",${o.price},${o.commission},${o.courier_payout},"${status}","${courier}"\n`;
+    });
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=orders-${new Date().toISOString().split('T')[0]}.csv`);
+    res.send(csv);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+app.get('/api/export/couriers', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT c.*, 
+        COUNT(CASE WHEN o.status='delivered' THEN 1 END) as total_deliveries,
+        COALESCE(SUM(CASE WHEN o.status='delivered' THEN o.courier_payout END),0) as total_earned
+      FROM couriers c LEFT JOIN orders o ON c.id = o.courier_id
+      GROUP BY c.id ORDER BY total_deliveries DESC
+    `);
+    
+    const BOM = '\uFEFF';
+    let csv = BOM + 'שם פרטי,שם משפחה,ת.ז,טלפון,סטטוס,משלוחים,סה"כ הרוויח,יתרה\n';
+    r.rows.forEach(c => {
+      csv += `"${c.first_name}","${c.last_name}","${c.id_number}","${c.phone}","${c.status==='active'?'פעיל':'לא פעיל'}",${c.total_deliveries},${c.total_earned},${c.balance}\n`;
+    });
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=couriers-${new Date().toISOString().split('T')[0]}.csv`);
+    res.send(csv);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+app.get('/api/export/payments', requireAuth, requireRole('admin','manager'), async (req, res) => {
+  try {
+    const r = await pool.query(`
+      SELECT p.*, c.first_name, c.last_name, u.name as paid_by
+      FROM payments p 
+      JOIN couriers c ON p.courier_id = c.id
+      LEFT JOIN users u ON p.created_by = u.id
+      ORDER BY p.created_at DESC
+    `);
+    
+    const BOM = '\uFEFF';
+    let csv = BOM + 'תאריך,שליח,סכום,אמצעי תשלום,הערות,שולם ע"י\n';
+    r.rows.forEach(p => {
+      const method = {cash:'מזומן',transfer:'העברה',bit:'ביט'}[p.method]||p.method;
+      csv += `"${new Date(p.created_at).toLocaleString('he-IL')}","${p.first_name} ${p.last_name}",${p.amount},"${method}","${p.notes||''}","${p.paid_by||''}"\n`;
+    });
+    
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=payments-${new Date().toISOString().split('T')[0]}.csv`);
+    res.send(csv);
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// ==================== ADVANCED SEARCH ====================
+app.get('/api/orders/search', requireAuth, async (req, res) => {
+  try {
+    const { q, status, courier, from, to, minPrice, maxPrice, area } = req.query;
+    let query = `SELECT o.*, c.first_name as cfn, c.last_name as cln, c.phone as cph 
+                 FROM orders o LEFT JOIN couriers c ON o.courier_id = c.id WHERE 1=1`;
+    const p = [];
+    let i = 1;
+    
+    if (q) {
+      query += ` AND (o.order_number ILIKE $${i} OR o.sender_name ILIKE $${i} OR o.receiver_name ILIKE $${i} OR o.pickup_address ILIKE $${i} OR o.delivery_address ILIKE $${i})`;
+      p.push(`%${q}%`); i++;
+    }
+    if (status && status !== 'all') { query += ` AND o.status = $${i++}`; p.push(status); }
+    if (courier) { query += ` AND o.courier_id = $${i++}`; p.push(courier); }
+    if (from) { query += ` AND o.created_at >= $${i++}`; p.push(from); }
+    if (to) { query += ` AND o.created_at <= $${i++}`; p.push(to + ' 23:59:59'); }
+    if (minPrice) { query += ` AND o.price >= $${i++}`; p.push(minPrice); }
+    if (maxPrice) { query += ` AND o.price <= $${i++}`; p.push(maxPrice); }
+    if (area) { query += ` AND (o.pickup_address ILIKE $${i} OR o.delivery_address ILIKE $${i})`; p.push(`%${area}%`); i++; }
+    
+    query += ' ORDER BY o.created_at DESC LIMIT 500';
+    const r = await pool.query(query, p);
+    res.json(r.rows.map(formatOrder));
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// ==================== COURIER HISTORY ====================
+app.get('/api/couriers/:id/history', requireAuth, async (req, res) => {
+  try {
+    const { from, to, status } = req.query;
+    let q = `SELECT o.* FROM orders o WHERE o.courier_id = $1`;
+    const p = [req.params.id];
+    let i = 2;
+    if (from) { q += ` AND o.created_at >= $${i++}`; p.push(from); }
+    if (to) { q += ` AND o.created_at <= $${i++}`; p.push(to + ' 23:59:59'); }
+    if (status && status !== 'all') { q += ` AND o.status = $${i++}`; p.push(status); }
+    q += ' ORDER BY o.created_at DESC';
+    const r = await pool.query(q, p);
+    
+    // סטטיסטיקות
+    const stats = await pool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered,
+        COUNT(CASE WHEN status='cancelled' THEN 1 END) as cancelled,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN courier_payout END),0) as total_earned
+      FROM orders WHERE courier_id = $1
+    `, [req.params.id]);
+    
+    res.json({ orders: r.rows.map(formatOrder), stats: stats.rows[0] });
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// ==================== ZONES & PRICING ====================
+app.get('/api/zones', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query("SELECT * FROM zones ORDER BY name");
+    res.json(r.rows);
+  } catch (e) { res.json([]); }
+});
+
+app.post('/api/zones', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { name, basePrice, pricePerKm, areas } = req.body;
+    const r = await pool.query(
+      "INSERT INTO zones (name, base_price, price_per_km, areas) VALUES ($1,$2,$3,$4) RETURNING *",
+      [name, basePrice, pricePerKm, JSON.stringify(areas || [])]
+    );
+    await logActivity(req.user.id, 'ZONE_CREATED', `אזור חדש: ${name}`);
+    res.json({ success: true, zone: r.rows[0] });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+app.put('/api/zones/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { name, basePrice, pricePerKm, areas, active } = req.body;
+    await pool.query(
+      "UPDATE zones SET name=$1, base_price=$2, price_per_km=$3, areas=$4, active=$5 WHERE id=$6",
+      [name, basePrice, pricePerKm, JSON.stringify(areas || []), active, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+app.delete('/api/zones/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    await pool.query("DELETE FROM zones WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+// ==================== GOOGLE MAPS DISTANCE ====================
+const calculateDistance = async (origin, destination) => {
+  try {
+    const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origin)}&destinations=${encodeURIComponent(destination)}&mode=driving&language=he&key=${CONFIG.GOOGLE_API_KEY}`;
+    const response = await axios.get(url);
+    
+    if (response.data.status === 'OK' && response.data.rows[0]?.elements[0]?.status === 'OK') {
+      const element = response.data.rows[0].elements[0];
+      return {
+        distanceKm: element.distance.value / 1000, // מטרים לק"מ
+        distanceText: element.distance.text,
+        durationMin: Math.round(element.duration.value / 60), // שניות לדקות
+        durationText: element.duration.text,
+        originAddress: response.data.origin_addresses[0],
+        destinationAddress: response.data.destination_addresses[0]
+      };
+    }
+    return null;
+  } catch (e) {
+    console.error('Google Maps error:', e.message);
+    return null;
+  }
+};
+
+// חישוב מחיר לפי מרחק
+const calculatePriceByDistance = (distanceKm) => {
+  const { BASE_PRICE, PRICE_PER_KM, FREE_KM, MIN_PRICE } = CONFIG.PRICING;
+  
+  // ק"מ לחיוב (אחרי הק"מ הראשון החינמי)
+  const chargeableKm = Math.max(0, distanceKm - FREE_KM);
+  
+  // חישוב מחיר: בסיס + (ק"מ נוספים × מחיר לק"מ)
+  let price = BASE_PRICE + (chargeableKm * PRICE_PER_KM);
+  
+  // עיגול למעלה לשקל שלם
+  price = Math.ceil(price);
+  
+  // מינימום
+  price = Math.max(price, MIN_PRICE);
+  
+  return price;
+};
+
+// חישוב מחיר אוטומטי
+app.post('/api/calculate-price', requireAuth, async (req, res) => {
+  try {
+    const { pickupAddress, deliveryAddress } = req.body;
+    
+    if (!pickupAddress || !deliveryAddress) {
+      return res.json({ 
+        success: false, 
+        error: 'נדרשות כתובות איסוף ומסירה',
+        price: CONFIG.PRICING.BASE_PRICE,
+        commission: Math.round(CONFIG.PRICING.BASE_PRICE * CONFIG.COMMISSION),
+        payout: CONFIG.PRICING.BASE_PRICE - Math.round(CONFIG.PRICING.BASE_PRICE * CONFIG.COMMISSION)
+      });
+    }
+    
+    // חישוב מרחק עם Google Maps
+    const distance = await calculateDistance(pickupAddress, deliveryAddress);
+    
+    if (!distance) {
+      // אם Google נכשל, נחזיר מחיר בסיס
+      const price = CONFIG.PRICING.BASE_PRICE;
+      return res.json({ 
+        success: true,
+        price,
+        commission: Math.round(price * CONFIG.COMMISSION),
+        payout: price - Math.round(price * CONFIG.COMMISSION),
+        distance: null,
+        note: 'לא ניתן לחשב מרחק - מחיר בסיס'
+      });
+    }
+    
+    // חישוב מחיר לפי מרחק
+    const price = calculatePriceByDistance(distance.distanceKm);
+    const commission = Math.round(price * CONFIG.COMMISSION);
+    const payout = price - commission;
+    
+    res.json({ 
+      success: true,
+      price,
+      commission,
+      payout,
+      distance: {
+        km: Math.round(distance.distanceKm * 10) / 10,
+        text: distance.distanceText,
+        duration: distance.durationText,
+        durationMin: distance.durationMin
+      },
+      calculation: {
+        basePrice: CONFIG.PRICING.BASE_PRICE,
+        pricePerKm: CONFIG.PRICING.PRICE_PER_KM,
+        freeKm: CONFIG.PRICING.FREE_KM,
+        chargeableKm: Math.max(0, distance.distanceKm - CONFIG.PRICING.FREE_KM).toFixed(1)
+      }
+    });
+  } catch (e) { 
+    console.error('Calculate price error:', e);
+    const price = CONFIG.PRICING.BASE_PRICE;
+    res.json({ 
+      success: false,
+      price,
+      commission: Math.round(price * CONFIG.COMMISSION),
+      payout: price - Math.round(price * CONFIG.COMMISSION),
+      error: 'שגיאה בחישוב'
+    }); 
+  }
+});
+
+// API לקבלת פרטי מרחק בלבד
+app.post('/api/distance', requireAuth, async (req, res) => {
+  try {
+    const { origin, destination } = req.body;
+    const distance = await calculateDistance(origin, destination);
+    
+    if (distance) {
+      res.json({ success: true, ...distance });
+    } else {
+      res.json({ success: false, error: 'לא ניתן לחשב מרחק' });
+    }
+  } catch (e) {
+    res.json({ success: false, error: 'שגיאה' });
+  }
+});
+
+// ==================== BLACKLIST ====================
+app.get('/api/blacklist', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query("SELECT * FROM blacklist ORDER BY created_at DESC");
+    res.json(r.rows);
+  } catch (e) { res.json([]); }
+});
+
+app.post('/api/blacklist', requireAuth, requireRole('admin','manager'), async (req, res) => {
+  try {
+    const { type, value, reason } = req.body;
+    const r = await pool.query(
+      "INSERT INTO blacklist (type, value, reason, created_by) VALUES ($1,$2,$3,$4) RETURNING *",
+      [type, value, reason, req.user.id]
+    );
+    await logActivity(req.user.id, 'BLACKLIST_ADD', `נוסף לרשימה שחורה: ${type} - ${value}`);
+    res.json({ success: true, item: r.rows[0] });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+app.delete('/api/blacklist/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    await pool.query("DELETE FROM blacklist WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+// בדיקת רשימה שחורה
+const checkBlacklist = async (phone, name) => {
+  try {
+    const r = await pool.query(
+      "SELECT * FROM blacklist WHERE (type='phone' AND value=$1) OR (type='name' AND $2 ILIKE '%' || value || '%')",
+      [phone, name]
+    );
+    return r.rows.length > 0 ? r.rows[0] : null;
+  } catch (e) { return null; }
+};
+
+// ==================== ORDER NOTES ====================
+app.get('/api/orders/:id/notes', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      "SELECT n.*, u.name as user_name FROM order_notes n LEFT JOIN users u ON n.user_id = u.id WHERE n.order_id = $1 ORDER BY n.created_at DESC",
+      [req.params.id]
+    );
+    res.json(r.rows);
+  } catch (e) { res.json([]); }
+});
+
+app.post('/api/orders/:id/notes', requireAuth, async (req, res) => {
+  try {
+    const { note } = req.body;
+    const r = await pool.query(
+      "INSERT INTO order_notes (order_id, user_id, note) VALUES ($1,$2,$3) RETURNING *",
+      [req.params.id, req.user.id, note]
+    );
+    res.json({ success: true, note: r.rows[0] });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+// ==================== MESSAGE TEMPLATES ====================
+app.get('/api/templates', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query("SELECT * FROM message_templates ORDER BY name");
+    res.json(r.rows);
+  } catch (e) { res.json([]); }
+});
+
+app.post('/api/templates', requireAuth, requireRole('admin','manager'), async (req, res) => {
+  try {
+    const { name, content, type } = req.body;
+    const r = await pool.query(
+      "INSERT INTO message_templates (name, content, type, created_by) VALUES ($1,$2,$3,$4) RETURNING *",
+      [name, content, type || 'general', req.user.id]
+    );
+    res.json({ success: true, template: r.rows[0] });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+app.put('/api/templates/:id', requireAuth, requireRole('admin','manager'), async (req, res) => {
+  try {
+    const { name, content, type } = req.body;
+    await pool.query("UPDATE message_templates SET name=$1, content=$2, type=$3 WHERE id=$4", [name, content, type, req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+app.delete('/api/templates/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    await pool.query("DELETE FROM message_templates WHERE id=$1", [req.params.id]);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+// ==================== AUTO MESSAGES ====================
+const sendCustomerNotification = async (order, type) => {
+  if (!CONFIG.WHAPI.TOKEN || !order.sender_phone) return;
+  
+  const templates = {
+    taken: `🏍️ שלום ${order.sender_name}!\n\nהמשלוח שלך (${order.order_number}) נתפס על ידי שליח ובקרוב ייאסף.\n\nתודה שבחרתם ב-M.M.H Delivery!`,
+    picked: `📦 המשלוח ${order.order_number} נאסף ובדרך ליעד!\n\nשליח: ${order.courier?.name || 'בדרך'}`,
+    delivered: `✅ המשלוח ${order.order_number} נמסר בהצלחה!\n\nתודה שבחרתם ב-M.M.H Delivery! 🙏`
+  };
+  
+  const msg = templates[type];
+  if (msg) {
+    const waId = order.sender_phone.replace(/^0/,'972').replace(/-/g,'')+'@s.whatsapp.net';
+    await sendWhatsApp(waId, msg);
+  }
+};
+
+// ==================== COURIER RATINGS ====================
+app.post('/api/couriers/:id/rating', requireAuth, async (req, res) => {
+  try {
+    const { rating, comment, orderId } = req.body;
+    await pool.query(
+      "INSERT INTO courier_ratings (courier_id, order_id, rating, comment, created_by) VALUES ($1,$2,$3,$4,$5)",
+      [req.params.id, orderId, rating, comment, req.user.id]
+    );
+    
+    // עדכון ממוצע
+    const avg = await pool.query("SELECT AVG(rating) as avg FROM courier_ratings WHERE courier_id=$1", [req.params.id]);
+    await pool.query("UPDATE couriers SET rating=$1 WHERE id=$2", [avg.rows[0].avg, req.params.id]);
+    
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+// ==================== REMINDERS ====================
+const checkStaleOrders = async () => {
+  try {
+    // משלוחים שמפורסמים יותר משעה ולא נתפסו
+    const stale = await pool.query(`
+      SELECT * FROM orders 
+      WHERE status = 'published' 
+      AND published_at < NOW() - INTERVAL '1 hour'
+    `);
+    
+    for (const order of stale.rows) {
+      console.log(`⚠️ משלוח ${order.order_number} מפורסם יותר משעה!`);
+      // אפשר לשלוח התראה למנהל
+    }
+  } catch (e) { console.error('Stale check error:', e); }
+};
+
+// בדיקה כל 30 דקות
+setInterval(checkStaleOrders, 30 * 60 * 1000);
+
+// ==================== DAILY REPORT ====================
+const generateDailyReport = async () => {
+  try {
+    const today = await pool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(CASE WHEN status='delivered' THEN 1 END) as delivered,
+        COUNT(CASE WHEN status='cancelled' THEN 1 END) as cancelled,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN price END),0) as revenue,
+        COALESCE(SUM(CASE WHEN status='delivered' THEN commission END),0) as profit
+      FROM orders WHERE DATE(created_at) = CURRENT_DATE
+    `);
+    
+    const s = today.rows[0];
+    const report = `📊 *דוח יומי - ${new Date().toLocaleDateString('he-IL')}*\n\n` +
+      `📦 סה"כ הזמנות: ${s.total}\n` +
+      `✅ נמסרו: ${s.delivered}\n` +
+      `❌ בוטלו: ${s.cancelled}\n` +
+      `💰 הכנסות: ₪${s.revenue}\n` +
+      `📈 רווח נקי: ₪${s.profit}\n\n` +
+      `יום טוב! 🚀`;
+    
+    return report;
+  } catch (e) { return null; }
+};
+
+app.get('/api/reports/daily-summary', requireAuth, async (req, res) => {
+  try {
+    const report = await generateDailyReport();
+    res.json({ report });
+  } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
+});
+
+// שליחת דוח יומי לוואטסאפ
+app.post('/api/reports/send-daily', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const report = await generateDailyReport();
+    if (report && CONFIG.WHAPI.GROUP_ID) {
+      await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, report);
+    }
+    res.json({ success: true, report });
+  } catch (e) { res.status(500).json({ success: false, error:'שגיאת שרת' }); }
+});
+
+// ==================== COURIER APP ====================
+app.get('/courier/:phone', async (req, res) => {
+  try {
+    const phone = req.params.phone;
+    const courier = await pool.query("SELECT * FROM couriers WHERE phone=$1 OR phone=$2", 
+      [phone, '0' + phone.replace(/^972/, '')]);
+    
+    if (!courier.rows[0]) {
+      return res.send(courierNotFoundPage());
+    }
+    
+    const c = courier.rows[0];
+    const orders = await pool.query(`
+      SELECT * FROM orders WHERE courier_id=$1 AND status IN ('taken','picked') ORDER BY created_at DESC
+    `, [c.id]);
+    
+    const stats = await pool.query(`
+      SELECT 
+        COUNT(CASE WHEN status='delivered' AND delivered_at >= CURRENT_DATE THEN 1 END) as today,
+        COUNT(CASE WHEN status='delivered' AND delivered_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as week,
+        COUNT(CASE WHEN status='delivered' AND delivered_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as month
+      FROM orders WHERE courier_id=$1
+    `, [c.id]);
+    
+    res.send(courierAppPage(c, orders.rows, stats.rows[0]));
+  } catch (e) { res.status(500).send('שגיאה'); }
+});
+
+function courierNotFoundPage() {
+  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>לא נמצא</title></head><body style="font-family:system-ui;background:#0f172a;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center"><div><h1>🔍</h1><p>שליח לא נמצא במערכת</p></div></body></html>`;
+}
+
+function courierAppPage(c, orders, stats) {
+  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>M.M.H - ${c.first_name}</title>
+<style>*{font-family:system-ui;margin:0;padding:0;box-sizing:border-box}body{background:#0f172a;color:#fff;min-height:100vh;padding:20px}
+.header{text-align:center;padding:20px 0;border-bottom:1px solid #334155;margin-bottom:20px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.stat{background:#1e293b;padding:15px;border-radius:12px;text-align:center}
+.stat-value{font-size:24px;font-weight:bold;color:#10b981}
+.stat-label{font-size:12px;color:#94a3b8}
+.balance{background:linear-gradient(135deg,#f59e0b,#d97706);padding:20px;border-radius:12px;text-align:center;margin-bottom:20px}
+.balance-value{font-size:32px;font-weight:bold}
+.orders{display:flex;flex-direction:column;gap:15px}
+.order{background:#1e293b;border-radius:12px;padding:15px;border:1px solid #334155}
+.order-header{display:flex;justify-content:space-between;margin-bottom:10px}
+.order-num{font-weight:bold;color:#10b981}
+.order-status{padding:4px 8px;border-radius:20px;font-size:12px}
+.status-taken{background:#3b82f620;color:#3b82f6}
+.status-picked{background:#8b5cf620;color:#8b5cf6}
+.order-addr{color:#94a3b8;font-size:14px;margin:8px 0}
+.order-payout{font-size:20px;font-weight:bold;color:#10b981}
+.btn{display:block;width:100%;padding:12px;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer;margin-top:10px;text-decoration:none;text-align:center}
+.btn-pickup{background:#3b82f6;color:#fff}
+.btn-deliver{background:#10b981;color:#fff}
+.btn-nav{background:#334155;color:#fff}
+.empty{text-align:center;padding:40px;color:#64748b}</style></head>
+<body>
+<div class="header"><h1>🏍️ ${c.first_name} ${c.last_name}</h1><p style="color:#64748b">${c.phone}</p></div>
+<div class="stats">
+  <div class="stat"><div class="stat-value">${stats.today||0}</div><div class="stat-label">היום</div></div>
+  <div class="stat"><div class="stat-value">${stats.week||0}</div><div class="stat-label">השבוע</div></div>
+  <div class="stat"><div class="stat-value">${stats.month||0}</div><div class="stat-label">החודש</div></div>
+</div>
+<div class="balance"><div style="font-size:14px">יתרה לתשלום</div><div class="balance-value">₪${c.balance||0}</div></div>
+<h3 style="margin-bottom:15px">📦 משלוחים פעילים (${orders.length})</h3>
+<div class="orders">
+${orders.length ? orders.map(o => `
+  <div class="order">
+    <div class="order-header">
+      <span class="order-num">${o.order_number}</span>
+      <span class="order-status status-${o.status}">${o.status==='taken'?'נתפס':'נאסף'}</span>
+    </div>
+    <div class="order-addr">📍 ${o.status==='taken'?o.pickup_address:o.delivery_address}</div>
+    <div class="order-addr">👤 ${o.status==='taken'?o.sender_name+' - '+o.sender_phone:o.receiver_name+' - '+o.receiver_phone}</div>
+    <div class="order-payout">💰 ₪${o.courier_payout}</div>
+    <a href="https://waze.com/ul?q=${encodeURIComponent(o.status==='taken'?o.pickup_address:o.delivery_address)}" class="btn btn-nav">🗺️ ניווט</a>
+    ${o.status==='taken'?`<a href="/status/${o.order_number}/pickup" class="btn btn-pickup">📦 אספתי</a>`:`<a href="/status/${o.order_number}/deliver" class="btn btn-deliver">✅ מסרתי</a>`}
+  </div>
+`).join('') : '<div class="empty">אין משלוחים פעילים</div>'}
+</div>
+</body></html>`;
+}
 
 // ==================== PUBLIC ROUTES ====================
 app.get('/take/:orderNumber', async (req, res) => {
