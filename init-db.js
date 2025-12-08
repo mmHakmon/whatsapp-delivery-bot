@@ -158,6 +158,7 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_orders_number ON orders(order_number);
       CREATE INDEX IF NOT EXISTS idx_couriers_phone ON couriers(phone);
       CREATE INDEX IF NOT EXISTS idx_couriers_id_number ON couriers(id_number);
+      CREATE INDEX IF NOT EXISTS idx_couriers_whatsapp ON couriers(whatsapp_id);
       CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id);
       CREATE INDEX IF NOT EXISTS idx_activity_created ON activity_log(created_at);
     `);
