@@ -1,29 +1,46 @@
 /**
- * M.M.H Delivery System Pro v3.0
+ * M.M.H Delivery System Pro v4.0
  * Full featured delivery management with PostgreSQL
+ * Enhanced Security Edition
  */
 
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const WebSocket = require('ws');
 const cors = require('cors');
 const axios = require('axios');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+
+// ==================== SECURITY CONFIG ====================
+const SECURITY = {
+  BCRYPT_ROUNDS: 12, // חזק יותר מ-10
+  JWT_ACCESS_EXPIRY: '15m', // טוקן גישה קצר
+  JWT_REFRESH_EXPIRY: '7d', // טוקן רענון ארוך
+  MAX_LOGIN_ATTEMPTS: 5, // מקסימום ניסיונות כניסה
+  LOCKOUT_TIME: 15 * 60 * 1000, // 15 דקות נעילה
+  RATE_LIMIT_WINDOW: 60 * 1000, // חלון של דקה
+  RATE_LIMIT_MAX: 100, // מקסימום בקשות בדקה
+  RATE_LIMIT_LOGIN: 5, // מקסימום ניסיונות התחברות בדקה
+};
 
 // ==================== CONFIG ====================
 const CONFIG = {
   PORT: process.env.PORT || 3001,
   PUBLIC_URL: process.env.PUBLIC_URL || 'https://mmh-delivery.onrender.com',
   JWT_SECRET: process.env.JWT_SECRET || 'mmh-secret-change-this',
+  JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || 'mmh-refresh-secret-change-this',
   WHAPI: {
     API_URL: 'https://gate.whapi.cloud',
     TOKEN: process.env.WHAPI_TOKEN,
     GROUP_ID: process.env.COURIERS_GROUP_ID,
   },
   COMMISSION: parseFloat(process.env.COMMISSION_RATE) || 0.25,
+  NODE_ENV: process.env.NODE_ENV || 'development',
 };
 
 // ==================== DATABASE ====================
@@ -32,15 +49,134 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+// ==================== RATE LIMITING ====================
+const rateLimitStore = new Map();
+const loginAttempts = new Map();
+
+const rateLimit = (maxRequests = SECURITY.RATE_LIMIT_MAX, windowMs = SECURITY.RATE_LIMIT_WINDOW) => {
+  return (req, res, next) => {
+    const ip = req.ip || req.connection.remoteAddress;
+    const key = `${ip}:${req.path}`;
+    const now = Date.now();
+    
+    if (!rateLimitStore.has(key)) {
+      rateLimitStore.set(key, { count: 1, resetTime: now + windowMs });
+      return next();
+    }
+    
+    const record = rateLimitStore.get(key);
+    if (now > record.resetTime) {
+      record.count = 1;
+      record.resetTime = now + windowMs;
+      return next();
+    }
+    
+    record.count++;
+    if (record.count > maxRequests) {
+      logSecurityEvent('RATE_LIMIT', ip, { path: req.path, count: record.count });
+      return res.status(429).json({ error: 'יותר מדי בקשות, נסה שוב מאוחר יותר' });
+    }
+    next();
+  };
+};
+
+// ניקוי תקופתי של rate limit store
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, record] of rateLimitStore.entries()) {
+    if (now > record.resetTime) rateLimitStore.delete(key);
+  }
+  for (const [key, record] of loginAttempts.entries()) {
+    if (now > record.lockoutUntil) loginAttempts.delete(key);
+  }
+}, 60000);
+
+// ==================== SECURITY LOGGING ====================
+const securityLogs = [];
+
+const logSecurityEvent = async (event, ip, details = {}) => {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    event,
+    ip,
+    details
+  };
+  securityLogs.push(logEntry);
+  console.log(`🔒 [SECURITY] ${event}:`, JSON.stringify(details));
+  
+  // שמירה לדאטאבייס
+  try {
+    await pool.query(
+      "INSERT INTO activity_log (action, ip_address, details) VALUES ($1, $2, $3)",
+      [event, ip, JSON.stringify(details)]
+    );
+  } catch (e) { /* ignore */ }
+  
+  // שמירת רק 1000 לוגים אחרונים בזיכרון
+  if (securityLogs.length > 1000) securityLogs.shift();
+};
+
 // ==================== EXPRESS ====================
 const app = express();
-app.use(cors({ origin: '*' }));
-app.use(express.json());
+
+// Helmet-style security headers
+app.use((req, res, next) => {
+  // מונע clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+  // מונע MIME sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  // XSS protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  // Referrer policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Content Security Policy
+  res.setHeader('Content-Security-Policy', "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self' wss: ws: https:;");
+  // HSTS - רק ב-production
+  if (CONFIG.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  next();
+});
+
+// HTTPS redirect בproduction
+app.use((req, res, next) => {
+  if (CONFIG.NODE_ENV === 'production' && req.headers['x-forwarded-proto'] !== 'https') {
+    return res.redirect(301, `https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
+
+app.use(cors({ 
+  origin: CONFIG.NODE_ENV === 'production' ? CONFIG.PUBLIC_URL : '*',
+  credentials: true 
+}));
+app.use(express.json({ limit: '10mb' })); // הגבלת גודל בקשה
+app.use(rateLimit()); // Rate limiting גלובלי
+
 const server = http.createServer(app);
 
 // ==================== AUTH ====================
+const generateTokens = (user) => {
+  const accessToken = jwt.sign(
+    { id: user.id, username: user.username, role: user.role, name: user.name },
+    CONFIG.JWT_SECRET,
+    { expiresIn: SECURITY.JWT_ACCESS_EXPIRY }
+  );
+  const refreshToken = jwt.sign(
+    { id: user.id, type: 'refresh' },
+    CONFIG.JWT_REFRESH_SECRET,
+    { expiresIn: SECURITY.JWT_REFRESH_EXPIRY }
+  );
+  return { accessToken, refreshToken };
+};
+
 const verifyToken = (token) => {
   try { return jwt.verify(token, CONFIG.JWT_SECRET); } 
+  catch (e) { return null; }
+};
+
+const verifyRefreshToken = (token) => {
+  try { return jwt.verify(token, CONFIG.JWT_REFRESH_SECRET); } 
   catch (e) { return null; }
 };
 
@@ -48,7 +184,7 @@ const requireAuth = (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'נדרשת התחברות' });
   const decoded = verifyToken(token);
-  if (!decoded) return res.status(401).json({ error: 'טוקן לא תקין' });
+  if (!decoded) return res.status(401).json({ error: 'טוקן לא תקין או פג תוקף' });
   req.user = decoded;
   next();
 };
@@ -56,6 +192,72 @@ const requireAuth = (req, res, next) => {
 const requireRole = (...roles) => (req, res, next) => {
   if (!roles.includes(req.user?.role)) return res.status(403).json({ error: 'אין הרשאה' });
   next();
+};
+
+// בדיקת נעילת חשבון
+const checkLoginAttempts = (ip, username) => {
+  const key = `${ip}:${username}`;
+  const record = loginAttempts.get(key);
+  if (!record) return { locked: false };
+  
+  if (Date.now() < record.lockoutUntil) {
+    const remainingMs = record.lockoutUntil - Date.now();
+    const remainingMin = Math.ceil(remainingMs / 60000);
+    return { locked: true, remainingMin };
+  }
+  return { locked: false };
+};
+
+const recordFailedLogin = (ip, username) => {
+  const key = `${ip}:${username}`;
+  const record = loginAttempts.get(key) || { count: 0, lockoutUntil: 0 };
+  record.count++;
+  
+  if (record.count >= SECURITY.MAX_LOGIN_ATTEMPTS) {
+    record.lockoutUntil = Date.now() + SECURITY.LOCKOUT_TIME;
+    logSecurityEvent('ACCOUNT_LOCKED', ip, { username, attempts: record.count });
+  }
+  
+  loginAttempts.set(key, record);
+};
+
+const clearLoginAttempts = (ip, username) => {
+  loginAttempts.delete(`${ip}:${username}`);
+};
+
+// ==================== 2FA ====================
+const generate2FACode = () => {
+  return crypto.randomInt(100000, 999999).toString();
+};
+
+const twoFACodes = new Map(); // userId -> { code, expiresAt }
+
+const send2FACode = async (userId, phone) => {
+  const code = generate2FACode();
+  twoFACodes.set(userId, {
+    code,
+    expiresAt: Date.now() + 5 * 60 * 1000 // 5 דקות
+  });
+  
+  // שליחה בווצאפ
+  if (CONFIG.WHAPI.TOKEN && phone) {
+    const waId = phone.replace(/^0/, '972').replace(/-/g, '') + '@s.whatsapp.net';
+    await sendWhatsApp(waId, `🔐 קוד האימות שלך: *${code}*\n\nתוקף: 5 דקות`);
+  }
+  
+  return code;
+};
+
+const verify2FACode = (userId, code) => {
+  const record = twoFACodes.get(userId);
+  if (!record) return false;
+  if (Date.now() > record.expiresAt) {
+    twoFACodes.delete(userId);
+    return false;
+  }
+  if (record.code !== code) return false;
+  twoFACodes.delete(userId);
+  return true;
 };
 
 // ==================== WEBSOCKET ====================
@@ -280,25 +482,150 @@ const cancelOrder = async (id, reason, userId) => {
 };
 
 // ==================== API ROUTES ====================
-app.post('/api/auth/login', async (req, res) => {
+
+// Login עם Rate Limiting חזק + נעילת חשבון + 2FA
+app.post('/api/auth/login', rateLimit(SECURITY.RATE_LIMIT_LOGIN, SECURITY.RATE_LIMIT_WINDOW), async (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
   try {
-    const { username, password } = req.body;
+    const { username, password, twoFactorCode } = req.body;
+    
+    // בדיקת נעילת חשבון
+    const lockStatus = checkLoginAttempts(ip, username);
+    if (lockStatus.locked) {
+      logSecurityEvent('LOGIN_BLOCKED', ip, { username, reason: 'account_locked' });
+      return res.json({ success: false, error: `החשבון נעול. נסה שוב בעוד ${lockStatus.remainingMin} דקות` });
+    }
+    
     const r = await pool.query("SELECT * FROM users WHERE username=$1 AND active=true",[username]);
     const user = r.rows[0];
-    if (!user || !(await bcrypt.compare(password, user.password))) 
-      return res.json({ success: false, error: 'שם משתמש או סיסמה שגויים' });
     
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      recordFailedLogin(ip, username);
+      logSecurityEvent('LOGIN_FAILED', ip, { username, reason: 'invalid_credentials' });
+      return res.json({ success: false, error: 'שם משתמש או סיסמה שגויים' });
+    }
+    
+    // אם זה אדמין ויש לו 2FA מופעל
+    if (user.role === 'admin' && user.two_factor_enabled) {
+      if (!twoFactorCode) {
+        // שלח קוד 2FA
+        await send2FACode(user.id, user.phone);
+        logSecurityEvent('2FA_SENT', ip, { username });
+        return res.json({ success: false, requires2FA: true, message: 'קוד אימות נשלח לטלפון שלך' });
+      }
+      
+      // אמת קוד 2FA
+      if (!verify2FACode(user.id, twoFactorCode)) {
+        logSecurityEvent('2FA_FAILED', ip, { username });
+        return res.json({ success: false, error: 'קוד אימות שגוי או פג תוקף' });
+      }
+    }
+    
+    // התחברות מוצלחת
+    clearLoginAttempts(ip, username);
     await pool.query("UPDATE users SET last_login=NOW() WHERE id=$1",[user.id]);
-    const token = jwt.sign({ id:user.id, username:user.username, role:user.role, name:user.name }, CONFIG.JWT_SECRET, { expiresIn:'7d' });
-    res.json({ success:true, token, user:{ id:user.id, username:user.username, name:user.name, role:user.role } });
-  } catch (e) { console.error('Login error:',e); res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+    
+    const tokens = generateTokens(user);
+    
+    // שמור refresh token בדאטאבייס
+    await pool.query(
+      "UPDATE users SET refresh_token=$1 WHERE id=$2",
+      [tokens.refreshToken, user.id]
+    );
+    
+    logSecurityEvent('LOGIN_SUCCESS', ip, { username, role: user.role });
+    
+    res.json({ 
+      success: true, 
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: { id: user.id, username: user.username, name: user.name, role: user.role }
+    });
+  } catch (e) { 
+    console.error('Login error:', e);
+    logSecurityEvent('LOGIN_ERROR', ip, { error: e.message });
+    res.status(500).json({ success: false, error: 'שגיאת שרת' }); 
+  }
+});
+
+// Refresh Token
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return res.status(401).json({ error: 'נדרש refresh token' });
+    
+    const decoded = verifyRefreshToken(refreshToken);
+    if (!decoded) return res.status(401).json({ error: 'refresh token לא תקין' });
+    
+    // וודא שהטוקן תואם לזה שבדאטאבייס
+    const r = await pool.query("SELECT * FROM users WHERE id=$1 AND refresh_token=$2 AND active=true", 
+      [decoded.id, refreshToken]);
+    const user = r.rows[0];
+    if (!user) return res.status(401).json({ error: 'refresh token לא תקין' });
+    
+    const tokens = generateTokens(user);
+    
+    // עדכן refresh token
+    await pool.query("UPDATE users SET refresh_token=$1 WHERE id=$2", [tokens.refreshToken, user.id]);
+    
+    res.json({ 
+      success: true, 
+      token: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'שגיאת שרת' });
+  }
+});
+
+// Logout - ביטול refresh token
+app.post('/api/auth/logout', requireAuth, async (req, res) => {
+  try {
+    await pool.query("UPDATE users SET refresh_token=NULL WHERE id=$1", [req.user.id]);
+    logSecurityEvent('LOGOUT', req.ip, { username: req.user.username });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'שגיאת שרת' });
+  }
+});
+
+// הפעלת/ביטול 2FA
+app.post('/api/auth/toggle-2fa', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query("SELECT two_factor_enabled, phone FROM users WHERE id=$1", [req.user.id]);
+    const user = r.rows[0];
+    
+    if (!user.phone) {
+      return res.json({ success: false, error: 'נדרש מספר טלפון להפעלת 2FA' });
+    }
+    
+    const newStatus = !user.two_factor_enabled;
+    await pool.query("UPDATE users SET two_factor_enabled=$1 WHERE id=$2", [newStatus, req.user.id]);
+    
+    logSecurityEvent(newStatus ? '2FA_ENABLED' : '2FA_DISABLED', req.ip, { username: req.user.username });
+    res.json({ success: true, enabled: newStatus });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'שגיאת שרת' });
+  }
+});
+
+// לוג אבטחה (לאדמין)
+app.get('/api/admin/security-logs', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query(
+      "SELECT * FROM activity_log WHERE action LIKE 'LOGIN%' OR action LIKE '2FA%' OR action LIKE 'RATE%' OR action LIKE 'ACCOUNT%' ORDER BY created_at DESC LIMIT 100"
+    );
+    res.json({ logs: r.rows, memoryLogs: securityLogs.slice(-50) });
+  } catch (e) {
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => res.json({ success:true, user:req.user }));
 
 app.get('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const r = await pool.query("SELECT id,username,name,role,phone,email,active,created_at FROM users ORDER BY created_at DESC");
+    const r = await pool.query("SELECT id,username,name,role,phone,email,active,two_factor_enabled,created_at FROM users ORDER BY created_at DESC");
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error:'שגיאת שרת' }); }
 });
@@ -306,9 +633,10 @@ app.get('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
 app.post('/api/users', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { username, password, name, role, phone, email } = req.body;
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, SECURITY.BCRYPT_ROUNDS);
     const r = await pool.query("INSERT INTO users (username,password,name,role,phone,email) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id,username,name,role",
       [username,hash,name,role||'agent',phone,email]);
+    logSecurityEvent('USER_CREATED', req.ip, { createdBy: req.user.username, newUser: username });
     res.json({ success:true, user:r.rows[0] });
   } catch (e) {
     if (e.code === '23505') return res.json({ success:false, error:'שם משתמש קיים' });
@@ -322,6 +650,7 @@ app.put('/api/users/:id', requireAuth, requireRole('admin'), async (req, res) =>
     const { name, role, phone, email, active } = req.body;
     await pool.query("UPDATE users SET name=$1,role=$2,phone=$3,email=$4,active=$5 WHERE id=$6",
       [name,role,phone,email,active,req.params.id]);
+    logSecurityEvent('USER_UPDATED', req.ip, { updatedBy: req.user.username, userId: req.params.id });
     res.json({ success:true });
   } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
 });
@@ -330,9 +659,10 @@ app.put('/api/users/:id', requireAuth, requireRole('admin'), async (req, res) =>
 app.put('/api/users/:id/password', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { password } = req.body;
-    if (!password || password.length < 4) return res.json({ success:false, error:'סיסמה חייבת להכיל לפחות 4 תווים' });
-    const hash = await bcrypt.hash(password, 10);
+    if (!password || password.length < 6) return res.json({ success:false, error:'סיסמה חייבת להכיל לפחות 6 תווים' });
+    const hash = await bcrypt.hash(password, SECURITY.BCRYPT_ROUNDS);
     await pool.query("UPDATE users SET password=$1 WHERE id=$2",[hash,req.params.id]);
+    logSecurityEvent('PASSWORD_CHANGED', req.ip, { changedBy: req.user.username, userId: req.params.id });
     res.json({ success:true });
   } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
 });
@@ -344,8 +674,8 @@ app.put('/api/auth/change-password', requireAuth, async (req, res) => {
     const r = await pool.query("SELECT password FROM users WHERE id=$1",[req.user.id]);
     if (!r.rows[0] || !(await bcrypt.compare(oldPassword, r.rows[0].password)))
       return res.json({ success:false, error:'סיסמה נוכחית שגויה' });
-    if (!newPassword || newPassword.length < 4) return res.json({ success:false, error:'סיסמה חייבת להכיל לפחות 4 תווים' });
-    const hash = await bcrypt.hash(newPassword, 10);
+    if (!newPassword || newPassword.length < 6) return res.json({ success:false, error:'סיסמה חייבת להכיל לפחות 6 תווים' });
+    const hash = await bcrypt.hash(newPassword, SECURITY.BCRYPT_ROUNDS);
     await pool.query("UPDATE users SET password=$1 WHERE id=$2",[hash,req.user.id]);
     res.json({ success:true });
   } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
@@ -668,19 +998,53 @@ app.get('/', (req, res) => {
 <div id="app"></div>
 <script>
 const API='',WS_URL='${wsUrl}';
-let token=localStorage.getItem('token'),user=JSON.parse(localStorage.getItem('user')||'null'),orders=[],stats={},couriers=[],users=[],ws=null,connected=false,currentTab='orders',filter='all',search='';
+let token=localStorage.getItem('token'),refreshToken=localStorage.getItem('refreshToken'),user=JSON.parse(localStorage.getItem('user')||'null'),orders=[],stats={},couriers=[],users=[],ws=null,connected=false,currentTab='orders',filter='all',search='',pending2FA=null;
+
+// רענון אוטומטי של טוקן
+async function refreshAccessToken(){
+  if(!refreshToken)return false;
+  try{
+    const r=await fetch(API+'/api/auth/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refreshToken})});
+    const d=await r.json();
+    if(d.success){token=d.token;refreshToken=d.refreshToken;localStorage.setItem('token',token);localStorage.setItem('refreshToken',refreshToken);return true;}
+  }catch(e){}
+  return false;
+}
+
+// בדיקת תוקף טוקן וחידוש אוטומטי
+setInterval(async()=>{if(token&&refreshToken)await refreshAccessToken();},10*60*1000); // כל 10 דקות
 
 async function login(){
   const u=document.getElementById('username').value,p=document.getElementById('password').value;
+  const twoFactorCode=document.getElementById('twoFactorCode')?.value;
   try{
-    const r=await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    const r=await fetch(API+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p,twoFactorCode})});
     const d=await r.json();
-    if(d.success){token=d.token;user=d.user;localStorage.setItem('token',token);localStorage.setItem('user',JSON.stringify(user));connectWS();render();}
-    else{document.getElementById('loginError').textContent=d.error;document.getElementById('loginError').classList.remove('hidden');}
+    if(d.success){
+      token=d.token;refreshToken=d.refreshToken;user=d.user;
+      localStorage.setItem('token',token);localStorage.setItem('refreshToken',refreshToken);localStorage.setItem('user',JSON.stringify(user));
+      pending2FA=null;connectWS();render();
+    }else if(d.requires2FA){
+      pending2FA={username:u,password:p};
+      document.getElementById('loginError').textContent=d.message;
+      document.getElementById('loginError').classList.remove('hidden');
+      document.getElementById('loginError').classList.remove('bg-red-500/20','border-red-500','text-red-400');
+      document.getElementById('loginError').classList.add('bg-blue-500/20','border-blue-500','text-blue-400');
+      document.getElementById('twoFactorSection').classList.remove('hidden');
+    }else{
+      document.getElementById('loginError').textContent=d.error;
+      document.getElementById('loginError').classList.remove('hidden');
+      document.getElementById('loginError').classList.add('bg-red-500/20','border-red-500','text-red-400');
+    }
   }catch(e){document.getElementById('loginError').textContent='שגיאת תקשורת';document.getElementById('loginError').classList.remove('hidden');}
 }
 
-function logout(){token=null;user=null;localStorage.removeItem('token');localStorage.removeItem('user');if(ws)ws.close();render();}
+function logout(){
+  api('/api/auth/logout','POST');
+  token=null;refreshToken=null;user=null;
+  localStorage.removeItem('token');localStorage.removeItem('refreshToken');localStorage.removeItem('user');
+  if(ws)ws.close();render();
+}
 
 function connectWS(){
   if(!token)return;ws=new WebSocket(WS_URL);
@@ -689,7 +1053,18 @@ function connectWS(){
   ws.onclose=()=>{connected=false;render();setTimeout(connectWS,3000);};
 }
 
-async function api(ep,method='GET',body=null){const opts={method,headers:{'Content-Type':'application/json'}};if(token)opts.headers.Authorization='Bearer '+token;if(body)opts.body=JSON.stringify(body);return(await fetch(API+ep,opts)).json();}
+async function api(ep,method='GET',body=null){
+  const opts={method,headers:{'Content-Type':'application/json'}};
+  if(token)opts.headers.Authorization='Bearer '+token;
+  if(body)opts.body=JSON.stringify(body);
+  let r=await fetch(API+ep,opts);
+  // אם הטוקן פג, נסה לרענן
+  if(r.status===401&&refreshToken){
+    const refreshed=await refreshAccessToken();
+    if(refreshed){opts.headers.Authorization='Bearer '+token;r=await fetch(API+ep,opts);}
+  }
+  return r.json();
+}
 async function loadCouriers(){couriers=await api('/api/couriers');render();}
 async function loadUsers(){if(user?.role==='admin'){users=await api('/api/users');render();}}
 
@@ -717,7 +1092,7 @@ function statusColor(s){const c={new:'slate',published:'amber',taken:'blue',pick
 function render(){if(!token||!user)renderLogin();else renderDashboard();}
 
 function renderLogin(){
-  document.getElementById('app').innerHTML=\`<div class="min-h-screen flex items-center justify-center p-4"><div class="bg-slate-800/80 backdrop-blur rounded-2xl p-8 w-full max-w-md border border-slate-700"><div class="text-center mb-8"><div class="text-5xl mb-4">🚚</div><h1 class="text-2xl font-bold text-emerald-400">M.M.H Delivery</h1><p class="text-slate-400 mt-2">מערכת ניהול משלוחים</p></div><div id="loginError" class="hidden bg-red-500/20 border border-red-500 text-red-400 rounded-lg p-3 mb-4 text-center"></div><div class="space-y-4"><input type="text" id="username" placeholder="שם משתמש" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"><input type="password" id="password" placeholder="סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none" onkeypress="if(event.key==='Enter')login()"><button onclick="login()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-xl font-bold">התחבר</button></div></div></div>\`;
+  document.getElementById('app').innerHTML=\`<div class="min-h-screen flex items-center justify-center p-4"><div class="bg-slate-800/80 backdrop-blur rounded-2xl p-8 w-full max-w-md border border-slate-700"><div class="text-center mb-8"><div class="text-5xl mb-4">🚚</div><h1 class="text-2xl font-bold text-emerald-400">M.M.H Delivery</h1><p class="text-slate-400 mt-2">מערכת ניהול משלוחים</p><p class="text-xs text-slate-500 mt-1">🔒 גרסה מאובטחת v4.0</p></div><div id="loginError" class="hidden bg-red-500/20 border border-red-500 text-red-400 rounded-lg p-3 mb-4 text-center"></div><div class="space-y-4"><input type="text" id="username" placeholder="שם משתמש" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none"><input type="password" id="password" placeholder="סיסמה" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-emerald-500 focus:outline-none" onkeypress="if(event.key==='Enter')login()"><div id="twoFactorSection" class="hidden"><input type="text" id="twoFactorCode" placeholder="קוד אימות (6 ספרות)" maxlength="6" class="w-full bg-slate-900 border border-amber-500 rounded-xl px-4 py-3 text-white text-center text-xl tracking-widest focus:border-amber-400 focus:outline-none" onkeypress="if(event.key==='Enter')login()"></div><button onclick="login()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-xl font-bold">התחבר</button></div></div></div>\`;
 }
 
 function renderDashboard(){
@@ -727,7 +1102,7 @@ function renderDashboard(){
 <header class="border-b border-slate-700/50 bg-slate-900/80 backdrop-blur sticky top-0 z-40">
   <div class="max-w-7xl mx-auto px-4 py-3">
     <div class="flex items-center justify-between">
-      <div class="flex items-center gap-3"><div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-xl flex items-center justify-center text-xl">🚚</div><div><h1 class="text-lg font-bold text-white">M.M.H Delivery</h1><p class="text-xs text-slate-500">v3.0</p></div></div>
+      <div class="flex items-center gap-3"><div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-xl flex items-center justify-center text-xl">🚚</div><div><h1 class="text-lg font-bold text-white">M.M.H Delivery</h1><p class="text-xs text-slate-500">🔒 v4.0</p></div></div>
       <div class="flex items-center gap-3"><div class="px-3 py-1 rounded-full text-sm \${connected?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">\${connected?'🟢 מחובר':'🔴 מתחבר...'}</div><span class="text-sm text-slate-300">\${user.name}</span><button onclick="logout()" class="p-2 hover:bg-slate-700 rounded-lg text-slate-400">🚪</button></div>
     </div>
     <div class="flex gap-1 mt-3 overflow-x-auto pb-1">
