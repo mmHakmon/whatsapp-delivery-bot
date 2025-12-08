@@ -534,6 +534,76 @@ app.post('/webhook/whapi', async (req, res) => {
 
 app.get('/health', (req, res) => res.json({ status:'ok', uptime:process.uptime() }));
 
+// ==================== ADMIN TOOLS ====================
+// מחיקת כל ההזמנות (טסטים)
+app.delete('/api/admin/orders/all', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query("DELETE FROM orders RETURNING id");
+    await pool.query("UPDATE couriers SET total_deliveries=0, total_earned=0, balance=0");
+    broadcast({ type: 'refresh' });
+    res.json({ success: true, deleted: r.rowCount });
+  } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
+});
+
+// מחיקת הזמנות שהושלמו בלבד
+app.delete('/api/admin/orders/delivered', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query("DELETE FROM orders WHERE status='delivered' RETURNING id");
+    res.json({ success: true, deleted: r.rowCount });
+  } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
+});
+
+// מחיקת הזמנות מבוטלות בלבד
+app.delete('/api/admin/orders/cancelled', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query("DELETE FROM orders WHERE status='cancelled' RETURNING id");
+    res.json({ success: true, deleted: r.rowCount });
+  } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
+});
+
+// מחיקת כל השליחים (טסטים)
+app.delete('/api/admin/couriers/all', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    await pool.query("UPDATE orders SET courier_id=NULL");
+    const r = await pool.query("DELETE FROM couriers RETURNING id");
+    res.json({ success: true, deleted: r.rowCount });
+  } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
+});
+
+// מחיקת כל התשלומים
+app.delete('/api/admin/payments/all', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const r = await pool.query("DELETE FROM payments RETURNING id");
+    res.json({ success: true, deleted: r.rowCount });
+  } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
+});
+
+// איפוס מלא - הכל חוץ ממשתמשים
+app.delete('/api/admin/reset', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    await pool.query("DELETE FROM payments");
+    await pool.query("DELETE FROM orders");
+    await pool.query("DELETE FROM couriers");
+    await pool.query("DELETE FROM activity_log");
+    broadcast({ type: 'refresh' });
+    res.json({ success: true, message: 'המערכת אופסה' });
+  } catch (e) { res.status(500).json({ success: false, error: 'שגיאת שרת' }); }
+});
+
+// סטטיסטיקות אדמין
+app.get('/api/admin/stats', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const orders = await pool.query("SELECT status, COUNT(*) as count FROM orders GROUP BY status");
+    const couriers = await pool.query("SELECT COUNT(*) as total FROM couriers");
+    const payments = await pool.query("SELECT COUNT(*) as total, COALESCE(SUM(amount),0) as sum FROM payments");
+    res.json({
+      orders: orders.rows,
+      couriers: parseInt(couriers.rows[0].total),
+      payments: { count: parseInt(payments.rows[0].total), sum: parseFloat(payments.rows[0].sum) }
+    });
+  } catch (e) { res.status(500).json({ error: 'שגיאת שרת' }); }
+});
+
 // ==================== HTML TEMPLATES ====================
 function statusHTML(emoji, title, subtitle, color) {
   return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>*{font-family:system-ui;margin:0;padding:0;box-sizing:border-box}body{background:#0f172a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#1e293b;border-radius:20px;padding:40px;text-align:center;border:1px solid #334155;max-width:400px}.emoji{font-size:60px;margin-bottom:20px}h1{color:${color};margin-bottom:10px}p{color:#94a3b8}</style></head><body><div class="card"><div class="emoji">${emoji}</div><h1>${title}</h1><p>${subtitle}</p></div></body></html>`;
@@ -586,7 +656,7 @@ function logout(){token=null;user=null;localStorage.removeItem('token');localSto
 function connectWS(){
   if(!token)return;ws=new WebSocket(WS_URL);
   ws.onopen=()=>{connected=true;ws.send(JSON.stringify({type:'auth',token}));render();};
-  ws.onmessage=(e)=>{const m=JSON.parse(e.data);if(m.type==='init'){orders=m.data.orders||[];stats=m.data.stats||{};render();}else if(m.type==='new_order'){if(!orders.find(o=>o.id===m.data.order.id)){orders.unshift(m.data.order);showToast('🆕 '+m.data.order.orderNumber);}render();}else if(m.type==='order_updated'){orders=orders.map(o=>o.id===m.data.order.id?m.data.order:o);render();}else if(m.type==='order_deleted'){orders=orders.filter(o=>o.id!==m.data.orderId);render();}else if(m.type==='stats_updated'){stats=m.data;render();}};
+  ws.onmessage=(e)=>{const m=JSON.parse(e.data);if(m.type==='init'){orders=m.data.orders||[];stats=m.data.stats||{};render();}else if(m.type==='new_order'){if(!orders.find(o=>o.id===m.data.order.id)){orders.unshift(m.data.order);showToast('🆕 '+m.data.order.orderNumber);}render();}else if(m.type==='order_updated'){orders=orders.map(o=>o.id===m.data.order.id?m.data.order:o);render();}else if(m.type==='order_deleted'){orders=orders.filter(o=>o.id!==m.data.orderId);render();}else if(m.type==='stats_updated'){stats=m.data;render();}else if(m.type==='refresh'){location.reload();}};
   ws.onclose=()=>{connected=false;render();setTimeout(connectWS,3000);};
 }
 
@@ -636,6 +706,7 @@ function renderDashboard(){
       <button onclick="setTab('couriers')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='couriers'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">🏍️ שליחים</button>
       <button onclick="setTab('stats')" class="px-4 py-2 rounded-lg text-sm font-medium \${currentTab==='stats'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800'}">📊 סטטיסטיקות</button>
       \${user.role==='admin'?'<button onclick="setTab(\\'users\\')" class="px-4 py-2 rounded-lg text-sm font-medium '+(currentTab==='users'?'bg-slate-700 text-white':'text-slate-400 hover:bg-slate-800')+'">👥 משתמשים</button>':''}
+      \${user.role==='admin'?'<button onclick="setTab(\\'admin\\')" class="px-4 py-2 rounded-lg text-sm font-medium '+(currentTab==='admin'?'bg-red-700 text-white':'text-red-400 hover:bg-slate-800')+'">⚙️ כלים</button>':''}
     </div>
   </div>
 </header>
@@ -644,6 +715,7 @@ function renderDashboard(){
   \${currentTab==='couriers'?renderCouriers():''}
   \${currentTab==='stats'?renderStats():''}
   \${currentTab==='users'?renderUsers():''}
+  \${currentTab==='admin'?renderAdmin():''}
 </main>
 <div id="modal"></div>\`;
 }
@@ -742,6 +814,47 @@ function renderUsers(){
   </table>
 </div>\`;
 }
+
+function renderAdmin(){
+  return \`
+<h2 class="text-xl font-bold mb-6">⚙️ כלי אדמין</h2>
+<div class="bg-red-500/10 border border-red-500/50 rounded-xl p-4 mb-6">
+  <div class="flex items-center gap-2 text-red-400 mb-2"><span class="text-xl">⚠️</span><span class="font-bold">אזור מסוכן!</span></div>
+  <p class="text-sm text-red-300">הפעולות כאן הן בלתי הפיכות. השתמש בזהירות.</p>
+</div>
+
+<div class="grid md:grid-cols-2 gap-6">
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
+    <h3 class="font-bold text-lg mb-4">📦 ניהול הזמנות</h3>
+    <div class="space-y-3">
+      <button onclick="adminDeleteDelivered()" class="w-full bg-amber-500/20 text-amber-400 border border-amber-500/50 py-3 rounded-lg text-sm hover:bg-amber-500/30">🗑️ מחק הזמנות שנמסרו</button>
+      <button onclick="adminDeleteCancelled()" class="w-full bg-amber-500/20 text-amber-400 border border-amber-500/50 py-3 rounded-lg text-sm hover:bg-amber-500/30">🗑️ מחק הזמנות מבוטלות</button>
+      <button onclick="adminDeleteAllOrders()" class="w-full bg-red-500/20 text-red-400 border border-red-500/50 py-3 rounded-lg text-sm hover:bg-red-500/30">💣 מחק את כל ההזמנות</button>
+    </div>
+  </div>
+
+  <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-6">
+    <h3 class="font-bold text-lg mb-4">🏍️ ניהול שליחים</h3>
+    <div class="space-y-3">
+      <button onclick="adminDeleteAllPayments()" class="w-full bg-amber-500/20 text-amber-400 border border-amber-500/50 py-3 rounded-lg text-sm hover:bg-amber-500/30">🗑️ מחק היסטוריית תשלומים</button>
+      <button onclick="adminDeleteAllCouriers()" class="w-full bg-red-500/20 text-red-400 border border-red-500/50 py-3 rounded-lg text-sm hover:bg-red-500/30">💣 מחק את כל השליחים</button>
+    </div>
+  </div>
+
+  <div class="bg-slate-800/60 rounded-xl border border-red-500/50 p-6 md:col-span-2">
+    <h3 class="font-bold text-lg mb-4 text-red-400">🔴 איפוס מלא</h3>
+    <p class="text-sm text-slate-400 mb-4">מוחק את כל ההזמנות, השליחים, התשלומים והלוגים. המשתמשים נשארים.</p>
+    <button onclick="adminFullReset()" class="w-full bg-red-600 text-white py-3 rounded-lg text-sm font-bold hover:bg-red-700">⚠️ אפס את כל המערכת</button>
+  </div>
+</div>\`;
+}
+
+async function adminDeleteDelivered(){if(!confirm('למחוק את כל ההזמנות שנמסרו?'))return;const r=await api('/api/admin/orders/delivered','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' הזמנות');location.reload();}else alert(r.error);}
+async function adminDeleteCancelled(){if(!confirm('למחוק את כל ההזמנות המבוטלות?'))return;const r=await api('/api/admin/orders/cancelled','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' הזמנות');location.reload();}else alert(r.error);}
+async function adminDeleteAllOrders(){if(!confirm('למחוק את כל ההזמנות? פעולה זו בלתי הפיכה!'))return;if(!confirm('אתה בטוח? זה ימחק הכל!'))return;const r=await api('/api/admin/orders/all','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' הזמנות');location.reload();}else alert(r.error);}
+async function adminDeleteAllCouriers(){if(!confirm('למחוק את כל השליחים?'))return;const r=await api('/api/admin/couriers/all','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' שליחים');loadCouriers();}else alert(r.error);}
+async function adminDeleteAllPayments(){if(!confirm('למחוק את כל היסטוריית התשלומים?'))return;const r=await api('/api/admin/payments/all','DELETE');if(r.success){showToast('נמחקו '+r.deleted+' תשלומים');}else alert(r.error);}
+async function adminFullReset(){if(!confirm('לאפס את כל המערכת? פעולה זו בלתי הפיכה!'))return;if(!confirm('אתה בטוח לחלוטין?'))return;if(prompt('הקלד "אפס" לאישור')!=='אפס')return;const r=await api('/api/admin/reset','DELETE');if(r.success){showToast('המערכת אופסה');location.reload();}else alert(r.error);}
 
 function showNewOrderModal(){
   document.getElementById('modal').innerHTML=\`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-700 flex justify-between items-center"><h2 class="text-lg font-bold">הזמנה חדשה</h2><button onclick="closeModal()" class="text-slate-400 hover:text-white">✕</button></div><div class="p-4 space-y-3"><div class="grid grid-cols-2 gap-3"><input type="text" id="senderName" placeholder="שם שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="senderPhone" placeholder="טלפון שולח" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="pickupAddress" placeholder="כתובת איסוף" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><div class="grid grid-cols-2 gap-3"><input type="text" id="receiverName" placeholder="שם מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><input type="tel" id="receiverPhone" placeholder="טלפון מקבל" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div><input type="text" id="deliveryAddress" placeholder="כתובת מסירה" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><textarea id="details" placeholder="פרטים נוספים" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm h-16 resize-none"></textarea><div class="grid grid-cols-2 gap-3"><input type="number" id="price" placeholder="מחיר ₪" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><select id="priority" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"><option value="normal">רגיל</option><option value="express">אקספרס</option><option value="urgent">דחוף</option></select></div><button onclick="submitOrder()" class="w-full bg-gradient-to-r from-emerald-500 to-blue-500 text-white py-3 rounded-lg font-bold">צור הזמנה</button></div></div></div>\`;
