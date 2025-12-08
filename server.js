@@ -254,7 +254,7 @@ const deliverOrder = async (orderNum) => {
   if (cr.rows[0]?.whatsapp_id) {
     await sendWhatsApp(cr.rows[0].whatsapp_id, `✅ *המשלוח ${o.order_number} נמסר!*\n\n━━━━━━━━━━━━━━━━━━━━\n💰 *רווח:* ₪${o.courier_payout}\n━━━━━━━━━━━━━━━━━━━━\n\nתודה! 🙏`);
   }
-  if (CONFIG.WHAPI.GROUP_ID) await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, `✅ המשלוח ${o.order_number} נמסר!`);
+  // הסרנו את ההודעה לקבוצה - רק השליח מקבל אישור בפרטי
   
   const upd = await pool.query(`SELECT o.*,c.first_name as cfn,c.last_name as cln,c.phone as cph FROM orders o 
     LEFT JOIN couriers c ON o.courier_id=c.id WHERE o.id=$1`,[o.id]);
