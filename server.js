@@ -1461,11 +1461,17 @@ function renderOrders(fo){
 }
 
 function renderCouriers(){
+  let cards = couriers.map(c => {
+    const statusClass = c.status==='active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400';
+    const statusText = c.status==='active' ? 'פעיל' : 'לא פעיל';
+    const fullName = (c.first_name||'') + ' ' + (c.last_name||'');
+    const safeName = fullName.replace(/'/g, "\\'");
+    const payBtn = parseFloat(c.balance) > 0 ? '<button onclick="showPaymentModal('+c.id+',\''+safeName+'\','+c.balance+')" class="w-full mt-3 bg-emerald-500/20 text-emerald-400 py-2 rounded-lg text-sm">💳 שלם</button>' : '';
+    return '<div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4"><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-3"><div class="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">🏍️</div><div><div class="font-bold">'+fullName+'</div><div class="text-sm text-slate-400">'+c.phone+'</div></div></div><span class="px-2 py-1 rounded text-xs '+statusClass+'">'+statusText+'</span></div><div class="grid grid-cols-3 gap-2 text-center text-sm"><div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold">'+(c.total_deliveries||0)+'</div><div class="text-xs text-slate-400">משלוחים</div></div><div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold text-emerald-400">'+fmt(c.total_earned)+'</div><div class="text-xs text-slate-400">סה״כ</div></div><div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold text-amber-400">'+fmt(c.balance)+'</div><div class="text-xs text-slate-400">יתרה</div></div></div>'+payBtn+'</div>';
+  }).join('');
   return \`
 <div class="mb-6 flex justify-between items-center"><h2 class="text-xl font-bold">🏍️ שליחים (\${couriers.length})</h2></div>
-<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-  \${couriers.map(c=>'<div class="bg-slate-800/60 rounded-xl border border-slate-700/50 p-4"><div class="flex items-center justify-between mb-3"><div class="flex items-center gap-3"><div class="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center">🏍️</div><div><div class="font-bold">'+c.first_name+' '+c.last_name+'</div><div class="text-sm text-slate-400">'+c.phone+'</div></div></div><span class="px-2 py-1 rounded text-xs '+(c.status==='active'?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400')+'">'+(c.status==='active'?'פעיל':'לא פעיל')+'</span></div><div class="grid grid-cols-3 gap-2 text-center text-sm"><div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold">'+(c.total_deliveries||0)+'</div><div class="text-xs text-slate-400">משלוחים</div></div><div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold text-emerald-400">'+fmt(c.total_earned)+'</div><div class="text-xs text-slate-400">סה״כ</div></div><div class="bg-slate-700/50 rounded-lg p-2"><div class="font-bold text-amber-400">'+fmt(c.balance)+'</div><div class="text-xs text-slate-400">יתרה</div></div></div>'+(parseFloat(c.balance)>0?'<button onclick="showPaymentModal('+c.id+',\\''+c.first_name+' '+c.last_name+'\\','+c.balance+')" class="w-full mt-3 bg-emerald-500/20 text-emerald-400 py-2 rounded-lg text-sm">💳 שלם</button>':'')+'</div>').join('')}
-</div>\`;
+<div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">\${cards}</div>\`;
 }
 
 function renderStats(){
@@ -1608,12 +1614,21 @@ function exportOrdersFiltered(){
 }
 
 function renderUsers(){
+  let rows = users.map(u => {
+    const roleClass = u.role==='admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400';
+    const roleText = u.role==='admin' ? 'מנהל' : u.role==='manager' ? 'מנהל משמרת' : 'נציג';
+    const statusClass = u.active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400';
+    const statusText = u.active ? 'פעיל' : 'לא פעיל';
+    const deleteBtn = u.id !== user.id ? '<button onclick="deleteUser('+u.id+')" class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">🗑️</button>' : '';
+    const safeName = (u.name || '').replace(/'/g, "\\'");
+    return '<tr class="border-t border-slate-700/50"><td class="p-3">'+u.name+'</td><td class="p-3 text-slate-400">'+u.username+'</td><td class="p-3"><span class="px-2 py-1 rounded text-xs '+roleClass+'">'+roleText+'</span></td><td class="p-3 text-slate-400">'+(u.phone||'-')+'</td><td class="p-3"><span class="px-2 py-1 rounded text-xs '+statusClass+'">'+statusText+'</span></td><td class="p-3"><div class="flex gap-1"><button onclick="showEditUserModal('+u.id+')" class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">✏️</button><button onclick="showChangePasswordModal('+u.id+',\''+safeName+'\')" class="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">🔑</button>'+deleteBtn+'</div></td></tr>';
+  }).join('');
   return \`
 <div class="mb-6 flex justify-between items-center"><h2 class="text-xl font-bold">👥 משתמשים (\${users.length})</h2><button onclick="showNewUserModal()" class="bg-gradient-to-r from-emerald-500 to-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium">➕ משתמש</button></div>
 <div class="bg-slate-800/60 rounded-xl border border-slate-700/50 overflow-hidden">
   <table class="w-full text-sm">
     <thead class="bg-slate-700/50"><tr><th class="text-right p-3">שם</th><th class="text-right p-3">משתמש</th><th class="text-right p-3">תפקיד</th><th class="text-right p-3">טלפון</th><th class="text-right p-3">סטטוס</th><th class="text-right p-3">פעולות</th></tr></thead>
-    <tbody>\${users.map(u=>'<tr class="border-t border-slate-700/50"><td class="p-3">'+u.name+'</td><td class="p-3 text-slate-400">'+u.username+'</td><td class="p-3"><span class="px-2 py-1 rounded text-xs '+(u.role==='admin'?'bg-purple-500/20 text-purple-400':'bg-blue-500/20 text-blue-400')+'">'+(u.role==='admin'?'מנהל':u.role==='manager'?'מנהל משמרת':'נציג')+'</span></td><td class="p-3 text-slate-400">'+(u.phone||'-')+'</td><td class="p-3"><span class="px-2 py-1 rounded text-xs '+(u.active?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400')+'">'+(u.active?'פעיל':'לא פעיל')+'</span></td><td class="p-3"><div class="flex gap-1"><button onclick="showEditUserModal('+u.id+')" class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">✏️</button><button onclick="showChangePasswordModal('+u.id+',\\''+u.name.replace(/'/g,"\\\\'")+'\\')" class="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs">🔑</button>'+(u.id!==user.id?'<button onclick="deleteUser('+u.id+')" class="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">🗑️</button>':'')+'</div></td></tr>').join('')}</tbody>
+    <tbody>\${rows}</tbody>
   </table>
 </div>\`;
 }
