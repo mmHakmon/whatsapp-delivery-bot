@@ -430,9 +430,9 @@ const publishOrder = async (id) => {
   msg += `👇 *לתפיסה:*\n${url}`;
   
   if (CONFIG.WHAPI.GROUP_ID) {
-    const logoUrl = process.env.LOGO_URL || 'https://i.ibb.co/39WjvNZm/favicon.png';
-    // שליחה עם תמונת הלוגו
-    await sendWhatsAppImage(CONFIG.WHAPI.GROUP_ID, logoUrl, msg);
+    // תמונה לוואטסאפ - התמונה החדשה שלך!
+    const whatsappImageUrl = process.env.WHATSAPP_IMAGE_URL || 'https://i.ibb.co/Rk3qyrvq/pages2.jpg';
+    await sendWhatsAppImage(CONFIG.WHAPI.GROUP_ID, whatsappImageUrl, msg);
   }
   
   broadcast({ type: 'order_updated', data: { order: formatOrder(o) } });
