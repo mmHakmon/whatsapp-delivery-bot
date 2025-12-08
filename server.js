@@ -1201,10 +1201,12 @@ app.get('/', (req, res) => {
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
 <div id="app"></div>
-<audio id="notificationSound" preload="auto"><source src="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNBrv+AAAAAAAAAAAAAAAAAAAAAP/7UMQAA8AAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tQxBKAAAGkAAAAIAAANIAAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV" type="audio/mpeg"></audio>
 <script>
 const API='',WS_URL='${wsUrl}';
 let token=localStorage.getItem('token'),refreshToken=localStorage.getItem('refreshToken'),user=JSON.parse(localStorage.getItem('user')||'null'),orders=[],stats={},couriers=[],users=[],ws=null,connected=false,currentTab='orders',filter='all',search='',pending2FA=null;
+
+// צליל התראה פשוט
+function playNotificationSound(){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.frequency.value=800;osc.type='sine';gain.gain.setValueAtTime(0.3,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+0.3);osc.start(ctx.currentTime);osc.stop(ctx.currentTime+0.3);}catch(e){}}
 
 // מצב לילה/יום
 let darkMode=localStorage.getItem('darkMode')!=='false';
@@ -1227,8 +1229,8 @@ async function toggleNotifications(){
 function showNotification(title,body){
   if(!notificationsEnabled)return;
   try{
-    new Notification(title,{body,icon:'🚚',badge:'🚚'});
-    document.getElementById('notificationSound')?.play().catch(()=>{});
+    new Notification(title,{body,icon:'🚚'});
+    playNotificationSound();
   }catch(e){}
 }
 
