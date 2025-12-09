@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M.M.H Delivery - מערכת ניהול</title>
+  <link rel="icon" type="image/png" href="/logo.png">
+  <meta name="theme-color" content="#0a0f1a">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Heebo', sans-serif; }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #1a2236; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+  <div id="app"></div>
+  <div id="toasts" class="fixed top-4 left-4 z-50 space-y-2"></div>
+  <div id="modal"></div>
+  <script>
+    const WS_URL = location.protocol === 'https:' ? 'wss://' + location.host : 'ws://' + location.host;
+    let token = localStorage.getItem('token'), user = null, orders = [], couriers = [], stats = {}, ws = null, tab = 'orders', filter = 'all';
+    
+    const fmt = n => '₪' + (parseFloat(n)||0).toLocaleString();
+    const statusLabels = {new:'חדש',published:'פורסם',taken:'נתפס',picked:'נאסף',delivered:'נמסר',cancelled:'בוטל'};
+    const statusColors = {new:'bg-slate-500/20 text-slate-400',published:'bg-amber-500/20 text-amber-400',taken:'bg-blue-500/20 text-blue-400',picked:'bg-purple-500/20 text-purple-400',delivered:'bg-emerald-500/20 text-emerald-400',cancelled:'bg-red-500/20 text-red-400'};
+    
+    async function api(url, method='GET', data=null) {
+      const opts = {method, headers:{'Content-Type':'application/json'}};
+      if(token) opts.headers.Authorization = 'Bearer '+token;
+      if(data) opts.body = JSON.stringify(data);
+      const res = await fetch(url, opts);
+      if(res.status===401) { logout(); return null; }
+      return res.json();
+    }
+    
+    function toast(msg, type='success') {
+      const colors = {success:'bg-emerald-500',error:'bg-red-500',warning:'bg-amber-500',info:'bg-blue-500'};
+      const t = document.createElement('div');
+      t.className = colors[type]+' text-white px-4 py-3 rounded-lg shadow-lg';
+      t.textContent = msg;
+      document.getElementById('toasts').appendChild(t);
+      setTimeout(()=>t.remove(), 4000);
+    }
+    
+    function connectWS() {
+      ws = new WebSocket(WS_URL);
+      ws.onopen = () => { if(token) ws.send(JSON.stringify({type:'auth',token})); render(); };
+      ws.onmessage = e => {
+        const msg = JSON.parse(e.data);
+        if(msg.type==='init') { orders=msg.data.orders||[]; stats=msg.data.stats||{}; render(); }
+        else if(msg.type==='new_order') { orders.unshift(msg.data.order); toast('הזמנה חדשה: '+msg.data.order.orderNumber); render(); }
+        else if(msg.type==='order_updated') { const i=orders.findIndex(o=>o.id===msg.data.order.id); if(i>=0)orders[i]=msg.data.order; render(); }
+        else if(msg.type==='order_deleted') { orders=orders.filter(o=>o.id!==msg.data.orderId); render(); }
+        else if(msg.type==='stats_updated') { stats=msg.data; render(); }
+        else if(msg.type==='refresh') location.reload();
+      };
+      ws.onclose = () => setTimeout(connectWS, 3000);
+    }
+    
+    async function login(u,p) {
+      const r = await api('/api/auth/login','POST',{username:u,password:p});
+      if(r?.success) { token=r.token; user=r.user; localStorage.setItem('token',token); connectWS(); loadData(); render(); toast('התחברת!'); }
+      else toast(r?.error||'שגיאה','error');
+    }
+    
+    function logout() { token=null; user=null; localStorage.removeItem('token'); if(ws)ws.close(); render(); }
+    
+    async function checkAuth() { if(!token)return false; const r=await api('/api/auth/me'); if(r?.success){user=r.user;return true;} return false; }
+    
+    async function loadData() {
+      const [o,c,s] = await Promise.all([api('/api/orders'),api('/api/couriers'),api('/api/orders/stats')]);
+      if(Array.isArray(o))orders=o; if(Array.isArray(c))couriers=c; if(s&&!s.error)stats=s;
+      render();
+    }
+    
+    async function createOrder(d) { const r=await api('/api/orders','POST',d); if(r?.success){toast('נוצרה!');closeModal();}else toast(r?.error||'שגיאה','error'); }
+    async function publishOrder(id) { const r=await api('/api/orders/'+id+'/publish','POST'); if(r?.success)toast('פורסמה!'); else toast(r?.error||'שגיאה','error'); }
+    async function cancelOrder(id) { const reason=prompt('סיבה:'); if(reason===null)return; const r=await api('/api/orders/'+id+'/cancel','POST',{reason}); if(r?.success)toast('בוטלה'); }
+    async function deleteOrder(id) { if(!confirm('למחוק?'))return; const r=await api('/api/orders/'+id,'DELETE'); if(r?.success)toast('נמחקה'); }
+    async function createPayment(d) { const r=await api('/api/payments','POST',d); if(r?.success){toast('נרשם!');closeModal();loadData();}else toast(r?.error||'שגיאה','error'); }
+    
+    function closeModal() { document.getElementById('modal').innerHTML=''; }
+    
+    function showNewOrderModal() {
+      document.getElementById('modal').innerHTML=`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"><div class="p-4 border-b border-slate-600 flex justify-between"><h2 class="font-bold">📦 הזמנה חדשה</h2><button onclick="closeModal()">✕</button></div><div class="p-4 space-y-3"><div class="grid grid-cols-2 gap-3"><input id="senderName" placeholder="שם שולח" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"><input id="senderPhone" placeholder="טלפון שולח" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"></div><input id="pickupAddress" placeholder="📍 כתובת איסוף" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"><div class="grid grid-cols-2 gap-3"><input id="receiverName" placeholder="שם מקבל" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"><input id="receiverPhone" placeholder="טלפון מקבל" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"></div><input id="deliveryAddress" placeholder="🏠 כתובת מסירה" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"><textarea id="details" placeholder="פרטים" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm h-16"></textarea><div class="grid grid-cols-2 gap-3"><input type="number" id="price" placeholder="מחיר ₪" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"><select id="priority" class="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"><option value="normal">רגיל</option><option value="express">אקספרס</option><option value="urgent">דחוף</option></select></div><button onclick="submitOrder()" class="w-full bg-cyan-600 text-white py-3 rounded-lg font-bold">✅ צור</button></div></div></div>`;
+    }
+    function submitOrder() { createOrder({senderName:document.getElementById('senderName').value,senderPhone:document.getElementById('senderPhone').value,pickupAddress:document.getElementById('pickupAddress').value,receiverName:document.getElementById('receiverName').value,receiverPhone:document.getElementById('receiverPhone').value,deliveryAddress:document.getElementById('deliveryAddress').value,details:document.getElementById('details').value,price:parseInt(document.getElementById('price').value)||0,priority:document.getElementById('priority').value}); }
+    
+    function showPaymentModal(id,name,balance) {
+      document.getElementById('modal').innerHTML=`<div class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onclick="if(event.target===this)closeModal()"><div class="bg-slate-800 rounded-2xl w-full max-w-md"><div class="p-4 border-b border-slate-600 flex justify-between"><h2 class="font-bold">💳 תשלום</h2><button onclick="closeModal()">✕</button></div><div class="p-4 space-y-4"><div class="text-center"><div>${name}</div><div class="text-2xl font-bold text-amber-400">יתרה: ${fmt(balance)}</div></div><input type="number" id="paymentAmount" value="${balance}" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2"><select id="paymentMethod" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2"><option value="cash">מזומן</option><option value="transfer">העברה</option><option value="bit">ביט</option></select><button onclick="submitPayment(${id})" class="w-full bg-cyan-600 text-white py-3 rounded-lg font-bold">אשר</button></div></div></div>`;
+    }
+    function submitPayment(id) { createPayment({courier_id:id,amount:parseFloat(document.getElementById('paymentAmount').value)||0,method:document.getElementById('paymentMethod').value}); }
+    
+    function render() {
+      if(!token||!user) { renderLogin(); return; }
+      const fo = orders.filter(o => filter==='all' || o.status===filter);
+      document.getElementById('app').innerHTML=`
+        <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 sticky top-0 z-40"><div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center"><div class="flex items-center gap-3"><img src="/logo.png" class="h-10"><div><h1 class="text-lg font-bold text-cyan-400">M.M.H v4.0</h1></div></div><div class="flex items-center gap-3"><span class="text-sm text-gray-400">👤 ${user.name}</span><button onclick="logout()" class="px-3 py-1 bg-red-500/20 text-red-400 rounded text-sm">יציאה</button></div></div></header>
+        <main class="max-w-7xl mx-auto px-4 py-6">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-slate-800/60 rounded-xl p-4"><div class="text-2xl font-bold">${stats.total||0}</div><div class="text-sm text-gray-400">הזמנות</div></div>
+            <div class="bg-slate-800/60 rounded-xl p-4"><div class="text-2xl font-bold text-amber-400">${(parseInt(stats.new)||0)+(parseInt(stats.published)||0)}</div><div class="text-sm text-gray-400">ממתינות</div></div>
+            <div class="bg-slate-800/60 rounded-xl p-4"><div class="text-2xl font-bold text-blue-400">${stats.active||0}</div><div class="text-sm text-gray-400">פעילות</div></div>
+            <div class="bg-slate-800/60 rounded-xl p-4"><div class="text-2xl font-bold text-emerald-400">${fmt(stats.revenue)}</div><div class="text-sm text-gray-400">הכנסות</div></div>
+          </div>
+          <div class="flex flex-wrap gap-2 mb-4">
+            <button onclick="tab='orders';render()" class="px-4 py-2 rounded-lg text-sm ${tab==='orders'?'bg-cyan-600 text-white':'bg-slate-700 text-gray-400'}">📦 הזמנות</button>
+            <button onclick="tab='couriers';render()" class="px-4 py-2 rounded-lg text-sm ${tab==='couriers'?'bg-cyan-600 text-white':'bg-slate-700 text-gray-400'}">🏍️ שליחים</button>
+          </div>
+          ${tab==='orders'?`
+            <div class="flex flex-wrap gap-2 mb-4">
+              ${['all','new','published','taken','picked','delivered','cancelled'].map(f=>`<button onclick="filter='${f}';render()" class="px-3 py-1 rounded text-sm ${filter===f?'bg-cyan-500/30 text-cyan-400':'bg-slate-700 text-gray-400'}">${f==='all'?'הכל':statusLabels[f]}</button>`).join('')}
+              <button onclick="showNewOrderModal()" class="mr-auto px-4 py-1 bg-cyan-600 text-white rounded text-sm">➕ חדשה</button>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              ${fo.map(o=>`<div class="bg-slate-800/60 rounded-xl overflow-hidden"><div class="p-3 border-b border-slate-700 flex justify-between items-center"><span class="font-bold text-cyan-400">${o.orderNumber}</span><span class="px-2 py-1 rounded text-xs ${statusColors[o.status]}">${statusLabels[o.status]}</span></div><div class="p-3 space-y-1 text-sm"><div class="text-gray-400">📍 ${o.pickupAddress}</div><div class="text-gray-400">🏠 ${o.deliveryAddress}</div><div class="flex justify-between pt-2"><span>מחיר:</span><span class="font-bold">${fmt(o.price)}</span></div><div class="flex justify-between"><span>לשליח:</span><span class="font-bold text-cyan-400">${fmt(o.courierPayout)}</span></div>${o.courier?`<div class="bg-slate-700/50 rounded p-2 text-xs">🏍️ ${o.courier.name}</div>`:''}</div><div class="p-3 pt-0">${o.status==='new'?`<div class="flex gap-2"><button onclick="publishOrder(${o.id})" class="flex-1 bg-cyan-600 text-white py-2 rounded text-sm">📤 פרסם</button><button onclick="cancelOrder(${o.id})" class="px-3 bg-red-500/20 text-red-400 rounded">✕</button></div>`:''}${['published','taken','picked'].includes(o.status)?`<button onclick="cancelOrder(${o.id})" class="w-full bg-red-500/20 text-red-400 py-2 rounded text-sm">❌ בטל</button>`:''}${o.status==='cancelled'&&user.role==='admin'?`<button onclick="deleteOrder(${o.id})" class="w-full bg-red-500/20 text-red-400 py-2 rounded text-sm">🗑️ מחק</button>`:''}</div></div>`).join('')}
+            </div>
+            ${fo.length===0?'<div class="text-center py-12 text-gray-400">אין הזמנות</div>':''}
+          `:''}
+          ${tab==='couriers'?`
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              ${couriers.map(c=>`<div class="bg-slate-800/60 rounded-xl p-4"><div class="flex justify-between items-center mb-3"><div><div class="font-bold">${c.first_name} ${c.last_name}</div><div class="text-sm text-gray-400">${c.phone}</div></div><span class="px-2 py-1 rounded text-xs ${c.status==='active'?'bg-emerald-500/20 text-emerald-400':'bg-red-500/20 text-red-400'}">${c.status==='active'?'פעיל':'לא פעיל'}</span></div><div class="grid grid-cols-3 gap-2 text-center text-sm"><div class="bg-slate-700/50 rounded p-2"><div class="font-bold">${c.total_deliveries||0}</div><div class="text-xs text-gray-400">משלוחים</div></div><div class="bg-slate-700/50 rounded p-2"><div class="font-bold text-cyan-400">${fmt(c.total_earned)}</div><div class="text-xs text-gray-400">סה"כ</div></div><div class="bg-slate-700/50 rounded p-2"><div class="font-bold text-amber-400">${fmt(c.balance)}</div><div class="text-xs text-gray-400">יתרה</div></div></div>${parseFloat(c.balance)>0?`<button onclick="showPaymentModal(${c.id},'${c.first_name} ${c.last_name}',${c.balance})" class="w-full mt-3 bg-cyan-500/20 text-cyan-400 py-2 rounded text-sm">💳 שלם</button>`:''}</div>`).join('')}
+            </div>
+          `:''}
+        </main>
+      `;
+    }
+    
+    function renderLogin() {
+      document.getElementById('app').innerHTML=`<div class="min-h-screen flex items-center justify-center p-4"><div class="bg-slate-800 rounded-2xl p-8 w-full max-w-md"><div class="text-center mb-8"><img src="/logo.png" class="h-24 mx-auto mb-4"><h1 class="text-2xl font-bold text-cyan-400">M.M.H משלוחים</h1><p class="text-gray-400">התחברות למערכת</p></div><div class="space-y-4"><input type="text" id="loginUser" placeholder="שם משתמש" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3"><input type="password" id="loginPass" placeholder="סיסמה" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3"><button onclick="handleLogin()" class="w-full bg-cyan-600 text-white py-3 rounded-lg font-bold">התחבר</button></div></div></div>`;
+      document.getElementById('loginPass')?.addEventListener('keyup',e=>{if(e.key==='Enter')handleLogin();});
+    }
+    function handleLogin() { login(document.getElementById('loginUser').value,document.getElementById('loginPass').value); }
+    
+    async function init() { if(await checkAuth()){connectWS();loadData();} render(); }
+    init();
+  </script>
+</body>
+</html>
