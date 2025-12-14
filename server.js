@@ -443,11 +443,23 @@ const takeOrder = async (orderNum, cd) => {
   const or = await pool.query("SELECT * FROM orders WHERE order_number=$1 AND status='published'",[orderNum]);
   const o = or.rows[0]; if (!o) return { success: false, error: 'המשלוח כבר נתפס !' };
   
-  let cr = await pool.query("SELECT * FROM couriers WHERE id_number=$1",[cd.idNumber]);
+  // חיפוש שליח קיים לפי ת.ז או טלפון
+  const cleanPhone = cd.phone.replace(/[^0-9]/g, '');
+  const phoneVariants = [cd.phone, cleanPhone, cleanPhone.replace(/^0/, '972'), '0' + cleanPhone.replace(/^972/, '')];
+  
+  let cr = await pool.query(
+    "SELECT * FROM couriers WHERE id_number=$1 OR phone = ANY($2) OR REPLACE(phone, '-', '') = ANY($2)",
+    [cd.idNumber, phoneVariants]
+  );
+  
   if (!cr.rows[0]) {
+    // שליח חדש - יוצר רשומה חדשה
     const waId = cd.phone.replace(/^0/,'972').replace(/-/g,'')+'@s.whatsapp.net';
     cr = await pool.query("INSERT INTO couriers (first_name,last_name,id_number,phone,whatsapp_id) VALUES ($1,$2,$3,$4,$5) RETURNING *",
       [cd.firstName,cd.lastName,cd.idNumber,cd.phone,waId]);
+    console.log('👤 New courier registered:', cd.firstName, cd.lastName);
+  } else {
+    console.log('✅ Existing courier identified:', cr.rows[0].first_name, cr.rows[0].last_name);
   }
   const cid = cr.rows[0].id, waId = cr.rows[0].whatsapp_id;
   
@@ -1749,33 +1761,360 @@ ${orders.length ? orders.map(o => `
 </body></html>`;
 }
 
+// ==================== SMART TAKE ORDER HTML ====================
+function takeOrderSmartHTML(o) {
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>תפיסת משלוח - M.M.H</title>
+  <style>
+    * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; padding: 20px; }
+    .container { max-width: 500px; margin: 0 auto; }
+    .card { background: #1e293b; border-radius: 20px; padding: 25px; border: 1px solid #334155; margin-bottom: 15px; }
+    .header { text-align: center; margin-bottom: 20px; }
+    .logo { font-size: 50px; margin-bottom: 10px; }
+    .title { color: #10b981; font-size: 24px; font-weight: bold; }
+    .order-id { color: #60a5fa; font-size: 18px; margin-top: 5px; }
+    .payout { font-size: 42px; font-weight: bold; color: #10b981; text-align: center; margin: 20px 0; }
+    .info { display: flex; gap: 12px; padding: 15px; background: #0f172a; border-radius: 12px; margin-bottom: 12px; }
+    .icon { font-size: 24px; }
+    .content { flex: 1; }
+    .label { font-size: 12px; color: #64748b; }
+    .value { font-size: 15px; color: #fff; font-weight: 500; margin-top: 4px; }
+    .input { width: 100%; padding: 16px; background: #0f172a; border: 2px solid #334155; border-radius: 12px; color: #fff; font-size: 18px; text-align: center; margin-bottom: 12px; }
+    .input:focus { outline: none; border-color: #10b981; }
+    .input::placeholder { color: #64748b; }
+    .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+    .btn-primary { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
+    .btn-primary:hover { transform: scale(1.02); }
+    .btn-primary:disabled { opacity: 0.6; cursor: wait; }
+    .btn-secondary { background: #334155; color: #fff; margin-top: 10px; }
+    .hidden { display: none; }
+    .error { background: #ef444420; border: 1px solid #ef4444; border-radius: 10px; padding: 12px; color: #ef4444; margin-bottom: 15px; text-align: center; }
+    .welcome { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 20px; color: #fff; }
+    .welcome h2 { margin-bottom: 5px; font-size: 22px; }
+    .welcome p { opacity: 0.9; }
+    .success { text-align: center; padding: 40px 20px; }
+    .success .emoji { font-size: 80px; margin-bottom: 20px; }
+    .success h2 { color: #10b981; margin-bottom: 10px; }
+    .success p { color: #94a3b8; }
+    .step-indicator { display: flex; justify-content: center; gap: 10px; margin-bottom: 20px; }
+    .step { width: 12px; height: 12px; border-radius: 50%; background: #334155; }
+    .step.active { background: #10b981; }
+    .new-courier-form { display: none; }
+    .new-courier-form.show { display: block; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .small-input { padding: 14px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- כרטיס פרטי המשלוח -->
+    <div class="card">
+      <div class="header">
+        <div class="logo">🚚</div>
+        <div class="title">M.M.H משלוחים</div>
+        <div class="order-id">משלוח ${o.order_number}</div>
+      </div>
+      
+      <div class="payout">💰 ₪${o.courier_payout}</div>
+      
+      <div class="info">
+        <div class="icon">📍</div>
+        <div class="content">
+          <div class="label">איסוף מ:</div>
+          <div class="value">${o.pickup_address}</div>
+        </div>
+      </div>
+      
+      <div class="info">
+        <div class="icon">🏠</div>
+        <div class="content">
+          <div class="label">מסירה ל:</div>
+          <div class="value">${o.delivery_address}</div>
+        </div>
+      </div>
+      
+      ${o.details ? `
+      <div class="info">
+        <div class="icon">📝</div>
+        <div class="content">
+          <div class="label">פרטים:</div>
+          <div class="value">${o.details}</div>
+        </div>
+      </div>` : ''}
+    </div>
+    
+    <!-- שלב 1: זיהוי לפי טלפון -->
+    <div class="card" id="step1">
+      <div class="step-indicator">
+        <div class="step active"></div>
+        <div class="step"></div>
+      </div>
+      
+      <h3 style="text-align:center; color:#fff; margin-bottom:20px;">📱 הכנס מספר טלפון</h3>
+      
+      <div id="phoneError" class="error hidden"></div>
+      
+      <input type="tel" id="phoneInput" class="input" placeholder="05X-XXXXXXX" maxlength="12">
+      
+      <button class="btn btn-primary" id="checkBtn" onclick="checkPhone()">המשך ←</button>
+    </div>
+    
+    <!-- שלב 2א: שליח מזוהה -->
+    <div class="card hidden" id="step2known">
+      <div class="welcome">
+        <h2>👋 היי <span id="courierName"></span>!</h2>
+        <p>זיהינו אותך במערכת</p>
+      </div>
+      
+      <button class="btn btn-primary" id="takeBtn" onclick="takeOrder()">✋ תפוס את המשלוח!</button>
+      <button class="btn btn-secondary" onclick="showStep1()">← חזור</button>
+    </div>
+    
+    <!-- שלב 2ב: שליח חדש -->
+    <div class="card hidden" id="step2new">
+      <div class="step-indicator">
+        <div class="step active"></div>
+        <div class="step active"></div>
+      </div>
+      
+      <h3 style="text-align:center; color:#fff; margin-bottom:20px;">📝 פרטי שליח חדש</h3>
+      
+      <div id="newError" class="error hidden"></div>
+      
+      <div class="form-row">
+        <input type="text" id="firstName" class="input small-input" placeholder="שם פרטי *">
+        <input type="text" id="lastName" class="input small-input" placeholder="שם משפחה *">
+      </div>
+      
+      <input type="text" id="idNumber" class="input" placeholder="ת.ז (9 ספרות) *" maxlength="9">
+      
+      <div id="phoneDisplay" style="background:#0f172a; padding:14px; border-radius:12px; text-align:center; color:#10b981; font-size:18px; margin-bottom:12px;"></div>
+      
+      <button class="btn btn-primary" id="registerBtn" onclick="registerAndTake()">✋ הרשם ותפוס!</button>
+      <button class="btn btn-secondary" onclick="showStep1()">← חזור</button>
+    </div>
+    
+    <!-- הצלחה -->
+    <div class="card hidden" id="success">
+      <div class="success">
+        <div class="emoji">🎉</div>
+        <h2>תפסת את המשלוח!</h2>
+        <p>הפרטים נשלחו אליך בוואטסאפ</p>
+        <div style="margin-top:20px; padding:20px; background:#10b98120; border-radius:12px;">
+          <div style="color:#10b981; font-size:14px;">הרווחת</div>
+          <div style="color:#10b981; font-size:36px; font-weight:bold;">₪${o.courier_payout}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let courierData = null;
+    let phoneNumber = '';
+    
+    function showStep1() {
+      document.getElementById('step1').classList.remove('hidden');
+      document.getElementById('step2known').classList.add('hidden');
+      document.getElementById('step2new').classList.add('hidden');
+    }
+    
+    async function checkPhone() {
+      const phone = document.getElementById('phoneInput').value.trim();
+      const btn = document.getElementById('checkBtn');
+      const error = document.getElementById('phoneError');
+      
+      if (!phone || phone.length < 9) {
+        error.textContent = '❌ נא להכניס מספר טלפון תקין';
+        error.classList.remove('hidden');
+        return;
+      }
+      
+      error.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = '⏳ בודק...';
+      phoneNumber = phone;
+      
+      try {
+        const r = await fetch('/api/courier/check-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
+        const data = await r.json();
+        
+        if (data.success && data.found) {
+          // שליח מזוהה!
+          courierData = data.courier;
+          document.getElementById('courierName').textContent = courierData.firstName + ' ' + courierData.lastName;
+          document.getElementById('step1').classList.add('hidden');
+          document.getElementById('step2known').classList.remove('hidden');
+        } else {
+          // שליח חדש
+          document.getElementById('phoneDisplay').textContent = '📱 ' + phone;
+          document.getElementById('step1').classList.add('hidden');
+          document.getElementById('step2new').classList.remove('hidden');
+        }
+      } catch (e) {
+        error.textContent = '❌ שגיאת תקשורת';
+        error.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'המשך ←';
+      }
+    }
+    
+    async function takeOrder() {
+      const btn = document.getElementById('takeBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ תופס...';
+      
+      try {
+        const r = await fetch('/api/take/${o.order_number}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: courierData.firstName,
+            lastName: courierData.lastName,
+            idNumber: courierData.idNumber,
+            phone: courierData.phone
+          })
+        });
+        const data = await r.json();
+        
+        if (data.success) {
+          document.getElementById('step2known').classList.add('hidden');
+          document.getElementById('success').classList.remove('hidden');
+        } else {
+          alert(data.error || 'שגיאה');
+          btn.disabled = false;
+          btn.textContent = '✋ תפוס את המשלוח!';
+        }
+      } catch (e) {
+        alert('שגיאת תקשורת');
+        btn.disabled = false;
+        btn.textContent = '✋ תפוס את המשלוח!';
+      }
+    }
+    
+    async function registerAndTake() {
+      const btn = document.getElementById('registerBtn');
+      const error = document.getElementById('newError');
+      
+      const data = {
+        firstName: document.getElementById('firstName').value.trim(),
+        lastName: document.getElementById('lastName').value.trim(),
+        idNumber: document.getElementById('idNumber').value.trim(),
+        phone: phoneNumber
+      };
+      
+      if (!data.firstName || !data.lastName || !data.idNumber) {
+        error.textContent = '❌ נא למלא את כל השדות';
+        error.classList.remove('hidden');
+        return;
+      }
+      
+      if (data.idNumber.length !== 9) {
+        error.textContent = '❌ ת.ז חייב להכיל 9 ספרות';
+        error.classList.remove('hidden');
+        return;
+      }
+      
+      error.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = '⏳ רושם ותופס...';
+      
+      try {
+        const r = await fetch('/api/take/${o.order_number}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await r.json();
+        
+        if (result.success) {
+          document.getElementById('step2new').classList.add('hidden');
+          document.getElementById('success').classList.remove('hidden');
+        } else {
+          error.textContent = '❌ ' + (result.error || 'שגיאה');
+          error.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = '✋ הרשם ותפוס!';
+        }
+      } catch (e) {
+        error.textContent = '❌ שגיאת תקשורת';
+        error.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = '✋ הרשם ותפוס!';
+      }
+    }
+    
+    // Enter = Submit
+    document.getElementById('phoneInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') checkPhone();
+    });
+  </script>
+</body>
+</html>`;
+}
+
 // ==================== PUBLIC ROUTES ====================
-app.get('/take/:orderNumber/:whatsappId?', async (req, res) => {
+app.get('/take/:orderNumber', async (req, res) => {
   try {
-    const { orderNumber, whatsappId } = req.params;
+    const { orderNumber } = req.params;
     const r = await pool.query("SELECT * FROM orders WHERE order_number=$1",[orderNumber]);
     const o = r.rows[0];
     if (!o) return res.send(statusHTML('❌','הזמנה לא נמצאה','','#ef4444'));
     if (o.status !== 'published') return res.send(statusHTML('🏍️','המשלוח נתפס!','מישהו הספיק לפניך, פעם הבאה תהיה מהיר יותר!','#f59e0b'));
     
-    // בדוק אם השליח רשום
-    let courier = null;
-    if (whatsappId) {
-      courier = await getCourierByWhatsAppId(whatsappId);
-    }
-    
-    // אם השליח רשום - הצג טופס מקוצר
-    if (courier) {
-      res.send(takeOrderEnhancedHTML(o, courier, whatsappId));
-    } else {
-      res.send(takeOrderHTML(o));
-    }
+    // דף תפיסה חכם - עם זיהוי לפי טלפון
+    res.send(takeOrderSmartHTML(o));
   } catch (e) { res.status(500).send(statusHTML('❌','שגיאה','','#ef4444')); }
 });
 
 app.post('/api/take/:orderNumber', async (req, res) => {
   try { res.json(await takeOrder(req.params.orderNumber, req.body)); }
   catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+// API לזיהוי שליח לפי טלפון
+app.post('/api/courier/check-phone', async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.json({ success: false, error: 'חסר מספר טלפון' });
+    
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const phoneVariants = [phone, cleanPhone, cleanPhone.replace(/^0/, '972'), '0' + cleanPhone.replace(/^972/, '')];
+    
+    const r = await pool.query(
+      "SELECT * FROM couriers WHERE phone = ANY($1) OR REPLACE(phone, '-', '') = ANY($1)",
+      [phoneVariants]
+    );
+    
+    if (r.rows[0]) {
+      const c = r.rows[0];
+      res.json({ 
+        success: true, 
+        found: true, 
+        courier: {
+          id: c.id,
+          firstName: c.first_name,
+          lastName: c.last_name,
+          idNumber: c.id_number,
+          phone: c.phone
+        }
+      });
+    } else {
+      res.json({ success: true, found: false });
+    }
+  } catch (e) {
+    console.error('Check phone error:', e);
+    res.status(500).json({ success: false, error: 'שגיאת שרת' });
+  }
 });
 
 app.get('/status/:orderNumber/pickup', async (req, res) => {
