@@ -539,6 +539,91 @@ const cancelOrder = async (id, reason, userId) => {
   console.log('❌ Cancelled:', o.order_number, '(was:', oldStatus, ')');
 };
 
+// ==================== COURIER IDENTIFICATION SYSTEM ====================
+/**
+ * זיהוי שליח לפי WhatsApp ID
+ */
+const getCourierByWhatsAppId = async (whatsappId) => {
+  try {
+    const r = await pool.query("SELECT * FROM couriers WHERE whatsapp_id = $1", [whatsappId]);
+    return r.rows[0] || null;
+  } catch (e) {
+    console.error('Error getting courier by WhatsApp ID:', e);
+    return null;
+  }
+};
+
+/**
+ * זיהוי שליח לפי מספר טלפון - עם וריאנטים
+ */
+const getCourierByPhone = async (phone) => {
+  try {
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const phoneVariants = [
+      phone,
+      cleanPhone,
+      cleanPhone.replace(/^0/, '972'),
+      cleanPhone.replace(/^972/, '0'),
+      '0' + cleanPhone.replace(/^972/, ''),
+      '972' + cleanPhone.replace(/^0/, '')
+    ];
+    
+    const r = await pool.query("SELECT * FROM couriers WHERE phone = ANY($1) OR REPLACE(phone, '-', '') = ANY($1)", [phoneVariants]);
+    return r.rows[0] || null;
+  } catch (e) {
+    console.error('Error getting courier by phone:', e);
+    return null;
+  }
+};
+
+/**
+ * רישום שליח חדש עם כל הפרטים
+ */
+const registerCourier = async (data) => {
+  try {
+    const { firstName, lastName, idNumber, phone, email, vehicleType, whatsappId } = data;
+    
+    // בדיקה שהשליח לא קיים
+    const existing = await pool.query(
+      "SELECT id FROM couriers WHERE id_number = $1 OR phone = $2 OR REPLACE(phone, '-', '') = $3",
+      [idNumber, phone, phone.replace(/[^0-9]/g, '')]
+    );
+    
+    if (existing.rows.length > 0) {
+      return { 
+        success: false, 
+        error: 'שליח עם פרטים אלו כבר קיים במערכת',
+        existingId: existing.rows[0].id 
+      };
+    }
+    
+    // יצירת WhatsApp ID אם לא סופק
+    const waId = whatsappId || phone.replace(/^0/, '972').replace(/-/g, '') + '@s.whatsapp.net';
+    
+    const r = await pool.query(`
+      INSERT INTO couriers (first_name, last_name, id_number, phone, whatsapp_id, email, vehicle_type, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active') 
+      RETURNING *
+    `, [firstName, lastName, idNumber, phone, waId, email || null, vehicleType || 'motorcycle']);
+    
+    console.log(`✅ שליח חדש נרשם: ${firstName} ${lastName} (${phone})`);
+    
+    // שלח הודעת ברוכים הבאים
+    await sendWhatsApp(waId, 
+      `🎉 ברוך הבא ל-M.M.H Delivery!\n\n` +
+      `היי ${firstName}! 👋\n\n` +
+      `הרישום שלך הושלם בהצלחה.\n` +
+      `מעכשיו תוכל לתפוס משלוחים בלחיצה אחת!\n\n` +
+      `בהצלחה! 🚀`
+    );
+    
+    return { success: true, courier: r.rows[0] };
+  } catch (e) {
+    console.error('Error registering courier:', e);
+    return { success: false, error: 'שגיאת שרת' };
+  }
+};
+
 // ==================== API ROUTES ====================
 
 // Login עם Rate Limiting חזק + נעילת חשבון + 2FA
@@ -769,6 +854,137 @@ app.put('/api/couriers/:id', requireAuth, async (req, res) => {
     await pool.query("UPDATE couriers SET status=$1,notes=$2,updated_at=NOW() WHERE id=$3",[status,notes,req.params.id]);
     res.json({ success:true });
   } catch (e) { res.status(500).json({ success:false, error:'שגיאת שרת' }); }
+});
+
+// ==================== COURIER REGISTRATION & IDENTIFICATION API ====================
+
+/**
+ * דף רישום שליח - GET
+ */
+app.get('/courier/register/:whatsappId?', async (req, res) => {
+  try {
+    const whatsappId = req.params.whatsappId;
+    
+    // אם יש WhatsApp ID, נבדוק אם השליח קיים
+    if (whatsappId) {
+      const courier = await getCourierByWhatsAppId(whatsappId);
+      if (courier) {
+        return res.redirect(`/courier/${courier.phone}`);
+      }
+    }
+    
+    res.send(courierRegistrationHTML(whatsappId));
+  } catch (e) {
+    console.error('Registration page error:', e);
+    res.status(500).send('שגיאה');
+  }
+});
+
+/**
+ * רישום שליח - POST
+ */
+app.post('/api/courier/register', async (req, res) => {
+  try {
+    const result = await registerCourier(req.body);
+    res.json(result);
+  } catch (e) {
+    console.error('Registration error:', e);
+    res.status(500).json({ success: false, error: 'שגיאת שרת' });
+  }
+});
+
+/**
+ * זיהוי שליח - GET
+ */
+app.get('/api/courier/identify/:identifier', async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    
+    let courier = await getCourierByWhatsAppId(identifier);
+    if (!courier) {
+      courier = await getCourierByPhone(identifier);
+    }
+    
+    if (courier) {
+      res.json({ 
+        success: true, 
+        found: true,
+        courier: {
+          id: courier.id,
+          name: `${courier.first_name} ${courier.last_name}`,
+          phone: courier.phone,
+          vehicleType: courier.vehicle_type,
+          registered: true
+        }
+      });
+    } else {
+      res.json({ success: true, found: false, message: 'שליח לא נמצא במערכת' });
+    }
+  } catch (e) {
+    console.error('Identify error:', e);
+    res.status(500).json({ success: false, error: 'שגיאת שרת' });
+  }
+});
+
+/**
+ * סטטיסטיקות שליח מפורטות
+ */
+app.get('/api/courier/stats/:phone', async (req, res) => {
+  try {
+    const courier = await getCourierByPhone(req.params.phone);
+    if (!courier) {
+      return res.status(404).json({ error: 'שליח לא נמצא' });
+    }
+    
+    const stats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_orders,
+        COUNT(CASE WHEN status = 'delivered' THEN 1 END) as completed,
+        COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled,
+        COALESCE(SUM(CASE WHEN status = 'delivered' THEN courier_payout END), 0) as total_earned
+      FROM orders WHERE courier_id = $1
+    `, [courier.id]);
+    
+    const today = await pool.query(`
+      SELECT COUNT(*) as today_count, COALESCE(SUM(courier_payout), 0) as today_earned
+      FROM orders WHERE courier_id = $1 AND status = 'delivered' AND DATE(delivered_at) = CURRENT_DATE
+    `, [courier.id]);
+    
+    const week = await pool.query(`
+      SELECT COUNT(*) as week_count, COALESCE(SUM(courier_payout), 0) as week_earned
+      FROM orders WHERE courier_id = $1 AND status = 'delivered' AND delivered_at >= CURRENT_DATE - INTERVAL '7 days'
+    `, [courier.id]);
+    
+    res.json({
+      courier: {
+        name: `${courier.first_name} ${courier.last_name}`,
+        phone: courier.phone,
+        vehicleType: courier.vehicle_type,
+        rating: courier.rating,
+        balance: courier.balance
+      },
+      stats: stats.rows[0],
+      today: today.rows[0],
+      week: week.rows[0]
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'שגיאת שרת' });
+  }
+});
+
+/**
+ * מיגרציה להוספת עמודות חדשות לשליחים
+ */
+app.post('/api/admin/migrate-couriers', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    await pool.query(`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS email VARCHAR(100)`);
+    await pool.query(`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS vehicle_type VARCHAR(30) DEFAULT 'motorcycle'`);
+    console.log('✅ Migration completed: email, vehicle_type columns added');
+    res.json({ success: true, message: 'עדכון בוצע בהצלחה' });
+  } catch (e) {
+    console.error('Migration error:', e);
+    res.json({ success: false, error: e.message });
+  }
 });
 
 app.get('/api/orders', requireAuth, async (req, res) => {
@@ -1473,9 +1689,11 @@ function courierNotFoundPage() {
 }
 
 function courierAppPage(c, orders, stats) {
+  const vehicleText = c.vehicle_type === 'motorcycle' ? '🏍️ אופנוע' : c.vehicle_type === 'car' ? '🚗 רכב' : c.vehicle_type === 'commercial' ? '🚚 מסחרי' : '🏍️ אופנוע';
   return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>M.M.H - ${c.first_name}</title>
-<style>*{font-family:system-ui;margin:0;padding:0;box-sizing:border-box}body{background:#0f172a;color:#fff;min-height:100vh;padding:20px}
+<style>*{font-family:system-ui;margin:0;padding:0;box-sizing:border-box}body{background:#0f172a;color:#fff;min-height:100vh;padding:20px;padding-bottom:80px}
 .header{text-align:center;padding:20px 0;border-bottom:1px solid #334155;margin-bottom:20px}
+.vehicle-badge{display:inline-block;padding:4px 12px;background:#334155;border-radius:20px;font-size:12px;margin-top:8px}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
 .stat{background:#1e293b;padding:15px;border-radius:12px;text-align:center}
 .stat-value{font-size:24px;font-weight:bold;color:#10b981}
@@ -1495,9 +1713,15 @@ function courierAppPage(c, orders, stats) {
 .btn-pickup{background:#3b82f6;color:#fff}
 .btn-deliver{background:#10b981;color:#fff}
 .btn-nav{background:#334155;color:#fff}
-.empty{text-align:center;padding:40px;color:#64748b}</style></head>
+.empty{text-align:center;padding:40px;color:#64748b}
+.empty-icon{font-size:50px;margin-bottom:15px}
+.refresh-btn{position:fixed;bottom:20px;right:20px;width:60px;height:60px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 10px 30px rgba(102,126,234,0.3);cursor:pointer;border:none;color:white}</style></head>
 <body>
-<div class="header"><h1>🏍️ ${c.first_name} ${c.last_name}</h1><p style="color:#64748b">${c.phone}</p></div>
+<div class="header">
+  <h1>🏍️ ${c.first_name} ${c.last_name}</h1>
+  <p style="color:#64748b">${c.phone}</p>
+  <div class="vehicle-badge">${vehicleText}</div>
+</div>
 <div class="stats">
   <div class="stat"><div class="stat-value">${stats.today||0}</div><div class="stat-label">היום</div></div>
   <div class="stat"><div class="stat-value">${stats.week||0}</div><div class="stat-label">השבוע</div></div>
@@ -1518,19 +1742,34 @@ ${orders.length ? orders.map(o => `
     <a href="https://waze.com/ul?q=${encodeURIComponent(o.status==='taken'?o.pickup_address:o.delivery_address)}" class="btn btn-nav">🗺️ ניווט</a>
     ${o.status==='taken'?`<a href="/status/${o.order_number}/pickup" class="btn btn-pickup">📦 אספתי</a>`:`<a href="/status/${o.order_number}/deliver" class="btn btn-deliver">✅ מסרתי</a>`}
   </div>
-`).join('') : '<div class="empty">אין משלוחים פעילים</div>'}
+`).join('') : '<div class="empty"><div class="empty-icon">🎯</div><h3>אין משלוחים פעילים</h3><p style="margin-top:10px;font-size:14px">המשלוחים החדשים יופיעו כאן</p></div>'}
 </div>
+<button class="refresh-btn" onclick="location.reload()">🔄</button>
+<script>setInterval(()=>location.reload(),30000);</script>
 </body></html>`;
 }
 
 // ==================== PUBLIC ROUTES ====================
-app.get('/take/:orderNumber', async (req, res) => {
+app.get('/take/:orderNumber/:whatsappId?', async (req, res) => {
   try {
-    const r = await pool.query("SELECT * FROM orders WHERE order_number=$1",[req.params.orderNumber]);
+    const { orderNumber, whatsappId } = req.params;
+    const r = await pool.query("SELECT * FROM orders WHERE order_number=$1",[orderNumber]);
     const o = r.rows[0];
     if (!o) return res.send(statusHTML('❌','הזמנה לא נמצאה','','#ef4444'));
     if (o.status !== 'published') return res.send(statusHTML('🏍️','המשלוח נתפס!','מישהו הספיק לפניך, פעם הבאה תהיה מהיר יותר!','#f59e0b'));
-    res.send(takeOrderHTML(o));
+    
+    // בדוק אם השליח רשום
+    let courier = null;
+    if (whatsappId) {
+      courier = await getCourierByWhatsAppId(whatsappId);
+    }
+    
+    // אם השליח רשום - הצג טופס מקוצר
+    if (courier) {
+      res.send(takeOrderEnhancedHTML(o, courier, whatsappId));
+    } else {
+      res.send(takeOrderHTML(o));
+    }
   } catch (e) { res.status(500).send(statusHTML('❌','שגיאה','','#ef4444')); }
 });
 
@@ -1710,6 +1949,307 @@ function statusUpdateHTML(o, action) {
   const api = `/api/status/${o.order_number}/${action}`;
   const success = isPickup ? 'סומן כנאסף!' : 'נמסר בהצלחה!';
   return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>*{font-family:system-ui;margin:0;padding:0;box-sizing:border-box}body{background:#0f172a;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.card{background:#1e293b;border-radius:20px;padding:30px;text-align:center;border:1px solid #334155;max-width:400px;width:100%}.emoji{font-size:50px;margin-bottom:15px}h1{color:#10b981;margin-bottom:10px}p{color:#94a3b8;margin-bottom:20px}.info{background:#0f172a;border-radius:10px;padding:12px;margin-bottom:20px;text-align:right}.buttons{display:flex;gap:10px}.btn{flex:1;padding:14px;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer}.btn-yes{background:linear-gradient(135deg,#10b981,#059669);color:#fff}.btn-no{background:#334155;color:#94a3b8}.payout{background:#10b98120;border-radius:10px;padding:15px;margin-top:20px}.payout-value{color:#10b981;font-size:28px;font-weight:bold}</style></head><body><div class="card" id="main"><div class="emoji">${isPickup?'📦':'📬'}</div><h1>${title}</h1><p>${q}</p>${!isPickup?`<div class="info"><div style="color:#64748b;font-size:12px">נמסר ל:</div><div style="color:#fff">${o.receiver_name}</div><div style="color:#94a3b8;font-size:13px">${o.delivery_address}</div></div>`:''}<div class="buttons"><button class="btn btn-yes" onclick="confirm()">${btn}</button><button class="btn btn-no" onclick="window.close()">❌ לא עדיין</button></div>${!isPickup?`<div class="payout"><div style="color:#10b981;font-size:14px">💰 רווח</div><div class="payout-value">₪${o.courier_payout}</div></div>`:''}</div><script>async function confirm(){try{const r=await fetch('${api}',{method:'POST'});const d=await r.json();if(d.success){document.getElementById('main').innerHTML='<div class="emoji">✅</div><h1>${success}</h1><p>תודה!</p>${!isPickup?`<div class="payout"><div style="color:#10b981;font-size:14px">הרווחת</div><div class="payout-value">₪${o.courier_payout}</div></div>`:''}';}else{alert(d.error||'שגיאה');}}catch(e){alert('שגיאת תקשורת');}}</script></body></html>`;
+}
+
+// ==================== COURIER REGISTRATION HTML ====================
+function courierRegistrationHTML(whatsappId = '') {
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>רישום שליח - M.M.H</title>
+  <style>
+    * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+    .container { max-width: 500px; margin: 0 auto; }
+    .card { background: white; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .header { text-align: center; margin-bottom: 30px; }
+    .logo { font-size: 50px; margin-bottom: 10px; }
+    h1 { color: #667eea; font-size: 24px; margin-bottom: 5px; }
+    .subtitle { color: #666; font-size: 14px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; color: #333; font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+    input, select { width: 100%; padding: 14px; border: 2px solid #e0e0e0; border-radius: 12px; font-size: 16px; transition: all 0.3s; }
+    input:focus, select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.1); }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .btn { width: 100%; padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; cursor: pointer; transition: transform 0.2s; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .error { background: #fee; border: 2px solid #fcc; color: #c33; padding: 12px; border-radius: 10px; margin-bottom: 20px; display: none; text-align: center; }
+    .error.show { display: block; }
+    .success { background: #efe; border: 2px solid #cfc; color: #3a3; padding: 20px; border-radius: 10px; text-align: center; display: none; }
+    .success.show { display: block; }
+    .success .emoji { font-size: 60px; margin-bottom: 15px; }
+    .vehicle-option { display: flex; align-items: center; gap: 10px; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px; cursor: pointer; transition: all 0.3s; margin-bottom: 8px; }
+    .vehicle-option:hover { border-color: #667eea; background: #f5f7ff; }
+    .vehicle-option input[type="radio"] { width: auto; }
+    .vehicle-icon { font-size: 24px; }
+    .info-box { background: #f0f4ff; border: 2px solid #667eea; border-radius: 12px; padding: 15px; margin-bottom: 20px; }
+    .info-box p { color: #667eea; font-size: 14px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <div class="logo">🚀</div>
+        <h1>הצטרפות לצוות השליחים</h1>
+        <p class="subtitle">M.M.H Delivery</p>
+      </div>
+      
+      <div class="info-box">
+        <p><strong>👋 היי!</strong><br>מלא את הפרטים פעם אחת ותוכל לתפוס משלוחים בלחיצה אחת בפעמים הבאות</p>
+      </div>
+      
+      <div id="form">
+        <div class="error" id="error"></div>
+        
+        <div class="row">
+          <div class="form-group">
+            <label>שם פרטי *</label>
+            <input type="text" id="firstName" placeholder="שם פרטי" required>
+          </div>
+          <div class="form-group">
+            <label>שם משפחה *</label>
+            <input type="text" id="lastName" placeholder="שם משפחה" required>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label>ת.ז / ע.מ *</label>
+          <input type="text" id="idNumber" placeholder="9 ספרות" maxlength="9" required>
+        </div>
+        
+        <div class="form-group">
+          <label>טלפון *</label>
+          <input type="tel" id="phone" placeholder="05X-XXXXXXX" required>
+        </div>
+        
+        <div class="form-group">
+          <label>אימייל</label>
+          <input type="email" id="email" placeholder="example@mail.com">
+        </div>
+        
+        <div class="form-group">
+          <label>סוג רכב *</label>
+          <label class="vehicle-option">
+            <input type="radio" name="vehicle" value="motorcycle" checked>
+            <span class="vehicle-icon">🏍️</span>
+            <span>אופנוע</span>
+          </label>
+          <label class="vehicle-option">
+            <input type="radio" name="vehicle" value="car">
+            <span class="vehicle-icon">🚗</span>
+            <span>רכב פרטי</span>
+          </label>
+          <label class="vehicle-option">
+            <input type="radio" name="vehicle" value="commercial">
+            <span class="vehicle-icon">🚚</span>
+            <span>רכב מסחרי</span>
+          </label>
+        </div>
+        
+        <button class="btn" id="submitBtn" onclick="register()">✅ הרשם עכשיו</button>
+      </div>
+      
+      <div class="success" id="success">
+        <div class="emoji">🎉</div>
+        <h2 style="color: #667eea; margin-bottom: 10px;">נרשמת בהצלחה!</h2>
+        <p style="color: #666;">מעכשיו תוכל לתפוס משלוחים בלחיצה אחת</p>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const whatsappId = '${whatsappId}';
+    
+    async function register() {
+      const btn = document.getElementById('submitBtn');
+      const error = document.getElementById('error');
+      
+      const data = {
+        firstName: document.getElementById('firstName').value.trim(),
+        lastName: document.getElementById('lastName').value.trim(),
+        idNumber: document.getElementById('idNumber').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        email: document.getElementById('email').value.trim(),
+        vehicleType: document.querySelector('input[name="vehicle"]:checked').value,
+        whatsappId: whatsappId
+      };
+      
+      if (!data.firstName || !data.lastName || !data.idNumber || !data.phone) {
+        error.textContent = '❌ נא למלא את כל השדות המסומנים ב-*';
+        error.classList.add('show');
+        return;
+      }
+      
+      if (data.idNumber.length !== 9) {
+        error.textContent = '❌ ת.ז חייב להכיל 9 ספרות';
+        error.classList.add('show');
+        return;
+      }
+      
+      btn.disabled = true;
+      btn.textContent = '⏳ שולח...';
+      error.classList.remove('show');
+      
+      try {
+        const response = await fetch('/api/courier/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          document.getElementById('form').style.display = 'none';
+          document.getElementById('success').classList.add('show');
+          setTimeout(() => { window.location.href = '/courier/' + data.phone; }, 2000);
+        } else {
+          error.textContent = '❌ ' + result.error;
+          error.classList.add('show');
+          btn.disabled = false;
+          btn.textContent = '✅ הרשם עכשיו';
+        }
+      } catch (e) {
+        error.textContent = '❌ שגיאת תקשורת';
+        error.classList.add('show');
+        btn.disabled = false;
+        btn.textContent = '✅ הרשם עכשיו';
+      }
+    }
+    
+    document.querySelectorAll('input').forEach(input => {
+      input.addEventListener('keypress', (e) => { if (e.key === 'Enter') register(); });
+    });
+  </script>
+</body>
+</html>`;
+}
+
+// ==================== ENHANCED TAKE ORDER HTML (FOR REGISTERED COURIERS) ====================
+function takeOrderEnhancedHTML(order, courier, whatsappId) {
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>תפיסת משלוח - M.M.H</title>
+  <style>
+    * { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); min-height: 100vh; padding: 20px; }
+    .container { max-width: 500px; margin: 0 auto; }
+    .card { background: white; border-radius: 20px; padding: 25px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); margin-bottom: 15px; }
+    .header { text-align: center; margin-bottom: 20px; }
+    .order-id { font-size: 24px; font-weight: bold; color: #11998e; margin-bottom: 5px; }
+    .payout { font-size: 36px; font-weight: bold; color: #11998e; margin: 20px 0; }
+    .info { display: flex; gap: 12px; padding: 12px; background: #f5f5f5; border-radius: 12px; margin-bottom: 12px; }
+    .icon { font-size: 24px; }
+    .content { flex: 1; }
+    .label { font-size: 12px; color: #666; }
+    .value { font-size: 15px; color: #333; font-weight: 500; }
+    .welcome { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 15px; text-align: center; margin-bottom: 20px; }
+    .welcome h2 { margin-bottom: 5px; }
+    .btn { width: 100%; padding: 18px; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; border: none; border-radius: 15px; font-size: 20px; font-weight: bold; cursor: pointer; transition: transform 0.2s; }
+    .btn:hover { transform: scale(1.02); }
+    .btn:disabled { opacity: 0.6; cursor: wait; }
+    .success { display: none; text-align: center; padding: 40px; }
+    .success.show { display: block; }
+    .success .emoji { font-size: 80px; margin-bottom: 20px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="welcome">
+      <h2>👋 היי ${courier.first_name}!</h2>
+      <p>זיהינו אותך אוטומטית</p>
+    </div>
+    
+    <div class="card" id="orderCard">
+      <div class="header">
+        <div class="order-id">📦 ${order.order_number}</div>
+        <div class="payout">💰 ₪${order.courier_payout}</div>
+      </div>
+      
+      <div class="info">
+        <div class="icon">📍</div>
+        <div class="content">
+          <div class="label">איסוף מ:</div>
+          <div class="value">${order.pickup_address}</div>
+        </div>
+      </div>
+      
+      <div class="info">
+        <div class="icon">🏠</div>
+        <div class="content">
+          <div class="label">מסירה ל:</div>
+          <div class="value">${order.delivery_address}</div>
+        </div>
+      </div>
+      
+      ${order.details ? `
+      <div class="info">
+        <div class="icon">📝</div>
+        <div class="content">
+          <div class="label">פרטים:</div>
+          <div class="value">${order.details}</div>
+        </div>
+      </div>` : ''}
+      
+      <button class="btn" id="takeBtn" onclick="quickTake()">✋ תפוס משלוח</button>
+    </div>
+    
+    <div class="card success" id="success">
+      <div class="emoji">🎉</div>
+      <h2 style="color: #11998e; margin-bottom: 10px;">תפסת את המשלוח!</h2>
+      <p style="color: #666; margin-bottom: 20px;">הפרטים נשלחו אליך בוואטסאפ</p>
+      <div style="background: #f5f5f5; padding: 15px; border-radius: 12px;">
+        <div style="font-size: 14px; color: #666; margin-bottom: 5px;">הרווחת</div>
+        <div style="font-size: 32px; font-weight: bold; color: #11998e;">₪${order.courier_payout}</div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    async function quickTake() {
+      const btn = document.getElementById('takeBtn');
+      btn.disabled = true;
+      btn.textContent = '⏳ תופס...';
+      
+      try {
+        const response = await fetch('/api/take/${order.order_number}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firstName: '${courier.first_name}',
+            lastName: '${courier.last_name}',
+            idNumber: '${courier.id_number}',
+            phone: '${courier.phone}'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          document.getElementById('orderCard').classList.add('hidden');
+          document.getElementById('success').classList.add('show');
+        } else {
+          alert(result.error || 'שגיאה');
+          btn.disabled = false;
+          btn.textContent = '✋ תפוס משלוח';
+        }
+      } catch (e) {
+        alert('שגיאת תקשורת');
+        btn.disabled = false;
+        btn.textContent = '✋ תפוס משלוח';
+      }
+    }
+  </script>
+</body>
+</html>`;
 }
 
 // ==================== DASHBOARD ====================
@@ -2229,10 +2769,15 @@ render();
 server.listen(CONFIG.PORT, '0.0.0.0', () => {
   console.log('');
   console.log('╔══════════════════════════════════════════════════════════════╗');
-  console.log('║     🚚  M.M.H Delivery System Pro v3.0  🚚                   ║');
+  console.log('║     🚚  M.M.H Delivery System Pro v4.0  🚚                   ║');
   console.log('╠══════════════════════════════════════════════════════════════╣');
   console.log('║  Server: http://localhost:' + CONFIG.PORT + '                             ║');
   console.log('║  Public: ' + CONFIG.PUBLIC_URL.padEnd(43) + '║');
+  console.log('╠══════════════════════════════════════════════════════════════╣');
+  console.log('║  🆕 New Features:                                            ║');
+  console.log('║  • Courier Registration: /courier/register                   ║');
+  console.log('║  • Auto-Identify Couriers on Take Order                      ║');
+  console.log('║  • Quick Take for Registered Couriers                        ║');
   console.log('╚══════════════════════════════════════════════════════════════╝');
   console.log('');
 });
