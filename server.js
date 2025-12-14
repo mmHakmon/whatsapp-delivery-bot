@@ -61,8 +61,8 @@ const pool = new Pool({
 // Auto-migrate on startup
 (async () => {
   try {
-    await pool.query`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS email VARCHAR(100)`;
-    await pool.query`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS vehicle_type VARCHAR(30) DEFAULT 'motorcycle'`;
+    await pool.query(`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS email VARCHAR(100)`);
+    await pool.query(`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS vehicle_type VARCHAR(30) DEFAULT 'motorcycle'`);
     console.log('✅ Auto-migration completed');
   } catch (e) {
     console.log('⚠️ Migration skipped:', e.message);
