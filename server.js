@@ -58,17 +58,6 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// Auto-migrate on startup
-(async () => {
-  try {
-    await pool.query(`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS email VARCHAR(100)`);
-    await pool.query(`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS vehicle_type VARCHAR(30) DEFAULT 'motorcycle'`);
-    console.log('✅ Auto-migration completed');
-  } catch (e) {
-    console.log('⚠️ Migration skipped:', e.message);
-  }
-})();
-
 // ==================== RATE LIMITING ====================
 const rateLimitStore = new Map();
 const loginAttempts = new Map();
@@ -2792,3 +2781,14 @@ server.listen(CONFIG.PORT, '0.0.0.0', () => {
   console.log('╚══════════════════════════════════════════════════════════════╝');
   console.log('');
 });
+
+// Auto-migrate on startup
+(async () => {
+  try {
+    await pool.query(`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS email VARCHAR(100)`);
+    await pool.query(`ALTER TABLE couriers ADD COLUMN IF NOT EXISTS vehicle_type VARCHAR(30) DEFAULT 'motorcycle'`);
+    console.log('✅ Auto-migration completed');
+  } catch (e) {
+    console.log('⚠️ Migration skipped:', e.message);
+  }
+})();
