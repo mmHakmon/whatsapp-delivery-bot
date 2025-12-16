@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>דף שליח - M.M.H Delivery</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    @keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+    .animate-fadeIn { animation: fadeIn 0.5s ease-out; }
+    .animate-pulse-slow { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    .shimmer { background: linear-gradient(90deg, #1e293b 0%, #334155 50%, #1e293b 100%); background-size: 1000px 100%; animation: shimmer 2s infinite; }
+    .gradient-text { background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-white">
+  
+  <!-- Background Effects -->
+  <div class="fixed inset-0 overflow-hidden pointer-events-none">
+    <div class="absolute top-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+    <div class="absolute bottom-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
+  </div>
+
+  <div id="app" class="relative z-10"></div>
+
+  <script>
+    const SERVER_URL = 'https://mmh-delivery.onrender.com';
+    
+    // Icons
+    const Icons = {
+      Bike: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 100-2 1 1 0 000 2zM12 17.5V14l-3-3 4-3 2 3h3"/></svg>`,
+      Package: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg>`,
+      Wallet: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 100 4 2 2 0 000-4z"/></svg>`,
+      TrendingUp: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"/></svg>`,
+      Clock: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`,
+      Star: () => `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`,
+      MapPin: () => `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>`,
+      Check: () => `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>`,
+      Phone: () => `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>`,
+      Calendar: () => `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
+      ChevronLeft: () => `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>`,
+    };
+
+    // Utility Functions
+    const formatCurrency = (amount) => `₪${parseFloat(amount || 0).toLocaleString('he-IL', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const formatDate = (date) => new Date(date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const formatTime = (date) => new Date(date).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    const formatDateTime = (date) => `${formatDate(date)} ${formatTime(date)}`;
+
+    const getStatusBadge = (status) => {
+      const badges = {
+        taken: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/50', label: 'נתפס' },
+        picked: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/50', label: 'נאסף' },
+        delivered: { bg: 'bg-emerald-500/20', text: 'text-emerald-400', border: 'border-emerald-500/50', label: 'נמסר' },
+        cancelled: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/50', label: 'בוטל' },
+      };
+      return badges[status] || badges.taken;
+    };
+
+    // State
+    let state = {
+      courier: null,
+      stats: null,
+      orders: [],
+      loading: true,
+      error: null,
+      view: 'dashboard', // dashboard, history, earnings
+      period: 'today' // today, week, month, all
+    };
+
+    // API Functions
+    async function fetchCourierData(phone) {
+      try {
+        const response = await fetch(`${SERVER_URL}/api/courier/${phone}/dashboard`);
+        if (!response.ok) throw new Error('שגיאה בטעינת נתונים');
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    // Components
+    function LoadingScreen() {
+      return `
+        <div class="flex items-center justify-center min-h-screen">
+          <div class="text-center">
+            <div class="w-16 h-16 mx-auto mb-4">
+              ${Icons.Bike()}
+              <div class="shimmer w-16 h-1 mt-2 rounded"></div>
+            </div>
+            <p class="text-slate-400">טוען נתונים...</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function ErrorScreen(message) {
+      return `
+        <div class="flex items-center justify-center min-h-screen px-4">
+          <div class="text-center bg-slate-800/50 backdrop-blur-sm rounded-2xl p-8 border border-red-500/30 max-w-md">
+            <div class="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+            </div>
+            <h2 class="text-xl font-bold text-white mb-2">שגיאה</h2>
+            <p class="text-slate-400">${message}</p>
+            <button onclick="location.reload()" class="mt-6 bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-2 rounded-xl font-medium transition-all">
+              נסה שוב
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function StatCard({ icon, label, value, subValue, color, trend }) {
+      return `
+        <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 animate-fadeIn hover:border-slate-600 transition-all">
+          <div class="flex items-start justify-between mb-4">
+            <div class="${color} p-3 rounded-xl">${icon}</div>
+            ${trend ? `<div class="text-xs ${trend > 0 ? 'text-emerald-400' : 'text-red-400'} flex items-center gap-1">
+              ${trend > 0 ? '↑' : '↓'} ${Math.abs(trend)}%
+            </div>` : ''}
+          </div>
+          <div class="text-3xl font-bold text-white mb-1">${value}</div>
+          <div class="text-sm text-slate-400">${label}</div>
+          ${subValue ? `<div class="text-xs text-slate-500 mt-1">${subValue}</div>` : ''}
+        </div>
+      `;
+    }
+
+    function OrderCard(order) {
+      const badge = getStatusBadge(order.status);
+      return `
+        <div class="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 overflow-hidden hover:border-slate-600 transition-all animate-fadeIn">
+          <!-- Header -->
+          <div class="p-4 border-b border-slate-700/50 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="text-lg font-bold text-white font-mono">#${order.order_number}</span>
+              <span class="px-3 py-1 rounded-full text-xs font-medium ${badge.bg} ${badge.text} border ${badge.border}">
+                ${badge.label}
+              </span>
+            </div>
+            <div class="text-2xl font-bold text-emerald-400">${formatCurrency(order.courier_payout)}</div>
+          </div>
+
+          <!-- Content -->
+          <div class="p-4 space-y-3">
+            <!-- Route -->
+            <div class="flex items-start gap-3">
+              <div class="flex-shrink-0 mt-1">${Icons.MapPin()}</div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-slate-400 mb-1">איסוף</div>
+                <div class="text-white font-medium truncate">${order.pickup_address}</div>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-2 pr-8">
+              <div class="w-px h-6 bg-slate-700"></div>
+            </div>
+
+            <div class="flex items-start gap-3">
+              <div class="flex-shrink-0 mt-1">${Icons.MapPin()}</div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-slate-400 mb-1">מסירה</div>
+                <div class="text-white font-medium truncate">${order.delivery_address}</div>
+              </div>
+            </div>
+
+            <!-- Customer Info -->
+            <div class="flex items-center gap-3 pt-3 border-t border-slate-700/50">
+              <div class="flex items-center gap-2 text-sm text-slate-400">
+                ${Icons.Phone()}
+                <span dir="ltr">${order.receiver_phone}</span>
+              </div>
+              <div class="flex items-center gap-2 text-sm text-slate-400">
+                ${Icons.Clock()}
+                ${formatTime(order.created_at)}
+              </div>
+            </div>
+
+            <!-- Timestamps -->
+            ${order.picked_at ? `
+              <div class="flex items-center gap-2 text-xs text-slate-500">
+                <span>נאסף:</span>
+                <span>${formatDateTime(order.picked_at)}</span>
+              </div>
+            ` : ''}
+            ${order.delivered_at ? `
+              <div class="flex items-center gap-2 text-xs text-emerald-400">
+                ${Icons.Check()}
+                <span>נמסר: ${formatDateTime(order.delivered_at)}</span>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function Dashboard() {
+      const { courier, stats, orders } = state;
+      const activeOrders = orders.filter(o => ['taken', 'picked'].includes(o.status));
+      const completedOrders = orders.filter(o => o.status === 'delivered');
+
+      return `
+        <div class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+          <!-- Header -->
+          <div class="bg-gradient-to-r from-emerald-500 to-blue-500 rounded-2xl p-6 text-white">
+            <div class="flex items-center justify-between">
+              <div>
+                <h1 class="text-2xl font-bold mb-2">שלום ${courier.first_name}! 👋</h1>
+                <p class="text-emerald-50 opacity-90">שליח מאז ${formatDate(courier.created_at)}</p>
+              </div>
+              <div class="text-left">
+                <div class="flex items-center gap-2 text-emerald-50 mb-1">
+                  ${Icons.Star()}
+                  <span class="text-2xl font-bold">${courier.rating || '5.0'}</span>
+                </div>
+                <div class="text-sm text-emerald-50 opacity-75">${courier.total_deliveries} משלוחים</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Stats -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            ${StatCard({
+              icon: Icons.Package(),
+              label: 'משלוחים פעילים',
+              value: activeOrders.length,
+              color: 'bg-blue-500/20 text-blue-400'
+            })}
+            ${StatCard({
+              icon: Icons.Check(),
+              label: 'הושלמו היום',
+              value: stats.today.completed,
+              subValue: formatCurrency(stats.today.earned),
+              color: 'bg-emerald-500/20 text-emerald-400'
+            })}
+            ${StatCard({
+              icon: Icons.Wallet(),
+              label: 'רווחים השבוע',
+              value: formatCurrency(stats.week.earned),
+              subValue: `${stats.week.completed} משלוחים`,
+              color: 'bg-purple-500/20 text-purple-400',
+              trend: stats.weekTrend
+            })}
+            ${StatCard({
+              icon: Icons.TrendingUp(),
+              label: 'סה״כ רווחים',
+              value: formatCurrency(stats.total.earned),
+              subValue: `${stats.total.completed} משלוחים`,
+              color: 'bg-amber-500/20 text-amber-400'
+            })}
+          </div>
+
+          <!-- Navigation Tabs -->
+          <div class="flex gap-2 bg-slate-800/50 backdrop-blur-sm rounded-xl p-2 border border-slate-700/50">
+            <button onclick="changeView('dashboard')" class="${state.view === 'dashboard' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'} px-4 py-2 rounded-lg font-medium transition-all flex-1">
+              דשבורד
+            </button>
+            <button onclick="changeView('active')" class="${state.view === 'active' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'} px-4 py-2 rounded-lg font-medium transition-all flex-1">
+              פעילים (${activeOrders.length})
+            </button>
+            <button onclick="changeView('history')" class="${state.view === 'history' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'} px-4 py-2 rounded-lg font-medium transition-all flex-1">
+              היסטוריה
+            </button>
+          </div>
+
+          <!-- Content based on view -->
+          ${state.view === 'dashboard' ? renderDashboardContent() : ''}
+          ${state.view === 'active' ? renderActiveOrders() : ''}
+          ${state.view === 'history' ? renderHistory() : ''}
+        </div>
+      `;
+    }
+
+    function renderDashboardContent() {
+      const { stats } = state;
+      return `
+        <div class="space-y-6">
+          <!-- Earnings Chart Placeholder -->
+          <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              ${Icons.TrendingUp()}
+              רווחים לפי יום (7 ימים אחרונים)
+            </h3>
+            <div class="h-64 flex items-end justify-between gap-2">
+              ${stats.dailyEarnings.map((day, i) => `
+                <div class="flex-1 flex flex-col items-center gap-2">
+                  <div class="w-full bg-gradient-to-t from-emerald-500 to-blue-500 rounded-t-lg transition-all hover:opacity-80" 
+                       style="height: ${(day.amount / Math.max(...stats.dailyEarnings.map(d => d.amount))) * 100}%">
+                  </div>
+                  <div class="text-xs text-slate-400">${day.day}</div>
+                  <div class="text-xs font-medium text-white">${formatCurrency(day.amount)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Recent Activity -->
+          <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              ${Icons.Clock()}
+              פעילות אחרונה
+            </h3>
+            <div class="space-y-3">
+              ${state.orders.slice(0, 5).map(order => `
+                <div class="flex items-center justify-between p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-all">
+                  <div class="flex items-center gap-3">
+                    <div class="${getStatusBadge(order.status).bg} ${getStatusBadge(order.status).text} p-2 rounded-lg">
+                      ${Icons.Package()}
+                    </div>
+                    <div>
+                      <div class="text-white font-medium">#${order.order_number}</div>
+                      <div class="text-xs text-slate-400">${order.delivery_address}</div>
+                    </div>
+                  </div>
+                  <div class="text-left">
+                    <div class="text-emerald-400 font-bold">${formatCurrency(order.courier_payout)}</div>
+                    <div class="text-xs text-slate-400">${formatTime(order.created_at)}</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderActiveOrders() {
+      const activeOrders = state.orders.filter(o => ['taken', 'picked'].includes(o.status));
+      
+      if (activeOrders.length === 0) {
+        return `
+          <div class="text-center py-12 bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700/50">
+            <div class="w-20 h-20 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-4">
+              ${Icons.Package()}
+            </div>
+            <h3 class="text-lg font-medium text-white mb-2">אין משלוחים פעילים</h3>
+            <p class="text-slate-400">כל המשלוחים הושלמו!</p>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          ${activeOrders.map(order => OrderCard(order)).join('')}
+        </div>
+      `;
+    }
+
+    function renderHistory() {
+      const completedOrders = state.orders.filter(o => o.status === 'delivered');
+      
+      return `
+        <div>
+          <!-- Period Selector -->
+          <div class="flex gap-2 mb-4 bg-slate-800/50 backdrop-blur-sm rounded-xl p-2 border border-slate-700/50">
+            <button onclick="changePeriod('today')" class="${state.period === 'today' ? 'bg-emerald-500 text-white' : 'text-slate-400'} px-4 py-2 rounded-lg text-sm font-medium transition-all">
+              היום
+            </button>
+            <button onclick="changePeriod('week')" class="${state.period === 'week' ? 'bg-emerald-500 text-white' : 'text-slate-400'} px-4 py-2 rounded-lg text-sm font-medium transition-all">
+              השבוע
+            </button>
+            <button onclick="changePeriod('month')" class="${state.period === 'month' ? 'bg-emerald-500 text-white' : 'text-slate-400'} px-4 py-2 rounded-lg text-sm font-medium transition-all">
+              החודש
+            </button>
+            <button onclick="changePeriod('all')" class="${state.period === 'all' ? 'bg-emerald-500 text-white' : 'text-slate-400'} px-4 py-2 rounded-lg text-sm font-medium transition-all">
+              הכל
+            </button>
+          </div>
+
+          <!-- Orders Grid -->
+          <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${completedOrders.map(order => OrderCard(order)).join('')}
+          </div>
+
+          ${completedOrders.length === 0 ? `
+            <div class="text-center py-12 bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700/50">
+              <p class="text-slate-400">אין משלוחים בתקופה זו</p>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    // Event Handlers
+    function changeView(view) {
+      state.view = view;
+      render();
+    }
+
+    function changePeriod(period) {
+      state.period = period;
+      render();
+    }
+
+    // Main Render
+    function render() {
+      const app = document.getElementById('app');
+      
+      if (state.loading) {
+        app.innerHTML = LoadingScreen();
+        return;
+      }
+
+      if (state.error) {
+        app.innerHTML = ErrorScreen(state.error);
+        return;
+      }
+
+      app.innerHTML = Dashboard();
+    }
+
+    // Initialize
+    async function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const phone = urlParams.get('phone');
+
+      if (!phone) {
+        state.error = 'לא צוין מספר טלפון';
+        state.loading = false;
+        render();
+        return;
+      }
+
+      try {
+        const data = await fetchCourierData(phone);
+        state.courier = data.courier;
+        state.stats = data.stats;
+        state.orders = data.orders;
+        state.loading = false;
+        render();
+      } catch (error) {
+        state.error = error.message;
+        state.loading = false;
+        render();
+      }
+    }
+
+    // Start
+    init();
+  </script>
+</body>
+</html>
