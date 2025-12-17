@@ -524,7 +524,15 @@
           <span id="distancePrice">₪0</span>
         </div>
         <div class="price-row">
-          <span>סה"כ:</span>
+          <span>סכום ביניים:</span>
+          <span id="subtotalPrice">₪0</span>
+        </div>
+        <div class="price-row">
+          <span>מע"ם (18%):</span>
+          <span id="vatPrice">₪0</span>
+        </div>
+        <div class="price-row">
+          <span>סה"כ כולל מע"ם:</span>
           <span id="totalPrice">₪0</span>
         </div>
       </div>
@@ -562,6 +570,7 @@
 
   <script>
     const API_URL = window.location.origin;
+    const VAT_RATE = 0.18; // מע"ם 18%
     let selectedVehicleType = null;
     let selectedVehicleBase = 0;
     let calculatedDistance = 0;
@@ -574,7 +583,7 @@
       
       if (!customerPhone) {
         alert('נא להתחבר תחילה');
-        window.location.href = '/customer/dashboard';
+        window.location.href = '/customer-dashboard.html';
         return;
       }
 
@@ -634,12 +643,16 @@
 
         calculatedDistance = data.distance;
         const distancePrice = Math.max(0, (calculatedDistance - 1) * 2.5); // 2.5 לק"מ אחרי הק"מ הראשון
-        const totalPrice = selectedVehicleBase + distancePrice;
+        const subtotal = selectedVehicleBase + distancePrice;
+        const vat = subtotal * VAT_RATE;
+        const totalPrice = subtotal + vat;
 
         // Update UI
-        document.getElementById('basePrice').textContent = `₪${selectedVehicleBase}`;
+        document.getElementById('basePrice').textContent = `₪${selectedVehicleBase.toFixed(0)}`;
         document.getElementById('distanceText').textContent = `${calculatedDistance.toFixed(1)} ק"מ`;
         document.getElementById('distancePrice').textContent = `₪${distancePrice.toFixed(0)}`;
+        document.getElementById('subtotalPrice').textContent = `₪${subtotal.toFixed(0)}`;
+        document.getElementById('vatPrice').textContent = `₪${vat.toFixed(0)}`;
         document.getElementById('totalPrice').textContent = `₪${totalPrice.toFixed(0)}`;
 
         summary.classList.remove('hidden');
@@ -674,6 +687,11 @@
       errorAlert.classList.add('hidden');
 
       try {
+        const distancePrice = Math.max(0, (calculatedDistance - 1) * 2.5);
+        const subtotal = selectedVehicleBase + distancePrice;
+        const vat = subtotal * VAT_RATE;
+        const totalPrice = subtotal + vat;
+
         const formData = {
           customerPhone: customerPhone,
           pickupAddress: document.getElementById('pickupAddress').value.trim(),
@@ -689,7 +707,9 @@
           vehicleType: selectedVehicleType,
           distance: calculatedDistance,
           basePrice: selectedVehicleBase,
-          totalPrice: selectedVehicleBase + Math.max(0, (calculatedDistance - 1) * 2.5)
+          subtotal: subtotal,
+          vat: vat,
+          totalPrice: totalPrice
         };
 
         const response = await fetch(`${API_URL}/api/orders/create`, {
@@ -702,7 +722,7 @@
 
         if (data.success) {
           alert('✅ ההזמנה נשלחה בהצלחה!\n\nההזמנה ממתינה לאישור מנהל. תקבל עדכון בהקדם.');
-          window.location.href = `/customer/dashboard?phone=${customerPhone}`;
+          window.location.href = `/customer-dashboard.html?phone=${customerPhone}`;
         } else {
           throw new Error(data.message || 'שגיאה ביצירת הזמנה');
         }
