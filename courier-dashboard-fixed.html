@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#10b981">
+  <title>M.M.H Delivery - דאשבורד שליח</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; }
+    .bg-dark-900 { background-color: #0f172a; }
+    .bg-dark-800 { background-color: #1e293b; }
+    .bg-dark-700 { background-color: #334155; }
+    .border-dark-600 { border-color: #475569; }
+    .text-primary { color: #10b981; }
+    .bg-primary { background-color: #10b981; }
+    .animate-pulse-slow { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    .fab-button {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 1000;
+      transition: transform 0.2s;
+    }
+    .fab-button:active { transform: scale(0.95); }
+    .status-badge {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      backdrop-filter: blur(10px);
+    }
+    .online { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .offline { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+  </style>
+</head>
+<body class="bg-dark-900 text-white">
+
+  <!-- Status Badge -->
+  <div id="statusBadge" class="status-badge offline">
+    <div class="w-2 h-2 rounded-full bg-current animate-pulse"></div>
+    <span>לא מחובר</span>
+  </div>
+
+  <!-- Main Container -->
+  <div class="min-h-screen pb-20">
+    
+    <!-- Header -->
+    <header class="bg-dark-800 border-b border-dark-600 sticky top-0 z-40 backdrop-blur-xl bg-opacity-90">
+      <div class="px-4 py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center">
+              🏍️
+            </div>
+            <div>
+              <h1 class="text-lg font-bold" id="courierName">שלום שליח!</h1>
+              <p class="text-xs text-gray-400" id="courierPhone"></p>
+            </div>
+          </div>
+          <button onclick="toggleMenu()" class="w-10 h-10 flex items-center justify-center rounded-lg bg-dark-700 hover:bg-dark-600">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Stats Cards -->
+    <div class="px-4 py-4">
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <!-- Today's Deliveries -->
+        <div class="bg-dark-800 rounded-2xl p-4 border border-dark-600">
+          <div class="text-2xl font-bold text-primary" id="todayCount">0</div>
+          <div class="text-sm text-gray-400 mt-1">משלוחים היום</div>
+        </div>
+        
+        <!-- Today's Earnings -->
+        <div class="bg-dark-800 rounded-2xl p-4 border border-dark-600">
+          <div class="text-2xl font-bold text-amber-400" id="todayEarnings">₪0</div>
+          <div class="text-sm text-gray-400 mt-1">הרווחת היום</div>
+        </div>
+        
+        <!-- Balance -->
+        <div class="bg-dark-800 rounded-2xl p-4 border border-dark-600">
+          <div class="text-2xl font-bold text-blue-400" id="balance">₪0</div>
+          <div class="text-sm text-gray-400 mt-1">יתרה זמינה</div>
+        </div>
+        
+        <!-- Rating -->
+        <div class="bg-dark-800 rounded-2xl p-4 border border-dark-600">
+          <div class="text-2xl font-bold text-yellow-400" id="rating">5.0 ⭐</div>
+          <div class="text-sm text-gray-400 mt-1">דירוג ממוצע</div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="grid grid-cols-2 gap-3 mb-6">
+        <button onclick="toggleOnlineStatus()" class="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 shadow-lg">
+          <span id="onlineButtonText">🟢 התחל עבודה</span>
+        </button>
+        <button onclick="viewEarnings()" class="bg-dark-800 border border-dark-600 text-white px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2">
+          💰 הרווחים שלי
+        </button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
+        <button onclick="switchTab('available')" id="tab-available" class="tab-btn active px-4 py-2 rounded-lg font-medium whitespace-nowrap">
+          זמינים <span class="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full ml-1" id="availableCount">0</span>
+        </button>
+        <button onclick="switchTab('active')" id="tab-active" class="tab-btn px-4 py-2 rounded-lg font-medium whitespace-nowrap">
+          פעילים <span class="bg-blue-500 text-white text-xs px-2 py-0.5 rounded-full ml-1" id="activeCount">0</span>
+        </button>
+        <button onclick="switchTab('history')" id="tab-history" class="tab-btn px-4 py-2 rounded-lg font-medium whitespace-nowrap">
+          היסטוריה
+        </button>
+      </div>
+
+      <!-- Available Orders -->
+      <div id="availableOrders" class="space-y-3">
+        <div class="text-center py-12 text-gray-500">
+          <div class="text-5xl mb-3">📦</div>
+          <div class="font-medium">אין משלוחים זמינים כרגע</div>
+          <div class="text-sm mt-1">נודיע לך כשיהיה משלוח חדש</div>
+        </div>
+      </div>
+
+      <!-- Active Orders -->
+      <div id="activeOrders" class="space-y-3 hidden">
+        <div class="text-center py-12 text-gray-500">
+          <div class="text-5xl mb-3">✅</div>
+          <div class="font-medium">אין משלוחים פעילים</div>
+          <div class="text-sm mt-1">תפוס משלוח כדי להתחיל</div>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div id="historyOrders" class="space-y-3 hidden">
+        <div class="text-center py-12 text-gray-500">
+          <div class="text-5xl mb-3">📋</div>
+          <div class="font-medium">אין היסטוריה עדיין</div>
+          <div class="text-sm mt-1">המשלוחים שהשלמת יופיעו כאן</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FAB Button -->
+  <div class="fab-button" onclick="refreshOrders()">
+    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+    </svg>
+  </div>
+
+  <!-- Menu Modal -->
+  <div id="menuModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden" onclick="if(event.target===this) toggleMenu()">
+    <div class="bg-dark-800 h-full max-w-xs mr-auto shadow-2xl">
+      <div class="p-4 border-b border-dark-600">
+        <h2 class="text-xl font-bold">תפריט</h2>
+      </div>
+      <div class="p-4 space-y-2">
+        <a href="#" onclick="viewProfile()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
+          👤 הפרופיל שלי
+        </a>
+        <a href="#" onclick="viewEarnings()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
+          💰 הרווחים שלי
+        </a>
+        <a href="#" onclick="viewSettings()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
+          ⚙️ הגדרות
+        </a>
+        <a href="#" onclick="viewHelp()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
+          ❓ עזרה ותמיכה
+        </a>
+        <a href="#" onclick="logout()" class="block p-3 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 mt-4">
+          🚪 התנתק
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-dark-800 text-white px-6 py-3 rounded-xl shadow-2xl z-50 hidden">
+    <span id="toastMessage"></span>
+  </div>
+
+  <script>
+    // ==================== CONFIG ====================
+    const API_URL = window.location.origin;
+    
+    let courier = null;
+    let courierPhone = null;
+    let isOnline = false;
+    let currentTab = 'available';
+    
+    // ==================== INIT ====================
+    async function init() {
+      // קבלת מספר טלפון מה-URL או מ-localStorage
+      const urlParams = new URLSearchParams(window.location.search);
+      courierPhone = urlParams.get('phone') || localStorage.getItem('courier_phone');
+      
+      if (!courierPhone) {
+        window.location.href = '/courier/login';
+        return;
+      }
+      
+      // שמירה ב-localStorage
+      localStorage.setItem('courier_phone', courierPhone);
+      
+      // טעינת נתוני שליח
+      await loadCourierData();
+      
+      // טעינת הזמנות
+      await loadOrders();
+      
+      // התחלת polling כל 10 שניות
+      setInterval(loadOrders, 10000);
+    }
+    
+    // ==================== LOAD DATA ====================
+    async function loadCourierData() {
+      try {
+        // קבלת פרטי שליח
+        const response = await fetch(`${API_URL}/api/couriers/phone/${courierPhone}`);
+        
+        if (!response.ok) {
+          throw new Error('שליח לא נמצא');
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.message || 'שגיאה בטעינת נתונים');
+        }
+        
+        courier = data.courier;
+        
+        // עדכון UI
+        document.getElementById('courierName').textContent = `שלום ${courier.first_name}!`;
+        document.getElementById('courierPhone').textContent = courier.phone;
+        document.getElementById('balance').textContent = `₪${courier.balance || 0}`;
+        document.getElementById('rating').textContent = `${courier.rating || 5.0} ⭐`;
+        
+      } catch (error) {
+        console.error('Error loading courier data:', error);
+        showToast('❌ שגיאה בטעינת נתונים');
+        // אם השליח לא נמצא, חזרה ללוגין
+        setTimeout(() => window.location.href = '/courier/login', 2000);
+      }
+    }
+
+    async function loadOrders() {
+      if (!courier) return;
+      
+      try {
+        // קבלת כל ההזמנות של השליח
+        const response = await fetch(`${API_URL}/api/couriers/${courier.id}/orders`);
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.message || 'שגיאה בטעינת הזמנות');
+        }
+        
+        const orders = data.orders || [];
+        
+        // סינון הזמנות
+        const availableOrders = orders.filter(o => o.status === 'published');
+        const activeOrders = orders.filter(o => ['taken', 'picked'].includes(o.status) && o.courier_id === courier.id);
+        const historyOrders = orders.filter(o => ['delivered', 'cancelled'].includes(o.status) && o.courier_id === courier.id);
+        
+        // חישוב סטטיסטיקות
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const todayOrders = historyOrders.filter(o => {
+          const orderDate = new Date(o.created_at);
+          orderDate.setHours(0, 0, 0, 0);
+          return orderDate.getTime() === today.getTime() && o.status === 'delivered';
+        });
+        
+        const todayEarnings = todayOrders.reduce((sum, o) => sum + parseFloat(o.courier_payout || 0), 0);
+        
+        // עדכון UI
+        document.getElementById('todayCount').textContent = todayOrders.length;
+        document.getElementById('todayEarnings').textContent = `₪${todayEarnings.toFixed(0)}`;
+        document.getElementById('availableCount').textContent = availableOrders.length;
+        document.getElementById('activeCount').textContent = activeOrders.length;
+        
+        // הצגת הזמנות
+        renderOrders('available', availableOrders);
+        renderOrders('active', activeOrders);
+        renderOrders('history', historyOrders);
+        
+      } catch (error) {
+        console.error('Error loading orders:', error);
+        showToast('❌ שגיאה בטעינת הזמנות');
+      }
+    }
+
+    function renderOrders(type, orders) {
+      const container = document.getElementById(`${type}Orders`);
+      
+      if (orders.length === 0) {
+        const messages = {
+          available: { icon: '📦', title: 'אין משלוחים זמינים כרגע', subtitle: 'נודיע לך כשיהיה משלוח חדש' },
+          active: { icon: '✅', title: 'אין משלוחים פעילים', subtitle: 'תפוס משלוח כדי להתחיל' },
+          history: { icon: '📋', title: 'אין היסטוריה עדיין', subtitle: 'המשלוחים שהשלמת יופיעו כאן' }
+        };
+        
+        const msg = messages[type];
+        container.innerHTML = `
+          <div class="text-center py-12 text-gray-500">
+            <div class="text-5xl mb-3">${msg.icon}</div>
+            <div class="font-medium">${msg.title}</div>
+            <div class="text-sm mt-1">${msg.subtitle}</div>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = orders.map(order => {
+        if (type === 'available') {
+          return `
+            <div class="bg-dark-800 rounded-2xl p-4 border border-dark-600">
+              <div class="flex items-start justify-between mb-3">
+                <div class="flex-1">
+                  <div class="font-bold text-lg">#${order.order_number}</div>
+                  <div class="text-sm text-gray-400">${formatDate(order.created_at)}</div>
+                </div>
+                <div class="text-2xl font-bold text-emerald-400">₪${order.courier_payout || 0}</div>
+              </div>
+              
+              <div class="space-y-2 text-sm">
+                <div class="flex items-start gap-2">
+                  <span class="text-amber-400">📍</span>
+                  <div class="flex-1">
+                    <div class="text-gray-400">איסוף</div>
+                    <div>${order.pickup_address}</div>
+                  </div>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span class="text-emerald-400">📍</span>
+                  <div class="flex-1">
+                    <div class="text-gray-400">מסירה</div>
+                    <div>${order.delivery_address}</div>
+                  </div>
+                </div>
+              </div>
+              
+              <button onclick="takeOrder(${order.id})" class="w-full mt-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white py-3 rounded-xl font-bold">
+                תפוס משלוח
+              </button>
+            </div>
+          `;
+        }
+        
+        if (type === 'active') {
+          const statusText = order.status === 'taken' ? 'נתפס - לאיסוף' : 'נאסף - למסירה';
+          const nextAction = order.status === 'taken' ? 
+            `<button onclick="updateStatus(${order.id}, 'picked')" class="flex-1 bg-purple-500 text-white py-2 rounded-lg font-medium">אספתי את החבילה</button>` :
+            `<button onclick="completeDelivery(${order.id})" class="flex-1 bg-emerald-500 text-white py-2 rounded-lg font-medium">מסרתי את החבילה</button>`;
+          
+          return `
+            <div class="bg-dark-800 rounded-2xl p-4 border border-emerald-600/50">
+              <div class="flex items-start justify-between mb-3">
+                <div class="flex-1">
+                  <div class="font-bold text-lg">#${order.order_number}</div>
+                  <div class="text-sm text-emerald-400">${statusText}</div>
+                </div>
+                <div class="text-xl font-bold text-emerald-400">₪${order.courier_payout || 0}</div>
+              </div>
+              
+              <div class="space-y-2 text-sm mb-3">
+                <div class="flex items-start gap-2">
+                  <span class="text-amber-400">📍</span>
+                  <div class="flex-1">
+                    <div class="text-gray-400">איסוף</div>
+                    <div>${order.pickup_address}</div>
+                  </div>
+                  <button onclick="navigate('${order.pickup_address}')" class="text-blue-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="flex items-start gap-2">
+                  <span class="text-emerald-400">📍</span>
+                  <div class="flex-1">
+                    <div class="text-gray-400">מסירה</div>
+                    <div>${order.delivery_address}</div>
+                  </div>
+                  <button onclick="navigate('${order.delivery_address}')" class="text-blue-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+                    </svg>
+                  </button>
+                </div>
+                ${order.receiver_phone ? `
+                <div class="flex items-center gap-2">
+                  <span class="text-blue-400">📱</span>
+                  <div class="text-gray-400">${order.receiver_phone}</div>
+                  <button onclick="callCustomer('${order.receiver_phone}')" class="mr-auto text-blue-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                    </svg>
+                  </button>
+                </div>` : ''}
+              </div>
+              
+              <div class="flex gap-2">
+                ${nextAction}
+              </div>
+            </div>
+          `;
+        }
+        
+        if (type === 'history') {
+          const statusColors = {
+            delivered: 'text-emerald-400',
+            cancelled: 'text-red-400'
+          };
+          const statusTexts = {
+            delivered: 'נמסר',
+            cancelled: 'בוטל'
+          };
+          
+          return `
+            <div class="bg-dark-800 rounded-2xl p-4 border border-dark-600">
+              <div class="flex items-start justify-between mb-2">
+                <div class="flex-1">
+                  <div class="font-bold">#${order.order_number}</div>
+                  <div class="text-sm text-gray-400">${formatDate(order.created_at)}</div>
+                </div>
+                <div>
+                  <div class="text-lg font-bold ${statusColors[order.status]}">₪${order.courier_payout || 0}</div>
+                  <div class="text-xs ${statusColors[order.status]}">${statusTexts[order.status]}</div>
+                </div>
+              </div>
+              
+              <div class="text-sm text-gray-400">
+                ${order.pickup_address.substring(0, 30)}... → ${order.delivery_address.substring(0, 30)}...
+              </div>
+            </div>
+          `;
+        }
+      }).join('');
+    }
+
+    // ==================== ACTIONS ====================
+    function toggleOnlineStatus() {
+      isOnline = !isOnline;
+      updateOnlineStatus();
+      showToast(isOnline ? '✅ התחלת עבודה!' : '🔴 סיימת עבודה');
+    }
+
+    function updateOnlineStatus() {
+      const badge = document.getElementById('statusBadge');
+      const button = document.getElementById('onlineButtonText');
+      
+      if (isOnline) {
+        badge.className = 'status-badge online';
+        badge.querySelector('span').textContent = 'מחובר';
+        button.textContent = '🔴 סיים עבודה';
+      } else {
+        badge.className = 'status-badge offline';
+        badge.querySelector('span').textContent = 'לא מחובר';
+        button.textContent = '🟢 התחל עבודה';
+      }
+    }
+
+    async function takeOrder(orderId) {
+      if (!courier) return;
+      
+      if (!isOnline) {
+        showToast('❌ עליך להתחבר למערכת לפני תפיסת משלוח');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_URL}/api/orders/${orderId}/take`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ courierId: courier.id })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          showToast('✅ המשלוח נתפס בהצלחה!');
+          loadOrders();
+          switchTab('active');
+        } else {
+          showToast(data.message || 'שגיאה בתפיסת המשלוח');
+        }
+      } catch (error) {
+        console.error('Error taking order:', error);
+        showToast('שגיאה בחיבור לשרת');
+      }
+    }
+
+    async function updateStatus(orderId, status) {
+      try {
+        const response = await fetch(`${API_URL}/api/orders/${orderId}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, courierId: courier.id })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          showToast('✅ הסטטוס עודכן!');
+          loadOrders();
+        } else {
+          showToast(data.message || 'שגיאה בעדכון סטטוס');
+        }
+      } catch (error) {
+        console.error('Error updating status:', error);
+        showToast('שגיאה בעדכון סטטוס');
+      }
+    }
+
+    function completeDelivery(orderId) {
+      // Navigate to delivery proof screen
+      window.location.href = `/courier/delivery-proof?orderId=${orderId}`;
+    }
+
+    function callCustomer(phone) {
+      window.location.href = `tel:${phone}`;
+    }
+
+    function navigate(address) {
+      const encoded = encodeURIComponent(address);
+      if (navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
+        window.location.href = `maps://maps.apple.com/?q=${encoded}`;
+      } else {
+        window.open(`https://waze.com/ul?q=${encoded}`, '_blank');
+      }
+    }
+
+    // ==================== TAB SWITCHING ====================
+    function switchTab(tab) {
+      currentTab = tab;
+      
+      // Update buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(`tab-${tab}`).classList.add('active');
+      
+      // Show/hide content
+      document.getElementById('availableOrders').classList.add('hidden');
+      document.getElementById('activeOrders').classList.add('hidden');
+      document.getElementById('historyOrders').classList.add('hidden');
+      document.getElementById(`${tab}Orders`).classList.remove('hidden');
+    }
+
+    // ==================== MENU & NAVIGATION ====================
+    function toggleMenu() {
+      document.getElementById('menuModal').classList.toggle('hidden');
+    }
+
+    function viewProfile() {
+      window.location.href = '/courier/profile?phone=' + courierPhone;
+    }
+
+    function viewEarnings() {
+      window.location.href = '/courier/earnings?phone=' + courierPhone;
+    }
+
+    function viewSettings() {
+      window.location.href = '/courier/settings?phone=' + courierPhone;
+    }
+
+    function viewHelp() {
+      window.location.href = '/courier/help';
+    }
+
+    function logout() {
+      if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
+        localStorage.removeItem('courier_phone');
+        window.location.href = '/courier/login';
+      }
+    }
+
+    async function refreshOrders() {
+      showToast('🔄 מרענן...');
+      await loadOrders();
+    }
+
+    // ==================== TOAST ====================
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const msg = document.getElementById('toastMessage');
+      msg.textContent = message;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    // ==================== HELPERS ====================
+    function formatDate(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffMins < 1) return 'עכשיו';
+      if (diffMins < 60) return `לפני ${diffMins} דקות`;
+      if (diffHours < 24) return `לפני ${diffHours} שעות`;
+      if (diffDays < 7) return `לפני ${diffDays} ימים`;
+      
+      return date.toLocaleDateString('he-IL');
+    }
+
+    // ==================== STYLES ====================
+    const style = document.createElement('style');
+    style.textContent = `
+      .tab-btn { background: transparent; color: #94a3b8; }
+      .tab-btn.active { background: #1e293b; color: #10b981; border-bottom: 2px solid #10b981; }
+    `;
+    document.head.appendChild(style);
+
+    // ==================== START ====================
+    init();
+  </script>
+</body>
+</html>

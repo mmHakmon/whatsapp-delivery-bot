@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>דשבורד מנהל - M.M.H Delivery</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes countUp { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+    .animate-fadeIn { animation: fadeIn 0.5s ease-out; }
+    .animate-countUp { animation: countUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .gradient-text { background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-white">
+  
+  <!-- Background Effects -->
+  <div class="fixed inset-0 overflow-hidden pointer-events-none">
+    <div class="absolute top-1/4 right-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse"></div>
+    <div class="absolute bottom-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+  </div>
+
+  <div id="app" class="relative z-10"></div>
+
+  <script>
+    const SERVER_URL = 'https://mmh-delivery.onrender.com';
+    
+    // Icons
+    const Icons = {
+      Dashboard: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`,
+      TrendingUp: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18M17 6h6v6"/></svg>`,
+      Package: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg>`,
+      Wallet: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 100 4 2 2 0 000-4z"/></svg>`,
+      Users: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>`,
+      Clock: () => `<svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`,
+      Star: () => `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`,
+      Download: () => `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>`,
+      Calendar: () => `<svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
+    };
+
+    // Utility Functions
+    const formatCurrency = (amount) => `₪${parseFloat(amount || 0).toLocaleString('he-IL', {minimumFractionDigits: 2})}`;
+    const formatNumber = (num) => parseFloat(num || 0).toLocaleString('he-IL');
+
+    // State
+    let state = {
+      analytics: null,
+      loading: true,
+      error: null,
+      period: 30,
+      charts: {}
+    };
+
+    // API Functions
+    async function fetchAnalytics(period) {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${SERVER_URL}/api/manager/analytics?period=${period}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) throw new Error('שגיאה בטעינת נתונים');
+      return response.json();
+    }
+
+    // Chart Creation
+    function createRevenueChart(data) {
+      const ctx = document.getElementById('revenueChart');
+      if (!ctx) return;
+
+      if (state.charts.revenue) state.charts.revenue.destroy();
+
+      state.charts.revenue = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.map(d => new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })),
+          datasets: [{
+            label: 'הכנסות',
+            data: data.map(d => d.revenue || 0),
+            borderColor: 'rgb(16, 185, 129)',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => formatCurrency(context.parsed.y)
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (value) => formatCurrency(value),
+                color: 'rgb(148, 163, 184)'
+              },
+              grid: { color: 'rgba(148, 163, 184, 0.1)' }
+            },
+            x: {
+              ticks: { color: 'rgb(148, 163, 184)' },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function createOrdersChart(data) {
+      const ctx = document.getElementById('ordersChart');
+      if (!ctx) return;
+
+      if (state.charts.orders) state.charts.orders.destroy();
+
+      state.charts.orders = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: data.map(d => new Date(d.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' })),
+          datasets: [
+            {
+              label: 'הושלמו',
+              data: data.map(d => d.completed || 0),
+              backgroundColor: 'rgba(16, 185, 129, 0.8)'
+            },
+            {
+              label: 'בוטלו',
+              data: data.map(d => d.cancelled || 0),
+              backgroundColor: 'rgba(239, 68, 68, 0.8)'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: 'rgb(148, 163, 184)' }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { color: 'rgb(148, 163, 184)' },
+              grid: { color: 'rgba(148, 163, 184, 0.1)' }
+            },
+            x: {
+              ticks: { color: 'rgb(148, 163, 184)' },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    function createHourlyChart(data) {
+      const ctx = document.getElementById('hourlyChart');
+      if (!ctx) return;
+
+      if (state.charts.hourly) state.charts.hourly.destroy();
+
+      // Fill missing hours with 0
+      const hourlyData = Array(24).fill(0);
+      data.forEach(d => {
+        hourlyData[parseInt(d.hour)] = parseInt(d.count);
+      });
+
+      state.charts.hourly = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+          datasets: [{
+            label: 'משלוחים',
+            data: hourlyData,
+            borderColor: 'rgb(59, 130, 246)',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { color: 'rgb(148, 163, 184)' },
+              grid: { color: 'rgba(148, 163, 184, 0.1)' }
+            },
+            x: {
+              ticks: { 
+                color: 'rgb(148, 163, 184)',
+                maxRotation: 0
+              },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+
+    // Components
+    function LoadingScreen() {
+      return `
+        <div class="flex items-center justify-center min-h-screen">
+          <div class="text-center">
+            <div class="w-16 h-16 mx-auto mb-4 animate-pulse">
+              ${Icons.Dashboard()}
+            </div>
+            <p class="text-slate-400">טוען אנליטיקס...</p>
+          </div>
+        </div>
+      `;
+    }
+
+    function StatCard({ icon, label, value, subValue, color, trend }) {
+      return `
+        <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 animate-fadeIn hover:border-slate-600 transition-all">
+          <div class="flex items-start justify-between mb-4">
+            <div class="${color} p-3 rounded-xl">${icon}</div>
+            ${trend !== undefined ? `
+              <div class="text-sm ${trend > 0 ? 'text-emerald-400' : trend < 0 ? 'text-red-400' : 'text-slate-400'} flex items-center gap-1">
+                ${trend > 0 ? '↑' : trend < 0 ? '↓' : '='} ${Math.abs(trend).toFixed(1)}%
+              </div>
+            ` : ''}
+          </div>
+          <div class="text-3xl font-bold text-white mb-1 animate-countUp">${value}</div>
+          <div class="text-sm text-slate-400">${label}</div>
+          ${subValue ? `<div class="text-xs text-slate-500 mt-1">${subValue}</div>` : ''}
+        </div>
+      `;
+    }
+
+    function Dashboard() {
+      const { analytics } = state;
+      const { overview, topCouriers } = analytics;
+
+      return `
+        <div class="min-h-screen">
+          <!-- Header -->
+          <header class="bg-slate-900/50 backdrop-blur-xl border-b border-slate-700/50 sticky top-0 z-10">
+            <div class="max-w-7xl mx-auto px-4 py-4">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-gradient-to-br from-emerald-400 to-blue-500 rounded-xl flex items-center justify-center">
+                    ${Icons.Dashboard()}
+                  </div>
+                  <div>
+                    <h1 class="text-xl font-bold gradient-text">M.M.H Delivery</h1>
+                    <p class="text-xs text-slate-400">דשבורד מנהל</p>
+                  </div>
+                </div>
+
+                <!-- Period Selector -->
+                <div class="flex gap-2 bg-slate-800/50 rounded-xl p-1 border border-slate-700/50">
+                  <button onclick="changePeriod(7)" class="${state.period === 7 ? 'bg-emerald-500 text-white' : 'text-slate-400'} px-3 py-1.5 rounded-lg text-sm font-medium transition-all">
+                    7 ימים
+                  </button>
+                  <button onclick="changePeriod(30)" class="${state.period === 30 ? 'bg-emerald-500 text-white' : 'text-slate-400'} px-3 py-1.5 rounded-lg text-sm font-medium transition-all">
+                    30 ימים
+                  </button>
+                  <button onclick="changePeriod(90)" class="${state.period === 90 ? 'bg-emerald-500 text-white' : 'text-slate-400'} px-3 py-1.5 rounded-lg text-sm font-medium transition-all">
+                    90 ימים
+                  </button>
+                </div>
+              </div>
+            </div>
+          </header>
+
+          <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+            <!-- Main Stats -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              ${StatCard({
+                icon: Icons.Package(),
+                label: 'משלוחים שהושלמו',
+                value: formatNumber(overview.completedOrders),
+                subValue: `${overview.cancelledOrders} בוטלו`,
+                color: 'bg-emerald-500/20 text-emerald-400'
+              })}
+              ${StatCard({
+                icon: Icons.Wallet(),
+                label: 'סה״כ הכנסות',
+                value: formatCurrency(overview.totalRevenue),
+                subValue: `רווח: ${formatCurrency(overview.totalCommission)}`,
+                color: 'bg-blue-500/20 text-blue-400'
+              })}
+              ${StatCard({
+                icon: Icons.Users(),
+                label: 'תשלומים לשליחים',
+                value: formatCurrency(overview.totalPayouts),
+                subValue: `ממוצע למשלוח: ${formatCurrency(overview.totalPayouts / (overview.completedOrders || 1))}`,
+                color: 'bg-purple-500/20 text-purple-400'
+              })}
+              ${StatCard({
+                icon: Icons.Clock(),
+                label: 'זמן מסירה ממוצע',
+                value: `${overview.avgDeliveryTime} דק'`,
+                subValue: `משלוחים פעילים: ${overview.activeOrders}`,
+                color: 'bg-amber-500/20 text-amber-400'
+              })}
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid md:grid-cols-2 gap-6">
+              <!-- Revenue Chart -->
+              <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+                <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  ${Icons.TrendingUp()}
+                  הכנסות יומיות
+                </h3>
+                <div class="h-64">
+                  <canvas id="revenueChart"></canvas>
+                </div>
+              </div>
+
+              <!-- Orders Chart -->
+              <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+                <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  ${Icons.Package()}
+                  משלוחים יומיים
+                </h3>
+                <div class="h-64">
+                  <canvas id="ordersChart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Hourly Distribution -->
+            <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+              <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                ${Icons.Clock()}
+                התפלגות משלוחים לפי שעות
+              </h3>
+              <div class="h-64">
+                <canvas id="hourlyChart"></canvas>
+              </div>
+            </div>
+
+            <!-- Top Couriers -->
+            <div class="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+              <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                  ${Icons.Users()}
+                  שליחים מובילים
+                </h3>
+                <span class="text-sm text-slate-400">${state.period} ימים אחרונים</span>
+              </div>
+              
+              <div class="space-y-3">
+                ${topCouriers.slice(0, 10).map((courier, index) => `
+                  <div class="flex items-center gap-4 p-4 bg-slate-700/30 rounded-xl hover:bg-slate-700/50 transition-all">
+                    <div class="flex-shrink-0">
+                      <div class="w-10 h-10 ${
+                        index === 0 ? 'bg-amber-500' :
+                        index === 1 ? 'bg-slate-400' :
+                        index === 2 ? 'bg-orange-600' :
+                        'bg-slate-600'
+                      } rounded-full flex items-center justify-center font-bold text-white">
+                        ${index + 1}
+                      </div>
+                    </div>
+                    
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="font-medium text-white">${courier.name}</span>
+                        ${courier.rating ? `
+                          <div class="flex items-center gap-1 text-amber-400 text-sm">
+                            ${Icons.Star()}
+                            <span>${courier.rating}</span>
+                          </div>
+                        ` : ''}
+                      </div>
+                      <div class="text-sm text-slate-400" dir="ltr">${courier.phone}</div>
+                    </div>
+                    
+                    <div class="text-left">
+                      <div class="text-emerald-400 font-bold">${formatCurrency(courier.earned)}</div>
+                      <div class="text-xs text-slate-400">${courier.deliveries} משלוחים</div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+
+            <!-- Export Button -->
+            <div class="flex justify-center">
+              <button onclick="exportData()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-6 py-3 rounded-xl font-medium transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20">
+                ${Icons.Download()}
+                ייצא נתונים לאקסל
+              </button>
+            </div>
+          </main>
+        </div>
+      `;
+    }
+
+    // Event Handlers
+    async function changePeriod(period) {
+      state.period = period;
+      state.loading = true;
+      render();
+      
+      try {
+        state.analytics = await fetchAnalytics(period);
+        state.loading = false;
+        render();
+        setTimeout(createCharts, 100);
+      } catch (error) {
+        state.error = error.message;
+        state.loading = false;
+        render();
+      }
+    }
+
+    async function exportData() {
+      const token = localStorage.getItem('token');
+      const from = new Date(Date.now() - state.period * 24 * 60 * 60 * 1000).toISOString();
+      const to = new Date().toISOString();
+      
+      window.open(`${SERVER_URL}/api/export/orders?from=${from}&to=${to}`, '_blank');
+    }
+
+    function createCharts() {
+      if (!state.analytics) return;
+      
+      createRevenueChart(state.analytics.dailyOrders);
+      createOrdersChart(state.analytics.dailyOrders);
+      createHourlyChart(state.analytics.hourlyDistribution);
+    }
+
+    // Main Render
+    function render() {
+      const app = document.getElementById('app');
+      
+      if (state.loading) {
+        app.innerHTML = LoadingScreen();
+        return;
+      }
+
+      if (state.error) {
+        app.innerHTML = `<div class="p-4 text-red-400">${state.error}</div>`;
+        return;
+      }
+
+      app.innerHTML = Dashboard();
+    }
+
+    // Initialize
+    async function init() {
+      try {
+        state.analytics = await fetchAnalytics(state.period);
+        state.loading = false;
+        render();
+        setTimeout(createCharts, 100);
+      } catch (error) {
+        state.error = error.message;
+        state.loading = false;
+        render();
+      }
+    }
+
+    // Start
+    init();
+  </script>
+</body>
+</html>
