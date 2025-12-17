@@ -3879,6 +3879,47 @@ function broadcastToClients(message) {
 
 console.log('✅ Phase 1 & 2 routes loaded successfully');
 
+// ==================== COURIER DASHBOARD API ====================
+
+// Get courier by phone
+app.get('/api/couriers/phone/:phone', async (req, res) => {
+  try {
+    const { phone } = req.params;
+    const result = await pool.query(
+      'SELECT * FROM couriers WHERE phone = $1',
+      [phone]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.json({ success: false, message: 'שליח לא נמצא' });
+    }
+    
+    res.json({ success: true, courier: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching courier:', error);
+    res.status(500).json({ success: false, message: 'שגיאת שרת' });
+  }
+});
+
+// Get courier orders
+app.get('/api/couriers/:id/orders', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT * FROM orders 
+       WHERE status = 'published' 
+       OR (courier_id = $1 AND status IN ('taken', 'picked', 'delivered', 'cancelled'))
+       ORDER BY created_at DESC`,
+      [id]
+    );
+    
+    res.json({ success: true, orders: result.rows });
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({ success: false, message: 'שגיאת שרת' });
+  }
+});
+
 // ==================== START ====================
 server.listen(CONFIG.PORT, '0.0.0.0', () => {
   console.log('');
