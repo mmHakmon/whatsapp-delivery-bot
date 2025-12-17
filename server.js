@@ -4757,7 +4757,7 @@ app.get('/api/couriers/:id/payout-history', async (req, res) => {
 // ==================== COURIER PROFILE ====================
 
 // Get courier full profile
-app.get('/api/couriers/:id/profile', async (req, res) => {
+app.get('/api/couriers/:id/courier-profile', async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -4779,7 +4779,7 @@ app.get('/api/couriers/:id/profile', async (req, res) => {
 });
 
 // Update courier profile
-app.put('/api/couriers/:id/profile', async (req, res) => {
+app.put('/api/couriers/:id/courier-profile', async (req, res) => {
   try {
     const { id } = req.params;
     const { first_name, last_name, email, address, vehicle_type, vehicle_plate } = req.body;
