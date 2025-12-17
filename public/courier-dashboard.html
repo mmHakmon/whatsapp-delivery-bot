@@ -214,11 +214,17 @@
     
     // ==================== INIT ====================
     async function init() {
-      const phone = localStorage.getItem('courier_phone');
+      // Try to get phone from URL first, then localStorage
+      const urlParams = new URLSearchParams(window.location.search);
+      let phone = urlParams.get('phone') || localStorage.getItem('courier_phone');
+      
       if (!phone) {
         window.location.href = '/courier/login';
         return;
       }
+      
+      // Save phone to localStorage for next time
+      localStorage.setItem('courier_phone', phone);
       
       await loadCourierData(phone);
       connectWebSocket();
@@ -234,12 +240,19 @@
         const response = await fetch(`${API_URL}/api/courier/profile?phone=${phone}`);
         const data = await response.json();
         
-        if (data.success) {
+        if (data.success && data.courier) {
           courier = data.courier;
+          console.log('✅ Courier loaded:', courier);
           updateUI();
           loadOrders();
         } else {
-          showToast('שגיאה בטעינת נתונים');
+          console.error('❌ Courier not found:', data);
+          showToast('שליח לא נמצא במערכת');
+          // Redirect back to login after 2 seconds
+          setTimeout(() => {
+            localStorage.removeItem('courier_phone');
+            window.location.href = '/courier/login';
+          }, 2000);
         }
       } catch (error) {
         console.error('Error loading courier data:', error);
