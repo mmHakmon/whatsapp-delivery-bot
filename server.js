@@ -166,6 +166,9 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' })); // הגבלת גודל בקשה
 app.use(rateLimit()); // Rate limiting גלובלי
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
 // ==================== STATIC LOGO ====================
 // הלוגו יכול להיות מקישור חיצוני או מקובץ סטטי
 const LOGO_URL = process.env.LOGO_URL || 'https://i.ibb.co/39WjvNZm/favicon.png';
