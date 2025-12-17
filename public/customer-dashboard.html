@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#6366f1">
+  <title>M.M.H Delivery - המשלוחים שלי</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_KEY"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; }
+    .bg-dark-900 { background-color: #0f172a; }
+    .bg-dark-800 { background-color: #1e293b; }
+    .bg-dark-700 { background-color: #334155; }
+    .border-dark-600 { border-color: #475569; }
+    #map { height: 300px; border-radius: 16px; }
+    .timeline { position: relative; padding-right: 40px; }
+    .timeline-item { position: relative; padding-bottom: 24px; }
+    .timeline-item:before {
+      content: '';
+      position: absolute;
+      right: -32px;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      background: #334155;
+    }
+    .timeline-dot {
+      position: absolute;
+      right: -40px;
+      top: 0;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 3px solid #0f172a;
+    }
+    .timeline-item.active .timeline-dot { background: #10b981; box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2); }
+    .timeline-item.completed .timeline-dot { background: #6366f1; }
+    .timeline-item.pending .timeline-dot { background: #475569; }
+  </style>
+</head>
+<body class="bg-dark-900 text-white">
+
+  <div class="min-h-screen pb-20">
+    
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-6 shadow-xl">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold">המשלוחים שלי</h1>
+          <p class="text-indigo-100 text-sm mt-1" id="userPhone"></p>
+        </div>
+        <button onclick="toggleMenu()" class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Quick Stats -->
+    <div class="px-4 -mt-4 mb-6">
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-dark-800 rounded-xl p-3 border border-dark-600">
+          <div class="text-2xl font-bold text-indigo-400" id="activeCount">0</div>
+          <div class="text-xs text-gray-400 mt-1">פעילים</div>
+        </div>
+        <div class="bg-dark-800 rounded-xl p-3 border border-dark-600">
+          <div class="text-2xl font-bold text-emerald-400" id="completedCount">0</div>
+          <div class="text-xs text-gray-400 mt-1">הושלמו</div>
+        </div>
+        <div class="bg-dark-800 rounded-xl p-3 border border-dark-600">
+          <div class="text-2xl font-bold text-amber-400" id="totalCount">0</div>
+          <div class="text-xs text-gray-400 mt-1">סה"כ</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- New Order Button -->
+    <div class="px-4 mb-6">
+      <button onclick="newOrder()" class="w-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-4 rounded-2xl font-bold shadow-xl flex items-center justify-center gap-2">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        משלוח חדש
+      </button>
+    </div>
+
+    <!-- Active Deliveries -->
+    <div class="px-4 mb-6">
+      <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+        <svg class="w-5 h-5 text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z"/><path d="M12 2.252A8.014 8.014 0 0117.748 8H12V2.252z"/>
+        </svg>
+        משלוחים פעילים
+      </h2>
+      <div id="activeOrders" class="space-y-3"></div>
+    </div>
+
+    <!-- Recent Deliveries -->
+    <div class="px-4">
+      <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        היסטוריה
+      </h2>
+      <div id="historyOrders" class="space-y-3"></div>
+    </div>
+  </div>
+
+  <!-- Tracking Modal -->
+  <div id="trackingModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden overflow-y-auto" onclick="if(event.target===this) closeTracking()">
+    <div class="min-h-full flex items-center justify-center p-4">
+      <div class="bg-dark-800 rounded-3xl w-full max-w-lg shadow-2xl" onclick="event.stopPropagation()">
+        <!-- Modal Header -->
+        <div class="p-4 border-b border-dark-600 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
+              📦
+            </div>
+            <div>
+              <h3 class="font-bold text-lg" id="trackingOrderNumber">משלוח #1234</h3>
+              <p class="text-sm text-gray-400" id="trackingStatus">בדרך אליך</p>
+            </div>
+          </div>
+          <button onclick="closeTracking()" class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-dark-700">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Map -->
+        <div class="p-4">
+          <div id="map" class="bg-dark-700 flex items-center justify-center text-gray-500">
+            <div class="text-center">
+              <div class="text-4xl mb-2">🗺️</div>
+              <div>מעקב בזמן אמת</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Courier Info -->
+        <div id="courierInfo" class="px-4 pb-4 hidden">
+          <div class="bg-dark-700 rounded-2xl p-4">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-2xl">
+                👤
+              </div>
+              <div class="flex-1">
+                <div class="font-bold" id="courierName">שם השליח</div>
+                <div class="text-sm text-gray-400 flex items-center gap-2">
+                  <span id="courierVehicle">🏍️ אופנוע</span>
+                  <span>•</span>
+                  <span id="courierRating">⭐ 4.8</span>
+                </div>
+              </div>
+              <button onclick="callCourier()" class="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="px-4 pb-4">
+          <div class="bg-dark-700 rounded-2xl p-4">
+            <div class="text-sm font-bold mb-4 text-gray-400">מעקב משלוח</div>
+            <div class="timeline" id="timeline">
+              <!-- Timeline items will be inserted here -->
+            </div>
+          </div>
+        </div>
+
+        <!-- ETA -->
+        <div id="etaInfo" class="px-4 pb-4 hidden">
+          <div class="bg-gradient-to-r from-indigo-500/20 to-purple-600/20 border border-indigo-500/30 rounded-2xl p-4 text-center">
+            <div class="text-sm text-gray-400 mb-1">זמן הגעה משוער</div>
+            <div class="text-2xl font-bold text-indigo-400" id="etaTime">15 דקות</div>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="p-4 border-t border-dark-600">
+          <button onclick="shareTracking()" class="w-full bg-dark-700 hover:bg-dark-600 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+            </svg>
+            שתף מעקב
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menu Modal -->
+  <div id="menuModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden" onclick="if(event.target===this) toggleMenu()">
+    <div class="bg-dark-800 h-full max-w-xs mr-auto shadow-2xl">
+      <div class="p-4 border-b border-dark-600">
+        <h2 class="text-xl font-bold">תפריט</h2>
+      </div>
+      <div class="p-4 space-y-2">
+        <a href="#" onclick="viewProfile()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
+          👤 הפרופיל שלי
+        </a>
+        <a href="#" onclick="viewAddresses()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
+          📍 כתובות שמורות
+        </a>
+        <a href="#" onclick="viewSettings()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
+          ⚙️ הגדרות
+        </a>
+        <a href="#" onclick="viewHelp()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
+          ❓ עזרה ותמיכה
+        </a>
+        <a href="#" onclick="logout()" class="block p-3 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 mt-4">
+          🚪 התנתק
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 bg-dark-800 text-white px-6 py-3 rounded-xl shadow-2xl z-50 hidden">
+    <span id="toastMessage"></span>
+  </div>
+
+  <script>
+    // ==================== CONFIG ====================
+    const API_URL = window.location.origin;
+    const WS_URL = window.location.origin.replace('http', 'ws');
+    
+    let ws = null;
+    let customerPhone = null;
+    let currentOrder = null;
+    let map = null;
+    let courierMarker = null;
+    let pickupMarker = null;
+    let deliveryMarker = null;
+    
+    // ==================== INIT ====================
+    async function init() {
+      customerPhone = localStorage.getItem('customer_phone');
+      if (!customerPhone) {
+        // Try to get from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        customerPhone = urlParams.get('phone');
+        if (customerPhone) {
+          localStorage.setItem('customer_phone', customerPhone);
+        } else {
+          promptPhone();
+          return;
+        }
+      }
+      
+      document.getElementById('userPhone').textContent = customerPhone;
+      await loadOrders();
+      connectWebSocket();
+      
+      // Refresh every 30 seconds
+      setInterval(loadOrders, 30000);
+    }
+
+    function promptPhone() {
+      const phone = prompt('הזן את מספר הטלפון שלך:');
+      if (phone) {
+        customerPhone = phone;
+        localStorage.setItem('customer_phone', phone);
+        document.getElementById('userPhone').textContent = phone;
+        loadOrders();
+      }
+    }
+
+    // ==================== DATA LOADING ====================
+    async function loadOrders() {
+      if (!customerPhone) return;
+      
+      try {
+        const response = await fetch(`${API_URL}/api/customer/orders?phone=${customerPhone}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          const active = data.orders.filter(o => ['new', 'published', 'taken', 'picked'].includes(o.status));
+          const completed = data.orders.filter(o => ['delivered', 'cancelled'].includes(o.status));
+          
+          updateStats(active.length, completed.filter(o => o.status === 'delivered').length, data.orders.length);
+          renderActiveOrders(active);
+          renderHistoryOrders(completed.slice(0, 10));
+        }
+      } catch (error) {
+        console.error('Error loading orders:', error);
+        showToast('שגיאה בטעינת משלוחים');
+      }
+    }
+
+    function updateStats(active, completed, total) {
+      document.getElementById('activeCount').textContent = active;
+      document.getElementById('completedCount').textContent = completed;
+      document.getElementById('totalCount').textContent = total;
+    }
+
+    // ==================== RENDER ====================
+    function renderActiveOrders(orders) {
+      const container = document.getElementById('activeOrders');
+      
+      if (orders.length === 0) {
+        container.innerHTML = `
+          <div class="bg-dark-800 rounded-2xl p-8 border border-dark-600 text-center">
+            <div class="text-5xl mb-3">📦</div>
+            <div class="text-gray-400">אין משלוחים פעילים</div>
+            <div class="text-sm text-gray-500 mt-1">לחץ על "משלוח חדש" להזמנה</div>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = orders.map(order => `
+        <div class="bg-gradient-to-br from-dark-800 to-dark-700 rounded-2xl p-4 border border-dark-600 shadow-lg" onclick="openTracking(${order.id})">
+          <div class="flex items-start justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="text-lg font-bold">#${order.order_number}</span>
+              <span class="px-2 py-1 rounded-lg text-xs ${getStatusColor(order.status)}">
+                ${getStatusText(order.status)}
+              </span>
+            </div>
+            ${order.courier_id ? `
+              <div class="flex items-center gap-1 text-xs text-emerald-400">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd"/>
+                </svg>
+                שליח בדרך
+              </div>
+            ` : ''}
+          </div>
+          
+          <div class="space-y-2 text-sm mb-3">
+            <div class="flex items-start gap-2 text-gray-300">
+              <span class="text-gray-500">📍</span>
+              <div class="flex-1">
+                <div class="text-xs text-gray-500">איסוף</div>
+                <div>${order.pickup_address}</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-2 text-gray-300">
+              <span class="text-gray-500">🏠</span>
+              <div class="flex-1">
+                <div class="text-xs text-gray-500">מסירה</div>
+                <div>${order.delivery_address}</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex items-center justify-between pt-3 border-t border-dark-600">
+            <div class="text-sm text-gray-400">
+              ${new Date(order.created_at).toLocaleString('he-IL', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </div>
+            <button class="text-indigo-400 text-sm font-medium flex items-center gap-1">
+              עקוב במפה
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderHistoryOrders(orders) {
+      const container = document.getElementById('historyOrders');
+      
+      if (orders.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-gray-500">
+            <div class="text-3xl mb-2">📋</div>
+            <div class="text-sm">אין היסטוריה</div>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = orders.map(order => `
+        <div class="bg-dark-800 rounded-xl p-3 border border-dark-600 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 ${order.status === 'delivered' ? 'bg-emerald-500/20' : 'bg-red-500/20'} rounded-lg flex items-center justify-center text-xl">
+              ${order.status === 'delivered' ? '✅' : '❌'}
+            </div>
+            <div>
+              <div class="font-medium">#${order.order_number}</div>
+              <div class="text-xs text-gray-400">
+                ${new Date(order.delivered_at || order.cancelled_at).toLocaleDateString('he-IL')}
+              </div>
+            </div>
+          </div>
+          <div class="text-sm ${order.status === 'delivered' ? 'text-emerald-400' : 'text-red-400'}">
+            ₪${order.price}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ==================== TRACKING ====================
+    async function openTracking(orderId) {
+      try {
+        const response = await fetch(`${API_URL}/api/orders/${orderId}`);
+        const data = await response.json();
+        
+        if (data.success) {
+          currentOrder = data.order;
+          showTrackingModal();
+          updateTrackingInfo();
+          
+          if (currentOrder.courier_id) {
+            loadCourierLocation(currentOrder.courier_id);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading order:', error);
+        showToast('שגיאה בטעינת פרטי משלוח');
+      }
+    }
+
+    function showTrackingModal() {
+      document.getElementById('trackingModal').classList.remove('hidden');
+      
+      // Initialize map
+      if (!map) {
+        map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 13,
+          center: { lat: 32.0853, lng: 34.7818 }, // Tel Aviv
+          styles: darkMapStyle
+        });
+      }
+    }
+
+    function updateTrackingInfo() {
+      if (!currentOrder) return;
+      
+      document.getElementById('trackingOrderNumber').textContent = `משלוח #${currentOrder.order_number}`;
+      document.getElementById('trackingStatus').textContent = getStatusText(currentOrder.status);
+      
+      // Update timeline
+      const timeline = document.getElementById('timeline');
+      const steps = [
+        { key: 'new', label: 'הזמנה התקבלה', icon: '📝' },
+        { key: 'published', label: 'מחפשים שליח', icon: '🔍' },
+        { key: 'taken', label: 'שליח נמצא', icon: '🚀' },
+        { key: 'picked', label: 'החבילה נאספה', icon: '📦' },
+        { key: 'delivered', label: 'נמסר בהצלחה', icon: '✅' }
+      ];
+      
+      const statusOrder = ['new', 'published', 'taken', 'picked', 'delivered'];
+      const currentIndex = statusOrder.indexOf(currentOrder.status);
+      
+      timeline.innerHTML = steps.map((step, index) => {
+        const state = index < currentIndex ? 'completed' : 
+                     index === currentIndex ? 'active' : 'pending';
+        return `
+          <div class="timeline-item ${state}">
+            <div class="timeline-dot"></div>
+            <div class="flex items-start gap-2">
+              <span class="text-xl">${step.icon}</span>
+              <div class="flex-1">
+                <div class="font-medium ${state === 'active' ? 'text-emerald-400' : state === 'completed' ? 'text-indigo-400' : 'text-gray-500'}">
+                  ${step.label}
+                </div>
+                ${getStepTime(step.key)}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      // Show courier info if assigned
+      if (currentOrder.courier_id) {
+        document.getElementById('courierInfo').classList.remove('hidden');
+        document.getElementById('courierName').textContent = currentOrder.courier_name || 'שליח';
+        document.getElementById('courierVehicle').textContent = `🏍️ ${currentOrder.vehicle_type || 'אופנוע'}`;
+        document.getElementById('courierRating').textContent = `⭐ ${currentOrder.courier_rating || '5.0'}`;
+        
+        // Show ETA if available
+        if (currentOrder.estimated_delivery_time) {
+          document.getElementById('etaInfo').classList.remove('hidden');
+          const eta = calculateETA(currentOrder.estimated_delivery_time);
+          document.getElementById('etaTime').textContent = eta;
+        }
+      }
+    }
+
+    function getStepTime(step) {
+      if (!currentOrder) return '';
+      
+      const timeMap = {
+        new: currentOrder.created_at,
+        published: currentOrder.published_at,
+        taken: currentOrder.taken_at,
+        picked: currentOrder.picked_at,
+        delivered: currentOrder.delivered_at
+      };
+      
+      const time = timeMap[step];
+      if (!time) return '';
+      
+      return `<div class="text-xs text-gray-500 mt-1">${new Date(time).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</div>`;
+    }
+
+    function calculateETA(timestamp) {
+      const eta = new Date(timestamp);
+      const now = new Date();
+      const diff = Math.round((eta - now) / 60000);
+      
+      if (diff < 0) return 'בקרוב';
+      if (diff < 60) return `${diff} דקות`;
+      
+      const hours = Math.floor(diff / 60);
+      const mins = diff % 60;
+      return `${hours} שעות ו-${mins} דקות`;
+    }
+
+    async function loadCourierLocation(courierId) {
+      try {
+        const response = await fetch(`${API_URL}/api/courier/location/${courierId}`);
+        const data = await response.json();
+        
+        if (data.success && data.location) {
+          updateMapMarkers(data.location);
+        }
+      } catch (error) {
+        console.error('Error loading courier location:', error);
+      }
+    }
+
+    function updateMapMarkers(location) {
+      if (!map) return;
+      
+      // Update courier marker
+      if (courierMarker) {
+        courierMarker.setPosition({ lat: location.latitude, lng: location.longitude });
+      } else {
+        courierMarker = new google.maps.Marker({
+          position: { lat: location.latitude, lng: location.longitude },
+          map: map,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 10,
+            fillColor: '#10b981',
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 2
+          }
+        });
+      }
+      
+      // Center map on courier
+      map.setCenter({ lat: location.latitude, lng: location.longitude });
+    }
+
+    function closeTracking() {
+      document.getElementById('trackingModal').classList.add('hidden');
+      currentOrder = null;
+    }
+
+    // ==================== ACTIONS ====================
+    function newOrder() {
+      window.location.href = `/customer/new-order?phone=${customerPhone}`;
+    }
+
+    function callCourier() {
+      if (currentOrder && currentOrder.courier_phone) {
+        window.location.href = `tel:${currentOrder.courier_phone}`;
+      }
+    }
+
+    function shareTracking() {
+      if (!currentOrder) return;
+      
+      const url = `${window.location.origin}/track/${currentOrder.order_number}`;
+      if (navigator.share) {
+        navigator.share({
+          title: `מעקב משלוח #${currentOrder.order_number}`,
+          text: 'עקוב אחר המשלוח שלך בזמן אמת',
+          url: url
+        });
+      } else {
+        navigator.clipboard.writeText(url);
+        showToast('✅ הקישור הועתק');
+      }
+    }
+
+    // ==================== WEBSOCKET ====================
+    function connectWebSocket() {
+      ws = new WebSocket(`${WS_URL}`);
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+        ws.send(JSON.stringify({ type: 'customer_auth', phone: customerPhone }));
+      };
+      
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'order_update') {
+          loadOrders();
+          if (currentOrder && currentOrder.id === data.orderId) {
+            openTracking(data.orderId);
+          }
+          playNotificationSound();
+        }
+        
+        if (data.type === 'courier_location' && currentOrder) {
+          updateMapMarkers(data.location);
+        }
+      };
+      
+      ws.onclose = () => {
+        console.log('WebSocket disconnected, reconnecting...');
+        setTimeout(connectWebSocket, 3000);
+      };
+    }
+
+    function playNotificationSound() {
+      const audio = new Audio('data:audio/wav;base64,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qJrx4KOQjahZxWbcZgztj2c49nKmkId44S71j0c8eV9yDK6uPRzx5X18eDvjvQ6yKo9ZSS6l//8elePK/Lf//IInrOF/FvDoADYAGBMGb7FtErm5MXMlmPAJQVgWta7Zx2go+8xJ0UiCb8LHHdftWyLJE0QIAIsI+UbXu67dZMjmgDGCGl1H+vpF4NSDckSIkk7Vd+sxEhBQMRU8j/12UIRhzSaUdQ+rQU5kGeFxm+hb1oh6pWWmv3uvmReDl0UnvtapVaIzo1jZbf/pD6ElLqSX+rUmOQNpJFa/r+sa4e/pBlAABoAAAAA3CUgShLdGIxsY7AUABPRrgCABdDuQ5GC7DqPQCgbbJUAoRSUj+NIEig0YfyWUho1VBBBA//uQZB4ABZx5zfMakeAAAAmwAAAAF5F3P0w9GtAAACfAAAAAwLhMDmAYWMgVEG1U0FIGCBgXBXAtfMH10000EEEEEECUBYln03TTTdNBDZopopYvrTTdNa325mImNg3TTPV9q3pmY0xoO6bv3r00y+IDGid/9aaaZTGMuj9mpu9Mpio1dXrr5HERTZSmqU36A3CumzN/9Robv/Xx4v9ijkSRSNLQhAWumap82WRSBUqXStV/YcS+XVLnSS+WLDroqArFkMEsAS+eWmrUzrO0oEmE40RlMZ5+ODIkAyKAGUwZ3mVKmcamcJnMW26MRPgUw6j+LkhyHGVGYjSUUKNpuJUQoOIAyDvEyG8S5yfK6dhZc0Tx1KI/gviKL6qvvFs1+bWtaz58uUNnryq6kt5RzOCkPWlVqVX2a/EEBUdU1KrXLf40GoiiFXK///qpoiDXrOgqDR38JB0bw7SoL+ZB9o1RCkQjQ2CBYZKd/+VJxZRRZlqSkKiws0WFxUyCwsKiMy7hUVFhIaCrNQsKkTIsLivwKKigsj8XYlwt/WKi2N4d//uQRCSAAjURNIHpMZBGYiaQPSYyAAABLAAAAAAAACWAAAAApUF/Mg+0aohSIRobBAsMlO//Kk4soosy1JSFRYWaLC4qZBYWFRGZdwqKiwkNBVmoWFSJkWFxX4FFRQWR+LsS4W/rFRb/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////VEFHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAU291bmRib3kuZGUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMjAwNGh0dHA6Ly93d3cuc291bmRib3kuZGUAAAAAAAAAACU=');
+      audio.play().catch(() => {});
+    }
+
+    // ==================== HELPERS ====================
+    function getStatusColor(status) {
+      const colors = {
+        new: 'bg-slate-500/20 text-slate-400',
+        published: 'bg-amber-500/20 text-amber-400',
+        taken: 'bg-blue-500/20 text-blue-400',
+        picked: 'bg-purple-500/20 text-purple-400',
+        delivered: 'bg-emerald-500/20 text-emerald-400',
+        cancelled: 'bg-red-500/20 text-red-400'
+      };
+      return colors[status] || colors.new;
+    }
+
+    function getStatusText(status) {
+      const texts = {
+        new: 'חדש',
+        published: 'מחפשים שליח',
+        taken: 'שליח בדרך',
+        picked: 'נאסף',
+        delivered: 'נמסר',
+        cancelled: 'בוטל'
+      };
+      return texts[status] || status;
+    }
+
+    function toggleMenu() {
+      document.getElementById('menuModal').classList.toggle('hidden');
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const msg = document.getElementById('toastMessage');
+      msg.textContent = message;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 3000);
+    }
+
+    // Dark map style
+    const darkMapStyle = [
+      { elementType: "geometry", stylers: [{ color: "#1e293b" }] },
+      { elementType: "labels.text.stroke", stylers: [{ color: "#0f172a" }] },
+      { elementType: "labels.text.fill", stylers: [{ color: "#94a3b8" }] },
+      { featureType: "road", elementType: "geometry", stylers: [{ color: "#334155" }] },
+      { featureType: "water", elementType: "geometry", stylers: [{ color: "#0f172a" }] }
+    ];
+
+    // ==================== START ====================
+    init();
+  </script>
+</body>
+</html>
