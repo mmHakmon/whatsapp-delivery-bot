@@ -3122,18 +3122,27 @@ app.post('/api/courier/auth', rateLimit(20), async (req, res) => {
       return res.status(400).json({ success: false, message: 'נדרש מספר טלפון' });
     }
     
-    const result = await pool.query(
-      'SELECT * FROM couriers WHERE phone = $1',
+    // Get courier with stats (same as profile endpoint)
+    const courier = await pool.query(
+      `SELECT c.*, 
+              COUNT(CASE WHEN o.status = 'delivered' AND DATE(o.delivered_at) = CURRENT_DATE THEN 1 END) as today_deliveries,
+              COALESCE(SUM(CASE WHEN o.status = 'delivered' AND DATE(o.delivered_at) = CURRENT_DATE THEN o.courier_payout END), 0) as today_earnings
+       FROM couriers c
+       LEFT JOIN orders o ON o.courier_id = c.id
+       WHERE c.phone = $1
+       GROUP BY c.id`,
       [phone]
     );
     
-    if (result.rows.length > 0) {
-      res.json({ success: true, courier: result.rows[0] });
+    if (courier.rows.length > 0) {
+      console.log('✅ Courier authenticated:', phone);
+      res.json({ success: true, courier: courier.rows[0] });
     } else {
+      console.log('❌ Courier not found:', phone);
       res.json({ success: false, message: 'שליח לא נמצא במערכת' });
     }
   } catch (error) {
-    console.error('Courier auth error:', error);
+    console.error('❌ Courier auth error:', error);
     res.status(500).json({ success: false, message: 'שגיאת שרת' });
   }
 });
