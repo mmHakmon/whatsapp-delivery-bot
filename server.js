@@ -3627,7 +3627,10 @@ app.post('/api/orders/:id/rate', rateLimit(10), async (req, res) => {
  * Courier Dashboard
  */
 app.get('/courier/dashboard', (req, res) => {
-  res.sendFile(__dirname + '/public/courier-dashboard.html');
+  const path = require('path');
+  const filePath = path.join(process.cwd(), 'public', 'courier-dashboard.html');
+  console.log('📂 Serving courier dashboard from:', filePath);
+  res.sendFile(filePath);
 });
 
 /**
@@ -3729,7 +3732,10 @@ app.get('/courier/login', (req, res) => {
  * Customer Dashboard
  */
 app.get('/customer/dashboard', (req, res) => {
-  res.sendFile(__dirname + '/public/customer-dashboard.html');
+  const path = require('path');
+  const filePath = path.join(process.cwd(), 'public', 'customer-dashboard.html');
+  console.log('📂 Serving customer dashboard from:', filePath);
+  res.sendFile(filePath);
 });
 
 /**
