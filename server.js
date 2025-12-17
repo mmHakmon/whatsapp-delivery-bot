@@ -4325,6 +4325,91 @@ CREATE INDEX idx_payout_courier ON payout_requests(courier_id);
 CREATE INDEX idx_payout_status ON payout_requests(status);
 */
 
+// Create new order (customer)
+app.post('/api/orders/create', async (req, res) => {
+  try {
+    const {
+      customerPhone,
+      pickupAddress,
+      pickupContact,
+      pickupPhone,
+      pickupNotes,
+      deliveryAddress,
+      deliveryContact,
+      deliveryPhone,
+      deliveryNotes,
+      packageDescription,
+      additionalNotes,
+      vehicleType,
+      distance,
+      basePrice,
+      subtotal,
+      vat,
+      totalPrice
+    } = req.body;
+
+    // Generate order number
+    const orderNumber = 'ORD-' + Date.now().toString().slice(-8);
+    
+    // Insert order with status 'new' (pending approval)
+    const result = await pool.query(
+      `INSERT INTO orders (
+        order_number,
+        sender_phone,
+        sender_name,
+        pickup_address,
+        pickup_phone,
+        pickup_notes,
+        receiver_name,
+        receiver_phone,
+        delivery_address,
+        delivery_notes,
+        package_description,
+        notes,
+        vehicle_type,
+        distance_km,
+        price,
+        status,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
+      RETURNING *`,
+      [
+        orderNumber,
+        customerPhone,
+        pickupContact,
+        pickupAddress,
+        pickupPhone,
+        pickupNotes || '',
+        deliveryContact,
+        deliveryPhone,
+        deliveryAddress,
+        deliveryNotes || '',
+        packageDescription,
+        additionalNotes || '',
+        vehicleType,
+        distance,
+        totalPrice,
+        'new' // Status: pending admin approval
+      ]
+    );
+
+    const order = result.rows[0];
+    console.log(`📦 New order created: ${orderNumber}`);
+
+    res.json({ 
+      success: true, 
+      message: 'ההזמנה נשלחה לאישור',
+      order
+    });
+
+  } catch (error) {
+    console.error('Create order error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'שגיאה ביצירת הזמנה: ' + error.message
+    });
+  }
+});
 
 // ==================== START ====================
 server.listen(CONFIG.PORT, '0.0.0.0', () => {
