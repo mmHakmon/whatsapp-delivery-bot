@@ -3122,28 +3122,68 @@ app.post('/api/courier/auth', rateLimit(20), async (req, res) => {
       return res.status(400).json({ success: false, message: 'נדרש מספר טלפון' });
     }
     
-    // Get courier with stats (same as profile endpoint)
+    console.log('🔐 Authenticating courier:', phone);
+    
+    // נקה את מספר הטלפון ונסה כמה וריאציות
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const phoneVariants = [
+      phone,                                      // המספר המקורי
+      cleanPhone,                                 // רק ספרות
+      cleanPhone.replace(/^0/, '972'),           // 972xxxxxxx
+      '0' + cleanPhone.replace(/^972/, ''),      // 05xxxxxxxx
+      cleanPhone.replace(/^972/, '0')            // 05xxxxxxxx
+    ];
+    
+    console.log('📞 Trying phone variants:', phoneVariants);
+    
+    // חפש שליח עם כל הסטטיסטיקות
     const courier = await pool.query(
       `SELECT c.*, 
               COUNT(CASE WHEN o.status = 'delivered' AND DATE(o.delivered_at) = CURRENT_DATE THEN 1 END) as today_deliveries,
               COALESCE(SUM(CASE WHEN o.status = 'delivered' AND DATE(o.delivered_at) = CURRENT_DATE THEN o.courier_payout END), 0) as today_earnings
        FROM couriers c
        LEFT JOIN orders o ON o.courier_id = c.id
-       WHERE c.phone = $1
-       GROUP BY c.id`,
-      [phone]
+       WHERE c.phone = ANY($1) OR REPLACE(c.phone, '-', '') = ANY($1)
+       GROUP BY c.id
+       LIMIT 1`,
+      [phoneVariants]
     );
     
     if (courier.rows.length > 0) {
-      console.log('✅ Courier authenticated:', phone);
-      res.json({ success: true, courier: courier.rows[0] });
+      console.log('✅ Courier authenticated:', courier.rows[0].first_name, courier.rows[0].last_name);
+      res.json({ 
+        success: true, 
+        courier: {
+          id: courier.rows[0].id,
+          first_name: courier.rows[0].first_name,
+          last_name: courier.rows[0].last_name,
+          phone: courier.rows[0].phone,
+          email: courier.rows[0].email,
+          vehicle_type: courier.rows[0].vehicle_type,
+          rating: parseFloat(courier.rows[0].rating) || 5.0,
+          total_deliveries: parseInt(courier.rows[0].total_deliveries) || 0,
+          total_earned: parseFloat(courier.rows[0].total_earned) || 0,
+          balance: parseFloat(courier.rows[0].balance) || 0,
+          today_deliveries: parseInt(courier.rows[0].today_deliveries) || 0,
+          today_earnings: parseFloat(courier.rows[0].today_earnings) || 0,
+          is_online: courier.rows[0].is_online || false
+        }
+      });
     } else {
-      console.log('❌ Courier not found:', phone);
-      res.json({ success: false, message: 'שליח לא נמצא במערכת' });
+      console.log('❌ Courier not found for phone:', phone);
+      
+      // בדוק אילו שליחים יש בכלל (לדיבאג)
+      const allCouriers = await pool.query('SELECT id, first_name, last_name, phone FROM couriers LIMIT 5');
+      console.log('📋 Sample couriers in DB:', allCouriers.rows);
+      
+      res.json({ 
+        success: false, 
+        message: 'שליח לא נמצא במערכת. אנא ודא שהטלפון נכון.'
+      });
     }
   } catch (error) {
     console.error('❌ Courier auth error:', error);
-    res.status(500).json({ success: false, message: 'שגיאת שרת' });
+    res.status(500).json({ success: false, message: 'שגיאת שרת: ' + error.message });
   }
 });
 
@@ -3159,25 +3199,84 @@ app.get('/api/courier/profile', async (req, res) => {
       return res.status(400).json({ success: false, message: 'נדרש מספר טלפון' });
     }
     
+    console.log('🔍 Getting profile for phone:', phone);
+    
+    // נקה את מספר הטלפון ונסה כמה וריאציות
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const phoneVariants = [
+      phone,                                      // המספר המקורי
+      cleanPhone,                                 // רק ספרות
+      cleanPhone.replace(/^0/, '972'),           // 972xxxxxxx
+      '0' + cleanPhone.replace(/^972/, ''),      // 05xxxxxxxx
+      cleanPhone.replace(/^972/, '0')            // 05xxxxxxxx
+    ];
+    
+    console.log('📞 Trying phone variants:', phoneVariants);
+    
+    // חפש שליח עם כל הסטטיסטיקות
     const courier = await pool.query(
       `SELECT c.*, 
               COUNT(CASE WHEN o.status = 'delivered' AND DATE(o.delivered_at) = CURRENT_DATE THEN 1 END) as today_deliveries,
               COALESCE(SUM(CASE WHEN o.status = 'delivered' AND DATE(o.delivered_at) = CURRENT_DATE THEN o.courier_payout END), 0) as today_earnings
        FROM couriers c
        LEFT JOIN orders o ON o.courier_id = c.id
-       WHERE c.phone = $1
-       GROUP BY c.id`,
-      [phone]
+       WHERE c.phone = ANY($1) OR REPLACE(c.phone, '-', '') = ANY($1)
+       GROUP BY c.id
+       LIMIT 1`,
+      [phoneVariants]
     );
     
     if (courier.rows.length > 0) {
-      res.json({ success: true, courier: courier.rows[0] });
+      console.log('✅ Courier profile found:', courier.rows[0].first_name, courier.rows[0].last_name);
+      res.json({ 
+        success: true, 
+        courier: {
+          id: courier.rows[0].id,
+          first_name: courier.rows[0].first_name,
+          last_name: courier.rows[0].last_name,
+          phone: courier.rows[0].phone,
+          email: courier.rows[0].email,
+          vehicle_type: courier.rows[0].vehicle_type,
+          whatsapp_id: courier.rows[0].whatsapp_id,
+          status: courier.rows[0].status,
+          rating: parseFloat(courier.rows[0].rating) || 5.0,
+          total_deliveries: parseInt(courier.rows[0].total_deliveries) || 0,
+          total_earned: parseFloat(courier.rows[0].total_earned) || 0,
+          balance: parseFloat(courier.rows[0].balance) || 0,
+          today_deliveries: parseInt(courier.rows[0].today_deliveries) || 0,
+          today_earnings: parseFloat(courier.rows[0].today_earnings) || 0,
+          is_online: courier.rows[0].is_online || false,
+          current_lat: courier.rows[0].current_lat,
+          current_lng: courier.rows[0].current_lng,
+          created_at: courier.rows[0].created_at
+        }
+      });
     } else {
-      res.json({ success: false, message: 'שליח לא נמצא' });
+      console.log('❌ Courier profile not found for phone:', phone);
+      
+      // בדוק אילו שליחים יש בכלל (לדיבאג)
+      const allCouriers = await pool.query('SELECT id, first_name, last_name, phone FROM couriers LIMIT 5');
+      console.log('📋 Sample couriers in DB:', allCouriers.rows);
+      
+      res.json({ 
+        success: false, 
+        message: 'שליח לא נמצא במערכת',
+        debug: {
+          searchedPhone: phone,
+          sampleCouriers: allCouriers.rows.map(c => ({ 
+            name: `${c.first_name} ${c.last_name}`, 
+            phone: c.phone 
+          }))
+        }
+      });
     }
   } catch (error) {
-    console.error('Get courier profile error:', error);
-    res.status(500).json({ success: false, message: 'שגיאת שרת' });
+    console.error('❌ Get courier profile error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'שגיאת שרת',
+      error: error.message 
+    });
   }
 });
 
