@@ -1004,6 +1004,16 @@ async function resetStatistics(period) {
     
     if (!confirm(messages[period])) return;
     
+    // Map frontend values to backend values
+    const periodMap = {
+        'today': 'daily',
+        'week': 'weekly',
+        'month': 'monthly',
+        'all': 'all'
+    };
+    
+    const backendPeriod = periodMap[period] || period;
+    
     try {
         const response = await fetch(`/api/admin/reset-statistics`, {
             method: 'POST',
@@ -1011,14 +1021,15 @@ async function resetStatistics(period) {
                 'Authorization': `Bearer ${adminToken}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ period })
+            body: JSON.stringify({ period: backendPeriod })
         });
         
+        const data = await response.json();
+        
         if (response.ok) {
-            showNotification(`✅ סטטיסטיקות ${period === 'all' ? 'כל' : ''} אופסו בהצלחה!`);
+            showNotification(`✅ ${data.message || 'סטטיסטיקות אופסו בהצלחה!'}`);
             loadStatistics();
         } else {
-            const data = await response.json();
             showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
         }
     } catch (error) {
@@ -1028,20 +1039,28 @@ async function resetStatistics(period) {
 }
 
 async function deleteOldOrders() {
-    if (!confirm('האם למחוק הזמנות ישנות מעל 6 חודשים?')) return;
+    const months = prompt('כמה חודשים לאחור למחוק? (ברירת מחדל: 6)', '6');
+    if (!months) return;
+    
+    if (!confirm(`האם למחוק הזמנות ישנות מעל ${months} חודשים?`)) return;
     
     try {
         const response = await fetch('/api/admin/delete-old-orders', {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${adminToken}` }
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ months: parseInt(months) })
         });
         
+        const data = await response.json();
+        
         if (response.ok) {
-            const data = await response.json();
-            showNotification(`✅ נמחקו ${data.deleted} הזמנות ישנות`);
+            showNotification(`✅ ${data.message || `נמחקו ${data.deleted} הזמנות ישנות`}`);
             loadOrders();
         } else {
-            showNotification('❌ שגיאה במחיקה', 'error');
+            showNotification('❌ ' + (data.error || 'שגיאה במחיקה'), 'error');
         }
     } catch (error) {
         console.error('Delete old orders error:', error);
@@ -1050,22 +1069,30 @@ async function deleteOldOrders() {
 }
 
 async function archiveDeliveredOrders() {
-    if (!confirm('האם להעביר הזמנות שהושלמו לארכיון?')) return;
+    const days = prompt('כמה ימים לאחור לארכב? (ברירת מחדל: 30)', '30');
+    if (!days) return;
+    
+    if (!confirm(`האם להעביר הזמנות שהושלמו לפני ${days} ימים לארכיון?`)) return;
     
     showNotification('⏳ מעביר לארכיון...');
     
     try {
         const response = await fetch('/api/admin/archive-delivered', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${adminToken}` }
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ days: parseInt(days) })
         });
         
+        const data = await response.json();
+        
         if (response.ok) {
-            const data = await response.json();
-            showNotification(`✅ ${data.archived} הזמנות הועברו לארכיון`);
+            showNotification(`✅ ${data.message || `${data.archived} הזמנות הועברו לארכיון`}`);
             loadOrders();
         } else {
-            showNotification('❌ שגיאה בארכוב', 'error');
+            showNotification('❌ ' + (data.error || 'שגיאה בארכוב'), 'error');
         }
     } catch (error) {
         console.error('Archive error:', error);
@@ -1334,7 +1361,6 @@ try {
 } catch (e) {
     console.error('Error parsing token:', e);
 }
-
 async function dangerResetAll() {
     if (!confirm('⚠️ האם אתה בטוח שברצונך למחוק את כל הנתונים?')) return;
     if (!confirm('⚠️⚠️ פעולה זו תמחק הכל ללא אפשרות שחזור! האם להמשיך?')) return;
