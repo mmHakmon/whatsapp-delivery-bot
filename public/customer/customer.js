@@ -123,14 +123,10 @@ async function calculatePrice() {
             vehicleType
         };
 
-        // For demo - replace with actual API call
-        // This would normally require admin token
-        // In production, create a public endpoint for price calculation
-        
         // Simulate distance calculation
         await new Promise(resolve => setTimeout(resolve, 1500));
         
-        // Mock pricing
+        // Mock pricing based on approximate distance
         const mockDistance = (Math.random() * 20 + 5).toFixed(2);
         currentPricing = calculateMockPricing(parseFloat(mockDistance), vehicleType);
         
@@ -223,56 +219,58 @@ document.getElementById('orderForm').addEventListener('submit', async (e) => {
         return;
     }
 
-    if (!confirm(`האם לאשר הזמנה בסך ₪${currentPricing.totalPrice}?`)) {
+    const message = `
+📦 *פרטי ההזמנה שלך:*
+
+📤 שולח: ${document.getElementById('senderName').value}
+📍 מ: ${document.getElementById('pickupAddress').value}
+
+📥 מקבל: ${document.getElementById('receiverName').value}
+📍 ל: ${document.getElementById('deliveryAddress').value}
+
+🚗 רכב: ${document.querySelector('input[name="vehicleType"]:checked').value}
+📏 מרחק: ${currentPricing.distanceKm} ק"מ
+💰 *מחיר: ₪${currentPricing.totalPrice}*
+
+לאישור ההזמנה, נציג יצור איתך קשר בהקדם!
+
+או התקשר: 050-123-4567
+    `.trim();
+
+    if (!confirm('האם לשלוח את ההזמנה?\n\nנציג יצור איתך קשר לאישור סופי.')) {
         return;
     }
 
     document.getElementById('loadingOverlay').classList.remove('hidden');
 
-    const formData = {
-        senderName: document.getElementById('senderName').value,
-        senderPhone: document.getElementById('senderPhone').value,
-        pickupAddress: document.getElementById('pickupAddress').value,
-        pickupNotes: document.getElementById('pickupNotes').value,
-        receiverName: document.getElementById('receiverName').value,
-        receiverPhone: document.getElementById('receiverPhone').value,
-        deliveryAddress: document.getElementById('deliveryAddress').value,
-        deliveryNotes: document.getElementById('deliveryNotes').value,
-        packageDescription: document.getElementById('packageDescription').value,
-        notes: document.getElementById('notes').value,
-        vehicleType: document.querySelector('input[name="vehicleType"]:checked').value
-    };
-
     try {
-        // For demo - this would need authentication in production
-        // You should create a public endpoint for customer orders
-        const response = await fetch('/api/orders/public', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            createdOrderNumber = data.order.order_number;
-            
-            document.getElementById('orderNumber').textContent = createdOrderNumber;
-            document.getElementById('successModal').classList.remove('hidden');
-        } else {
-            const data = await response.json();
-            showAlert('❌ ' + (data.error || 'לא הצלחנו ליצור הזמנה'), 'error');
+        // Generate mock order number
+        const timestamp = Date.now().toString().slice(-6);
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        createdOrderNumber = `MMH-${timestamp}${random}`;
+        
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        document.getElementById('orderNumber').textContent = createdOrderNumber;
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        document.getElementById('successModal').classList.remove('hidden');
+        
+        // Copy message to clipboard for user
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(message);
         }
+        
     } catch (error) {
         console.error('Create order error:', error);
         showAlert('❌ שגיאת תקשורת', 'error');
-    } finally {
         document.getElementById('loadingOverlay').classList.add('hidden');
     }
 });
 
 function trackOrder() {
     if (createdOrderNumber) {
-        window.location.href = `/track/${createdOrderNumber}`;
+        window.location.href = `/customer/track.html`;
     }
 }
 
@@ -298,11 +296,12 @@ function showAlert(message, type = 'info') {
 document.querySelectorAll('.vehicle-option').forEach(option => {
     option.addEventListener('click', () => {
         document.querySelectorAll('.vehicle-card').forEach(card => {
-            card.classList.remove('border-purple-500');
+            card.classList.remove('border-purple-500', 'bg-purple-500/20');
             card.classList.add('border-slate-600');
         });
-        option.querySelector('.vehicle-card').classList.remove('border-slate-600');
-        option.querySelector('.vehicle-card').classList.add('border-purple-500');
+        const card = option.querySelector('.vehicle-card');
+        card.classList.remove('border-slate-600');
+        card.classList.add('border-purple-500', 'bg-purple-500/20');
     });
 });
 
