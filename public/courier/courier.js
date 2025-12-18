@@ -47,8 +47,9 @@ async function courierLogin(event) {
             
             showMainApp();
         } else if (data.needsRegistration) {
-            // Redirect to registration page
-            window.location.href = '/courier/register.html';
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+            document.getElementById('regPhone').value = phone;
         } else {
             showLoginError(data.error || 'שגיאה בהתחברות');
         }
@@ -80,7 +81,6 @@ async function courierLoginById(event) {
             
             showMainApp();
         } else if (data.needsRegistration) {
-            // Redirect to registration page
             window.location.href = '/courier/register.html';
         } else {
             showLoginError(data.error || 'שגיאה בהתחברות');
@@ -92,13 +92,46 @@ async function courierLoginById(event) {
 }
 
 function showLoginError(message) {
-    const errorDiv = document.getElementById('loginError');
-    errorDiv.textContent = message;
-    errorDiv.classList.remove('hidden');
-    setTimeout(() => errorDiv.classList.add('hidden'), 3000);
+    alert(message);
 }
 
-function checkCourierAuth() {
+function showLoginForm() {
+    document.getElementById('registerForm').classList.add('hidden');
+    document.getElementById('loginForm').classList.remove('hidden');
+}
+
+async function registerCourier(event) {
+    event.preventDefault();
+    
+    const formData = {
+        firstName: document.getElementById('regFirstName').value,
+        lastName: document.getElementById('regLastName').value,
+        idNumber: document.getElementById('regIdNumber').value,
+        phone: document.getElementById('regPhone').value,
+        vehicleType: document.getElementById('regVehicleType').value
+    };
+    
+    try {
+        const response = await fetch('/api/couriers/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+        
+        if (response.ok) {
+            alert('✅ הרישום בוצע בהצלחה! המנהל יאשר את חשבונך בקרוב.');
+            showLoginForm();
+        } else {
+            const data = await response.json();
+            alert('❌ ' + (data.error || 'שגיאה ברישום'));
+        }
+    } catch (error) {
+        console.error('Register error:', error);
+        alert('❌ שגיאת תקשורת');
+    }
+}
+
+function checkAuth() {
     courierToken = localStorage.getItem('courierToken');
     const savedData = localStorage.getItem('courierData');
     
@@ -115,39 +148,29 @@ function showMainApp() {
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('mainApp').classList.remove('hidden');
     
-    // Update header
     document.getElementById('courierName').textContent = `${courierData.firstName} ${courierData.lastName}`;
     document.getElementById('courierPhone').textContent = courierData.phone;
-    document.getElementById('courierBalance').textContent = `₪${parseFloat(courierData.balance || 0).toLocaleString()}`;
     
     initCourierApp();
 }
 
-function logout() {
-    if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
-        localStorage.removeItem('courierToken');
-        localStorage.removeItem('courierData');
-        
-        // Stop location tracking
-        if (locationInterval) {
-            clearInterval(locationInterval);
-        }
-        
-        // Close WebSocket
-        if (ws) {
-            ws.close();
-        }
-        
-        // Reload page
-        location.reload();
-    }
+// ==========================================
+// INITIALIZATION
+// ==========================================
+
+function initCourierApp() {
+    connectWebSocket();
+    startLocationTracking();
+    loadCourierStatistics();
+    loadAvailableOrders();
+    loadMyOrders();
 }
 
 // ==========================================
 // WEBSOCKET
 // ==========================================
 
-function connectCourierWebSocket() {
+function connectWebSocket() {
     const wsUrl = window.location.protocol === 'https:' 
         ? `wss://${window.location.host}` 
         : `ws://${window.location.host}`;
@@ -165,37 +188,26 @@ function connectCourierWebSocket() {
     
     ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        handleCourierWebSocketMessage(data);
+        handleWebSocketMessage(data);
     };
     
     ws.onclose = () => {
         console.log('❌ WebSocket disconnected');
-        setTimeout(connectCourierWebSocket, 3000);
+        setTimeout(connectWebSocket, 3000);
     };
 }
 
-function handleCourierWebSocketMessage(data) {
+function handleWebSocketMessage(data) {
     switch (data.type) {
         case 'new_available_order':
             showNotification('📦 משלוח חדש זמין!');
             loadAvailableOrders();
             break;
         case 'order_updated':
-            loadMyOrders();
             loadAvailableOrders();
+            loadMyOrders();
             break;
     }
-}
-
-// ==========================================
-// INITIALIZATION
-// ==========================================
-
-async function initCourierApp() {
-    connectCourierWebSocket();
-    startLocationTracking();
-    loadCourierStatistics();
-    loadAvailableOrders();
 }
 
 // ==========================================
@@ -348,12 +360,10 @@ async function takeOrder(orderId) {
             showNotification('✅ המשלוח נתפס! פרטי איסוף נשלחו בוואטסאפ');
             loadAvailableOrders();
             loadMyOrders();
-            loadCourierStatistics();
-            switchCourierTab('active');
+            switchCourierTab('active'); // Switch to active tab
         } else {
             const data = await response.json();
-            showNotification('❌ ' + (data.error || 'המשלוח כבר נתפס'), 'error');
-            loadAvailableOrders();
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
         }
     } catch (error) {
         console.error('Take order error:', error);
@@ -362,18 +372,21 @@ async function takeOrder(orderId) {
 }
 
 // ==========================================
-// MY ORDERS (ACTIVE)
+// MY ORDERS (ACTIVE) - תיקון!
 // ==========================================
 
 async function loadMyOrders() {
     try {
-        const response = await fetch('/api/couriers/my-orders?status=taken&status=picked', {
+        // Load all my orders, then filter
+        const response = await fetch('/api/couriers/my-orders', {
             headers: { 'Authorization': `Bearer ${courierToken}` }
         });
         
         if (response.ok) {
             const data = await response.json();
-            displayMyOrders(data.orders);
+            // Filter only taken and picked orders
+            const activeOrders = data.orders.filter(o => o.status === 'taken' || o.status === 'picked');
+            displayMyOrders(activeOrders);
         }
     } catch (error) {
         console.error('Load my orders error:', error);
@@ -500,13 +513,14 @@ function openWaze(address) {
 
 async function loadOrderHistory() {
     try {
-        const response = await fetch('/api/couriers/my-orders?status=delivered&limit=20', {
+        const response = await fetch('/api/couriers/my-orders', {
             headers: { 'Authorization': `Bearer ${courierToken}` }
         });
         
         if (response.ok) {
             const data = await response.json();
-            displayOrderHistory(data.orders);
+            const deliveredOrders = data.orders.filter(o => o.status === 'delivered');
+            displayOrderHistory(deliveredOrders);
         }
     } catch (error) {
         console.error('Load history error:', error);
@@ -520,7 +534,7 @@ function displayOrderHistory(orders) {
         container.innerHTML = `
             <div class="text-center py-12 text-slate-400">
                 <div class="text-6xl mb-4">📋</div>
-                <p>אין משלוחים בהיסטוריה</p>
+                <p>אין היסטוריה עדיין</p>
             </div>
         `;
         return;
@@ -528,23 +542,18 @@ function displayOrderHistory(orders) {
     
     container.innerHTML = orders.map(order => `
         <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
-            <div class="flex justify-between items-start mb-2">
-                <div>
-                    <p class="font-bold">${order.order_number}</p>
-                    <p class="text-xs text-slate-400">${new Date(order.delivered_at).toLocaleDateString('he-IL')}</p>
-                </div>
-                <p class="text-lg font-bold text-emerald-400">₪${order.courier_payout}</p>
+            <div class="flex justify-between items-center mb-2">
+                <p class="font-bold">${order.order_number}</p>
+                <p class="text-emerald-400 font-bold">+₪${order.courier_payout}</p>
             </div>
-            <div class="text-sm text-slate-300">
-                <p>📍 ${order.pickup_address}</p>
-                <p>🏠 ${order.delivery_address}</p>
-            </div>
+            <p class="text-xs text-slate-400">${new Date(order.delivered_at).toLocaleDateString('he-IL')}</p>
+            <p class="text-xs text-slate-400">${order.distance_km} ק"מ</p>
         </div>
     `).join('');
 }
 
 // ==========================================
-// EARNINGS & PAYOUTS
+// EARNINGS
 // ==========================================
 
 async function loadPayoutRequests() {
@@ -568,77 +577,39 @@ function displayPayoutRequests(requests) {
     if (!requests || requests.length === 0) {
         container.innerHTML = `
             <div class="text-center py-8 text-slate-400">
-                <p class="text-sm">אין בקשות משיכה</p>
+                <p>אין בקשות משיכה</p>
             </div>
         `;
         return;
     }
     
     container.innerHTML = requests.map(req => `
-        <div class="bg-slate-700 rounded-lg p-3 border border-slate-600">
+        <div class="bg-slate-700 rounded-lg p-4 border border-slate-600">
             <div class="flex justify-between items-center mb-2">
                 <p class="font-bold">₪${parseFloat(req.amount).toLocaleString()}</p>
                 ${getPaymentStatusBadge(req.status)}
             </div>
             <p class="text-xs text-slate-400">${new Date(req.created_at).toLocaleDateString('he-IL')}</p>
-            ${req.admin_notes ? `<p class="text-xs text-slate-300 mt-1">📝 ${req.admin_notes}</p>` : ''}
         </div>
     `).join('');
 }
 
+function getPaymentStatusBadge(status) {
+    const badges = {
+        'pending': '<span class="px-2 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400">ממתין</span>',
+        'approved': '<span class="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">אושר</span>',
+        'completed': '<span class="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400">הושלם</span>',
+        'rejected': '<span class="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">נדחה</span>'
+    };
+    return badges[status] || '';
+}
+
 async function requestPayout() {
-    // Get balance
-    const balanceText = document.getElementById('earningsBalance').textContent;
-    const balance = parseFloat(balanceText.replace('₪', '').replace(',', ''));
-    
-    const minPayout = 50;
-    if (balance < minPayout) {
-        alert(`יתרה מינימלית למשיכה: ₪${minPayout}`);
-        return;
-    }
-    
-    const amount = prompt(`כמה לבקש למשיכה? (יתרה: ₪${balance})`);
+    const amount = prompt('כמה כסף לבקש למשיכה?');
     if (!amount) return;
     
-    const amountNum = parseFloat(amount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-        alert('סכום לא תקין');
-        return;
-    }
-    
-    if (amountNum > balance) {
-        alert('אין מספיק יתרה');
-        return;
-    }
-    
-    if (amountNum < minPayout) {
-        alert(`סכום מינימלי: ₪${minPayout}`);
-        return;
-    }
-    
-    const method = prompt('אמצעי תשלום:\n1. העברה בנקאית\n2. ביט\n3. מזומן\n\nהקלד 1, 2 או 3:');
-    if (!method) return;
-    
-    const methods = {
-        '1': 'bank_transfer',
-        '2': 'bit',
-        '3': 'cash'
-    };
-    
-    if (!methods[method]) {
-        alert('אמצעי תשלום לא תקין');
-        return;
-    }
-    
-    const accountInfo = prompt(
-        methods[method] === 'bank_transfer' 
-            ? 'מספר חשבון בנק (בנק, סניף, חשבון):'
-            : methods[method] === 'bit'
-            ? 'מספר טלפון לביט:'
-            : 'הערות למזומן:'
-    );
-    
-    if (!accountInfo) return;
+    const paymentMethod = prompt('אמצעי תשלום (bank_transfer / bit / cash):', 'bank_transfer');
+    if (!paymentMethod) return;
     
     try {
         const response = await fetch('/api/payments/payout-request', {
@@ -648,33 +619,23 @@ async function requestPayout() {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                amount: amountNum,
-                paymentMethod: methods[method],
-                accountInfo: accountInfo
+                amount: parseFloat(amount),
+                paymentMethod,
+                accountInfo: { note: 'Manual request' }
             })
         });
         
         if (response.ok) {
-            alert('✅ בקשת המשיכה נשלחה בהצלחה!');
+            showNotification('✅ בקשת משיכה נשלחה!');
             loadPayoutRequests();
+            loadCourierStatistics();
         } else {
             const data = await response.json();
-            alert('❌ ' + (data.error || 'שגיאה'));
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
         }
     } catch (error) {
         console.error('Payout request error:', error);
-        alert('❌ שגיאת תקשורת');
     }
-}
-
-function getPaymentStatusBadge(status) {
-    const badges = {
-        'pending': '<span class="px-2 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400">ממתין</span>',
-        'approved': '<span class="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400">אושר</span>',
-        'rejected': '<span class="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">נדחה</span>',
-        'completed': '<span class="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400">הושלם</span>'
-    };
-    return badges[status] || '';
 }
 
 // ==========================================
@@ -686,7 +647,14 @@ function switchCourierTab(tab) {
     document.querySelectorAll('[id^="tab"]').forEach(t => t.className = 'courier-tab-inactive px-4 py-2 text-sm');
     document.querySelectorAll('.courier-tab-content').forEach(t => t.classList.add('hidden'));
     
-    document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).className = 'courier-tab-active px-4 py-2 text-sm font-bold';
+    const tabMap = {
+        'available': 'tabAvailable',
+        'active': 'tabActive',
+        'history': 'tabHistory',
+        'earnings': 'tabEarnings'
+    };
+    
+    document.getElementById(tabMap[tab]).className = 'courier-tab-active px-4 py-2 text-sm font-bold';
     document.getElementById(`${tab}Tab`).classList.remove('hidden');
     
     // Load data
@@ -739,5 +707,5 @@ function showNotification(message, type = 'success') {
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
-    checkCourierAuth();
+    checkAuth();
 });
