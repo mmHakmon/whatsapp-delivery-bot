@@ -271,8 +271,41 @@ function formatDate(dateString) {
     return date.toLocaleDateString('he-IL');
 }
 
-function viewOrderDetails(orderId) {
-    showNotification('📦 פרטי הזמנה - בקרוב!');
+async function viewOrderDetails(orderId) {
+    try {
+        const response = await fetch(`/api/orders/${orderId}`, {
+            headers: { "Authorization": `Bearer ${customerToken}` }
+        });
+        if (!response.ok) {
+            showNotification("❌ שגיאה בטעינת פרטים");
+            return;
+        }
+        const { order } = await response.json();
+        const modal = document.createElement("div");
+        modal.id = "orderDetailsModal";
+        modal.className = "fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4";
+        modal.innerHTML = `<div class="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700"><div class="flex justify-between items-center mb-6"><h2 class="text-2xl font-bold">📦 פרטי הזמנה</h2><button onclick="closeOrderDetails()" class="text-slate-400 hover:text-white text-3xl">×</button></div><div class="bg-slate-700 rounded-lg p-4 mb-6"><div class="flex justify-between items-center"><div><p class="text-sm text-slate-400">מספר הזמנה</p><p class="text-2xl font-bold">${order.order_number}</p></div><div class="text-right"><span class="${getStatusBadgeClass(order.status)} text-lg px-4 py-2">${getStatusText(order.status)}</span></div></div></div><div class="bg-slate-700 rounded-lg p-4 mb-4"><h3 class="font-bold text-emerald-400 mb-3">📤 שולח</h3><p><strong>שם:</strong> ${order.sender_name}</p><p><strong>טלפון:</strong> ${order.sender_phone}</p><p><strong>כתובת:</strong> ${order.pickup_address}</p></div><div class="bg-slate-700 rounded-lg p-4 mb-4"><h3 class="font-bold text-blue-400 mb-3">📥 מקבל</h3><p><strong>שם:</strong> ${order.receiver_name}</p><p><strong>טלפון:</strong> ${order.receiver_phone}</p><p><strong>כתובת:</strong> ${order.delivery_address}</p></div><div class="bg-emerald-500/10 border border-emerald-500 rounded-lg p-4 mb-4"><h3 class="font-bold text-emerald-400 mb-3">💰 מחיר</h3><p class="text-2xl font-bold">₪${order.total_price}</p></div><button onclick="closeOrderDetails()" class="w-full bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">סגור</button></div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener("click", (e) => { if (e.target === modal) closeOrderDetails(); });
+    } catch (error) {
+        console.error("Error:", error);
+        showNotification("❌ שגיאה");
+    }
+}
+
+function closeOrderDetails() {
+    const modal = document.getElementById("orderDetailsModal");
+    if (modal) modal.remove();
+}
+
+function getVehicleTypeText(type) {
+    const types = { "motorcycle": "🏍️ אופנוע", "car": "🚗 רכב", "van": "🚐 מסחרית", "truck": "🚚 משאית" };
+    return types[type] || type;
+}
+
+function formatDateTime(dateString) {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleString("he-IL", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
 function trackOrder(orderNumber) {
