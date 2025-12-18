@@ -1081,12 +1081,258 @@ async function saveSystemSettings() {
     showNotification('ℹ️ הגדרות אלו דורשות שינוי ב-Environment Variables ב-Render', 'error');
 }
 
-function showAddAgent() {
-    showNotification('👥 הוספת נציג - בקרוב!');
+
+// ==========================================
+// USER MANAGEMENT
+// ==========================================
+
+async function showAddAgent() {
+    const modal = document.createElement('div');
+    modal.id = 'addAgentModal';
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+        <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full border border-slate-700">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">➕ הוסף נציג חדש</h2>
+                <button onclick="closeAddAgent()" class="text-slate-400 hover:text-white text-3xl">×</button>
+            </div>
+            
+            <form id="addAgentForm" onsubmit="handleAddAgent(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm mb-2">שם משתמש *</label>
+                    <input type="text" id="agentUsername" required minlength="3"
+                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                </div>
+                
+                <div>
+                    <label class="block text-sm mb-2">סיסמה *</label>
+                    <input type="password" id="agentPassword" required minlength="6"
+                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                </div>
+                
+                <div>
+                    <label class="block text-sm mb-2">תפקיד *</label>
+                    <select id="agentRole" required
+                            class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                        <option value="agent">נציג</option>
+                        <option value="admin">מנהל</option>
+                    </select>
+                </div>
+                
+                <div class="flex gap-3 mt-6">
+                    <button type="submit" class="flex-1 bg-emerald-500 hover:bg-emerald-600 py-3 rounded-lg font-bold">
+                        ✅ הוסף נציג
+                    </button>
+                    <button type="button" onclick="closeAddAgent()" 
+                            class="flex-1 bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
+                        ביטול
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeAddAgent();
+    });
 }
 
-function manageAgents() {
-    showNotification('📋 ניהול נציגים - בקרוב!');
+function closeAddAgent() {
+    const modal = document.getElementById('addAgentModal');
+    if (modal) modal.remove();
+}
+
+async function handleAddAgent(event) {
+    event.preventDefault();
+    
+    const username = document.getElementById('agentUsername').value;
+    const password = document.getElementById('agentPassword').value;
+    const role = document.getElementById('agentRole').value;
+    
+    try {
+        const response = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password, role })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ נציג ${username} נוסף בהצלחה!`);
+            closeAddAgent();
+            // Refresh users list if open
+            if (document.getElementById('manageAgentsModal')) {
+                manageAgents();
+            }
+        } else {
+            showNotification(`❌ ${data.error || 'שגיאה בהוספת נציג'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Add agent error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function manageAgents() {
+    try {
+        const response = await fetch('/api/admin/users', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            showNotification('❌ שגיאה בטעינת נציגים', 'error');
+            return;
+        }
+        
+        const users = data.users || [];
+        
+        const modal = document.createElement('div');
+        modal.id = 'manageAgentsModal';
+        modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+        modal.innerHTML = `
+            <div class="bg-slate-800 rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">👥 ניהול נציגים</h2>
+                    <button onclick="closeManageAgents()" class="text-slate-400 hover:text-white text-3xl">×</button>
+                </div>
+                
+                ${users.length === 0 ? `
+                    <div class="text-center py-12 text-slate-400">
+                        <p class="text-xl mb-4">אין נציגים במערכת</p>
+                        <button onclick="closeManageAgents(); showAddAgent();" 
+                                class="bg-emerald-500 hover:bg-emerald-600 px-6 py-3 rounded-lg font-bold">
+                            ➕ הוסף נציג ראשון
+                        </button>
+                    </div>
+                ` : `
+                    <div class="space-y-3">
+                        ${users.map(user => `
+                            <div class="bg-slate-700 rounded-lg p-4 flex items-center justify-between">
+                                <div>
+                                    <p class="font-bold text-lg">${user.username}</p>
+                                    <p class="text-sm text-slate-400">
+                                        ${user.role === 'admin' ? '👑 מנהל' : '👤 נציג'} • 
+                                        נוצר: ${new Date(user.created_at).toLocaleDateString('he-IL')}
+                                    </p>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="changeUserPassword(${user.id}, '${user.username}')"
+                                            class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded text-sm">
+                                        🔑 שנה סיסמה
+                                    </button>
+                                    ${user.id !== currentUserId ? `
+                                        <button onclick="deleteUserConfirm(${user.id}, '${user.username}')"
+                                                class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded text-sm">
+                                            🗑️ מחק
+                                        </button>
+                                    ` : `
+                                        <span class="text-emerald-400 px-4 py-2 text-sm">
+                                            אתה 🔒
+                                        </span>
+                                    `}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <button onclick="closeManageAgents(); showAddAgent();" 
+                            class="w-full mt-6 bg-emerald-500 hover:bg-emerald-600 py-3 rounded-lg font-bold">
+                        ➕ הוסף נציג נוסף
+                    </button>
+                `}
+                
+                <button onclick="closeManageAgents()" 
+                        class="w-full mt-3 bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
+                    סגור
+                </button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeManageAgents();
+        });
+        
+    } catch (error) {
+        console.error('Manage agents error:', error);
+        showNotification('❌ שגיאה בטעינת נציגים', 'error');
+    }
+}
+
+function closeManageAgents() {
+    const modal = document.getElementById('manageAgentsModal');
+    if (modal) modal.remove();
+}
+
+async function changeUserPassword(userId, username) {
+    const newPassword = prompt(`🔑 הכנס סיסמה חדשה עבור ${username}:`);
+    if (!newPassword) return;
+    
+    if (newPassword.length < 6) {
+        showNotification('❌ הסיסמה חייבת להכיל לפחות 6 תווים', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/admin/users/${userId}/password`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ password: newPassword })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ סיסמה שונתה עבור ${username}`);
+        } else {
+            showNotification(`❌ ${data.error || 'שגיאה בשינוי סיסמה'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Change password error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function deleteUserConfirm(userId, username) {
+    if (!confirm(`⚠️ האם אתה בטוח שברצונך למחוק את ${username}?`)) return;
+    
+    try {
+        const response = await fetch(`/api/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${username} נמחק בהצלחה`);
+            manageAgents(); // Refresh list
+        } else {
+            showNotification(`❌ ${data.error || 'שגיאה במחיקת נציג'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Delete user error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+// Get current user ID from token
+let currentUserId = null;
+try {
+    const tokenData = JSON.parse(atob(token.split('.')[1]));
+    currentUserId = tokenData.id;
+} catch (e) {
+    console.error('Error parsing token:', e);
 }
 
 async function dangerResetAll() {
