@@ -516,8 +516,8 @@
 
     // ==================== ACTIONS ====================
     function newOrder() {
-      window.location.href = `/new-order=${customerPhone}`;
-    }
+  window.location.href = '/new-order.html?phone=' + customerPhone;
+}
 
     function callCourier(phone) {
       if (phone) {
