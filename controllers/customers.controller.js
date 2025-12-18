@@ -282,8 +282,8 @@ class CustomersController {
           COUNT(*) FILTER (WHERE status IN ('published', 'taken', 'picked')) as active_orders,
           COUNT(*) FILTER (WHERE status = 'delivered') as completed_orders,
           COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled_orders,
-          COALESCE(SUM(total_price) FILTER (WHERE status = 'delivered'), 0) as total_spent,
-          COALESCE(AVG(total_price) FILTER (WHERE status = 'delivered'), 0) as avg_order_value,
+          COALESCE(SUM(price) FILTER (WHERE status = 'delivered'), 0) as total_spent,
+          COALESCE(AVG(price) FILTER (WHERE status = 'delivered'), 0) as avg_order_value,
           MIN(created_at) as first_order_date,
           MAX(created_at) as last_order_date
         FROM orders
@@ -297,7 +297,7 @@ class CustomersController {
         `SELECT 
           TO_CHAR(created_at, 'YYYY-MM') as month,
           COUNT(*) as orders,
-          COALESCE(SUM(total_price), 0) as total
+          COALESCE(SUM(price), 0) as total
         FROM orders
         WHERE (sender_phone = (SELECT phone FROM customers WHERE id = $1)
            OR receiver_phone = (SELECT phone FROM customers WHERE id = $1))
@@ -385,8 +385,8 @@ class CustomersController {
           number: process.env.SUPPORT_PHONE || '054-502-5254',
           url: `tel:${process.env.SUPPORT_PHONE || '0545025254'}`
         },
-        email: process.env.SUPPORT_EMAIL || 'm.m.hakmon@gmail.com',
-        hours: 'א׳-ה׳: 8:00-20:00, ו׳: 8:00-14:00'
+        email: process.env.SUPPORT_EMAIL || 'support@mmh-delivery.com',
+        hours: 'א׳-ה׳: 8:00-18:00, ו׳: 8:00-14:00'
       };
 
       res.json({ support: supportInfo });
