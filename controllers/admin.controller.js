@@ -714,6 +714,9 @@ class AdminController {
         order: result.rows[0]
       });
     } catch (error) {
+      next(error);
+    }
+  }
   // ==========================================
   // PAYMENTS & COURIERS MANAGEMENT
   // ==========================================
