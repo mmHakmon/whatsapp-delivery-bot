@@ -21,9 +21,14 @@
                     <p class="text-xs text-slate-400" id="courierPhone"></p>
                 </div>
             </div>
-            <div class="text-left">
-                <p class="text-2xl font-bold text-emerald-400" id="courierBalance">₪0</p>
-                <p class="text-xs text-slate-400">יתרה</p>
+            <div class="flex items-center gap-3">
+                <div class="text-left">
+                    <p class="text-2xl font-bold text-emerald-400" id="courierBalance">₪0</p>
+                    <p class="text-xs text-slate-400">יתרה</p>
+                </div>
+                <button onclick="logoutCourier()" class="bg-red-500 hover:bg-red-600 px-3 py-2 rounded-lg text-sm">
+                    🚪
+                </button>
             </div>
         </div>
     </header>
@@ -37,79 +42,20 @@
                 <p class="text-slate-400">אפליקציית שליחים</p>
             </div>
             
-            <!-- Login Form -->
-<div id="loginForm">
-    <div class="mb-4 flex gap-2">
-        <button type="button" onclick="showPhoneLogin()" id="btnPhoneLogin" class="flex-1 bg-purple-600 py-2 rounded-lg font-bold">
-            טלפון
-        </button>
-        <button type="button" onclick="showIdLogin()" id="btnIdLogin" class="flex-1 bg-slate-700 py-2 rounded-lg">
-            ת.ז
-        </button>
-    </div>
-
-    <!-- Phone Login -->
-    <form id="phoneLoginForm" onsubmit="courierLogin(event)">
-        <label class="block text-sm font-medium mb-2">מספר טלפון</label>
-        <input type="tel" id="loginPhone" required
-               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 mb-4">
-        <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
-            🔐 התחבר
-        </button>
-    </form>
-
-    <!-- ID Login -->
-    <form id="idLoginForm" class="hidden" onsubmit="courierLoginById(event)">
-        <label class="block text-sm font-medium mb-2">תעודת זהות</label>
-        <input type="text" id="loginId" required pattern="[0-9]{9}"
-               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 mb-4">
-        <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
-            🔐 התחבר
-        </button>
-    </form>
-</div>
-
-            <!-- Registration Form -->
-            <div id="registerForm" class="hidden bg-slate-800 rounded-xl p-6 border border-slate-700 mt-4">
-                <h2 class="text-xl font-bold mb-4">רישום שליח חדש</h2>
-                <form onsubmit="registerCourier(event)" class="space-y-3">
-                    <div>
-                        <label class="block text-sm font-medium mb-1">שם פרטי</label>
-                        <input type="text" id="regFirstName" required
-                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:border-emerald-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">שם משפחה</label>
-                        <input type="text" id="regLastName" required
-                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:border-emerald-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">ת.ז</label>
-                        <input type="text" id="regIdNumber" required pattern="[0-9]{9}"
-                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:border-emerald-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">טלפון</label>
-                        <input type="tel" id="regPhone" required readonly
-                               class="w-full bg-slate-600 border border-slate-600 rounded-lg px-4 py-2">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">סוג רכב</label>
-                        <select id="regVehicleType" required
-                                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:border-emerald-500">
-                            <option value="motorcycle">🏍️ אופנוע</option>
-                            <option value="car">🚗 רכב פרטי</option>
-                            <option value="van">🚐 מסחרית</option>
-                            <option value="truck">🚚 משאית</option>
-                        </select>
-                    </div>
+            <!-- Login Form - רק ת.ז -->
+            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                <form id="idLoginForm" onsubmit="courierLoginById(event)">
+                    <label class="block text-sm font-medium mb-2">תעודת זהות</label>
+                    <input type="text" id="loginId" required pattern="[0-9]{9}"
+                           placeholder="123456789"
+                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-purple-500">
                     <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
-                        ✅ הירשם
-                    </button>
-                    <button type="button" onclick="showLoginForm()" class="w-full bg-slate-700 hover:bg-slate-600 py-2 rounded-lg text-sm">
-                        חזור להתחברות
+                        🔐 התחבר
                     </button>
                 </form>
+                <a href="/courier/register.html" class="block text-center mt-4 text-blue-400 hover:text-blue-300">
+                    אין לך חשבון? הירשם כאן
+                </a>
             </div>
         </div>
     </div>
@@ -190,6 +136,35 @@
     </main>
 
     <script src="/courier/courier.js"></script>
+    
+    <!-- Handle WhatsApp action links -->
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const action = urlParams.get('action');
+        const orderId = urlParams.get('order');
+        
+        if (action && orderId) {
+            const checkAuth = setInterval(() => {
+                if (courierToken) {
+                    clearInterval(checkAuth);
+                    
+                    if (action === 'pickup') {
+                        switchCourierTab('active');
+                        setTimeout(() => markAsPickedUp(parseInt(orderId)), 1000);
+                    } else if (action === 'deliver') {
+                        switchCourierTab('active');
+                        setTimeout(() => markAsDelivered(parseInt(orderId)), 1000);
+                    }
+                    
+                    window.history.replaceState({}, '', '/courier');
+                }
+            }, 500);
+            
+            setTimeout(() => clearInterval(checkAuth), 10000);
+        }
+    });
+    </script>
 </body>
 </html>
 
