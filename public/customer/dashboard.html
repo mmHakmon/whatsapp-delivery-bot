@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M.M.H Delivery - אזור אישי</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white">
+    <!-- Header -->
+    <header class="gradient-bg border-b border-white/20 sticky top-0 z-10">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="text-3xl">👤</div>
+                <div>
+                    <h1 class="text-xl font-bold" id="customerName">לקוח</h1>
+                    <p class="text-xs text-white/80" id="customerPhone"></p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="showNewOrderModal()" class="bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg font-bold">
+                    ➕ הזמנה חדשה
+                </button>
+                <button onclick="logout()" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg">
+                    🚪 התנתק
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+        <div class="bg-slate-800 rounded-2xl p-8 w-full max-w-md border border-slate-700">
+            <div class="text-center mb-6">
+                <div class="text-6xl mb-4">👤</div>
+                <h2 class="text-2xl font-bold mb-2">אזור לקוחות</h2>
+                <p class="text-slate-400">התחבר או הירשם</p>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm">
+                <form onsubmit="customerLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">מספר טלפון</label>
+                        <input type="tel" id="loginPhone" required
+                               placeholder="050-1234567"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">סיסמה</label>
+                        <input type="password" id="loginPassword" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <button type="submit" class="w-full bg-purple-600 hover:bg-purple-700 font-bold py-3 rounded-lg">
+                        🔐 התחבר
+                    </button>
+                </form>
+                <div class="text-center mt-4">
+                    <button onclick="showRegisterForm()" class="text-purple-400 hover:text-purple-300 text-sm">
+                        אין לך חשבון? הירשם עכשיו →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Register Form -->
+            <div id="registerForm" class="hidden">
+                <form onsubmit="customerRegister(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">שם מלא</label>
+                        <input type="text" id="regName" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">מספר טלפון</label>
+                        <input type="tel" id="regPhone" required
+                               placeholder="050-1234567"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">אימייל (אופציונלי)</label>
+                        <input type="email" id="regEmail"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">סיסמה</label>
+                        <input type="password" id="regPassword" required minlength="6"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 font-bold py-3 rounded-lg">
+                        ✅ הירשם
+                    </button>
+                </form>
+                <div class="text-center mt-4">
+                    <button onclick="showLoginForm()" class="text-purple-400 hover:text-purple-300 text-sm">
+                        ← חזור להתחברות
+                    </button>
+                </div>
+            </div>
+
+            <div id="authError" class="hidden mt-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-red-400 text-sm"></div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main id="mainContent" class="hidden container mx-auto px-4 py-6">
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-3xl">📦</span>
+                    <span class="text-blue-400 text-sm">סה"כ</span>
+                </div>
+                <p class="text-3xl font-bold" id="statTotal">0</p>
+                <p class="text-slate-400 text-sm">הזמנות</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-3xl">🔵</span>
+                    <span class="text-amber-400 text-sm">בתהליך</span>
+                </div>
+                <p class="text-3xl font-bold" id="statActive">0</p>
+                <p class="text-slate-400 text-sm">פעילות</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-3xl">✅</span>
+                    <span class="text-emerald-400 text-sm">הושלמו</span>
+                </div>
+                <p class="text-3xl font-bold" id="statDelivered">0</p>
+                <p class="text-slate-400 text-sm">נמסרו</p>
+            </div>
+            <div class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-3xl">💰</span>
+                    <span class="text-purple-400 text-sm">סה"כ</span>
+                </div>
+                <p class="text-3xl font-bold" id="statSpent">₪0</p>
+                <p class="text-slate-400 text-sm">הוצאות</p>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="mb-6 flex gap-2 border-b border-slate-700">
+            <button onclick="switchTab('active')" id="tabActive" class="tab-active px-6 py-3 font-bold">
+                🔵 פעילות
+            </button>
+            <button onclick="switchTab('history')" id="tabHistory" class="tab-inactive px-6 py-3">
+                📋 היסטוריה
+            </button>
+            <button onclick="switchTab('addresses')" id="tabAddresses" class="tab-inactive px-6 py-3">
+                📍 כתובות שמורות
+            </button>
+            <button onclick="switchTab('settings')" id="tabSettings" class="tab-inactive px-6 py-3">
+                ⚙️ הגדרות
+            </button>
+        </div>
+
+        <!-- Active Orders Tab -->
+        <div id="activeTab" class="tab-content">
+            <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-4">
+                <h2 class="text-xl font-bold mb-4">משלוחים פעילים</h2>
+                <div id="activeOrdersList" class="space-y-3">
+                    <!-- Active orders will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="historyTab" class="tab-content hidden">
+            <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-4">
+                <h2 class="text-xl font-bold mb-4">היסטוריית הזמנות</h2>
+                <div class="mb-4 flex gap-2">
+                    <input type="text" id="searchOrders" placeholder="חיפוש לפי מספר הזמנה..."
+                           class="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500">
+                    <button onclick="searchOrders()" class="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg font-bold">
+                        🔍 חפש
+                    </button>
+                </div>
+                <div id="historyOrdersList" class="space-y-3">
+                    <!-- History will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Saved Addresses Tab -->
+        <div id="addressesTab" class="tab-content hidden">
+            <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">כתובות שמורות</h2>
+                    <button onclick="addNewAddress()" class="bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg font-bold">
+                        ➕ כתובת חדשה
+                    </button>
+                </div>
+                <div id="addressesList" class="space-y-3">
+                    <!-- Saved addresses will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div id="settingsTab" class="tab-content hidden">
+            <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-4">
+                <h2 class="text-xl font-bold mb-6">הגדרות חשבון</h2>
+                <div class="space-y-6">
+                    <div>
+                        <h3 class="font-bold mb-3">פרטים אישיים</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-sm text-slate-400 mb-1">שם מלא</label>
+                                <input type="text" id="settingsName"
+                                       class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-slate-400 mb-1">אימייל</label>
+                                <input type="email" id="settingsEmail"
+                                       class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500">
+                            </div>
+                            <button onclick="updateProfile()" class="bg-emerald-500 hover:bg-emerald-600 px-6 py-2 rounded-lg font-bold">
+                                💾 שמור שינויים
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-700 pt-6">
+                        <h3 class="font-bold mb-3">שינוי סיסמה</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-sm text-slate-400 mb-1">סיסמה נוכחית</label>
+                                <input type="password" id="currentPassword"
+                                       class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-slate-400 mb-1">סיסמה חדשה</label>
+                                <input type="password" id="newPassword" minlength="6"
+                                       class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500">
+                            </div>
+                            <button onclick="changePassword()" class="bg-blue-500 hover:bg-blue-600 px-6 py-2 rounded-lg font-bold">
+                                🔐 שנה סיסמה
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-700 pt-6">
+                        <h3 class="font-bold mb-3 text-red-400">אזור מסוכן</h3>
+                        <button onclick="deleteAccount()" class="bg-red-500 hover:bg-red-600 px-6 py-2 rounded-lg font-bold">
+                            🗑️ מחק חשבון
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- New Order Modal -->
+    <div id="newOrderModal" class="hidden fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full border border-slate-700 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">📦 הזמנה חדשה</h2>
+                <button onclick="closeNewOrderModal()" class="text-3xl hover:text-red-400">×</button>
+            </div>
+            <p class="text-slate-400 mb-4">להזמנה מהירה - מעבר לטופס המלא</p>
+            <a href="/customer/" class="block w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-center font-bold py-4 rounded-xl text-lg">
+                ➕ פתח טופס הזמנה מלא
+            </a>
+        </div>
+    </div>
+
+    <script src="/customer/dashboard.js"></script>
+</body>
+</html>
+
+<style>
+.tab-active {
+    border-bottom: 3px solid #a855f7;
+    color: #a855f7;
+}
+.tab-inactive {
+    color: #94a3b8;
+}
+</style>

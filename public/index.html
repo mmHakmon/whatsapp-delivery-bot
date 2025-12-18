@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M.M.H Delivery - משלוחים מהירים ואמינים</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white">
+    <!-- Hero Section -->
+    <section class="gradient-bg min-h-screen flex items-center justify-center px-4">
+        <div class="text-center max-w-4xl">
+            <div class="text-9xl mb-6 animate-bounce">🚚</div>
+            <h1 class="text-6xl font-black mb-4">M.M.H Delivery</h1>
+            <p class="text-2xl mb-8 text-white/90">משלוחים מהירים ואמינים בכל הארץ</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12">
+                <a href="/customer/order.html" class="bg-white/10 backdrop-blur hover:bg-white/20 border border-white/20 rounded-2xl p-8 transition-all transform hover:scale-105">
+                    <div class="text-6xl mb-4">📦</div>
+                    <h3 class="text-2xl font-bold mb-2">הזמן משלוח</h3>
+                    <p class="text-white/80">שלח חבילה עכשיו</p>
+                </a>
+                
+                <a href="/admin" class="bg-white/10 backdrop-blur hover:bg-white/20 border border-white/20 rounded-2xl p-8 transition-all transform hover:scale-105">
+                    <div class="text-6xl mb-4">👨‍💼</div>
+                    <h3 class="text-2xl font-bold mb-2">פאנל ניהול</h3>
+                    <p class="text-white/80">כניסת מנהלים</p>
+                </a>
+                
+                <a href="/courier" class="bg-white/10 backdrop-blur hover:bg-white/20 border border-white/20 rounded-2xl p-8 transition-all transform hover:scale-105">
+                    <div class="text-6xl mb-4">🏍️</div>
+                    <h3 class="text-2xl font-bold mb-2">אזור שליחים</h3>
+                    <p class="text-white/80">כניסת שליחים</p>
+                </a>
+            </div>
+
+            <div class="flex justify-center gap-4">
+                <a href="/courier/register.html" class="bg-emerald-500 hover:bg-emerald-600 px-8 py-4 rounded-xl font-bold text-lg">
+                    ✨ הצטרף כשליח
+                </a>
+                <a href="/customer/track.html" class="bg-blue-500 hover:bg-blue-600 px-8 py-4 rounded-xl font-bold text-lg">
+                    🔍 עקוב אחר משלוח
+                </a>
+            </div>
+        </div>
+    </section>
+</body>
+</html>

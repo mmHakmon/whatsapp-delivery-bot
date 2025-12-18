@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M.M.H Delivery - הצטרפות שליחים</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen">
+    <!-- Header -->
+    <header class="gradient-bg border-b border-white/20">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex items-center justify-center gap-3">
+                <div class="text-5xl">🏍️</div>
+                <div class="text-center">
+                    <h1 class="text-3xl font-bold">הצטרף כשליח ל-M.M.H</h1>
+                    <p class="text-white/80">מלא את הטופס והצטרף למשפחת המשלוחים</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Registration Form -->
+    <main class="container mx-auto px-4 py-8 max-w-2xl">
+        <form id="courierRegisterForm" onsubmit="registerCourier(event)" class="space-y-6">
+            <!-- Personal Info -->
+            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <span class="text-3xl">👤</span>
+                    <span>פרטים אישיים</span>
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">שם פרטי *</label>
+                        <input type="text" id="firstName" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">שם משפחה *</label>
+                        <input type="text" id="lastName" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">תעודת זהות *</label>
+                        <input type="text" id="idNumber" required pattern="[0-9]{9}"
+                               placeholder="123456789"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">גיל *</label>
+                        <input type="number" id="age" required min="18" max="80"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">מין *</label>
+                        <select id="gender" required
+                                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                            <option value="">בחר...</option>
+                            <option value="male">זכר</option>
+                            <option value="female">נקבה</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contact Info -->
+            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <span class="text-3xl">📞</span>
+                    <span>פרטי קשר</span>
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">מספר טלפון *</label>
+                        <input type="tel" id="phone" required pattern="[0-9]{10}"
+                               placeholder="0501234567"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">אימייל</label>
+                        <input type="email" id="email"
+                               placeholder="example@mail.com"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">כתובת מגורים *</label>
+                        <input type="text" id="address" required
+                               placeholder="רחוב, מספר, עיר"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Work Info -->
+            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <span class="text-3xl">🚗</span>
+                    <span>פרטי עבודה</span>
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">איזור עבודה עיקרי *</label>
+                        <select id="workArea" required
+                                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                            <option value="">בחר איזור...</option>
+                            <option value="center">מרכז</option>
+                            <option value="north">צפון</option>
+                            <option value="south">דרום</option>
+                            <option value="jerusalem">ירושלים</option>
+                        </select>
+                        <p class="text-xs text-slate-400 mt-1">💡 לידע בלבד - תוכל לקבל משלוחים בכל הארץ</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">סוג רכב *</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="cursor-pointer">
+                                <input type="radio" name="vehicleType" value="motorcycle" required class="hidden peer">
+                                <div class="bg-slate-700 border-2 border-slate-600 peer-checked:border-purple-500 peer-checked:bg-purple-500/20 rounded-xl p-4 text-center transition-all">
+                                    <div class="text-4xl mb-2">🏍️</div>
+                                    <p class="font-bold">אופנוע</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="vehicleType" value="car" class="hidden peer">
+                                <div class="bg-slate-700 border-2 border-slate-600 peer-checked:border-purple-500 peer-checked:bg-purple-500/20 rounded-xl p-4 text-center transition-all">
+                                    <div class="text-4xl mb-2">🚗</div>
+                                    <p class="font-bold">רכב פרטי</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="vehicleType" value="van" class="hidden peer">
+                                <div class="bg-slate-700 border-2 border-slate-600 peer-checked:border-purple-500 peer-checked:bg-purple-500/20 rounded-xl p-4 text-center transition-all">
+                                    <div class="text-4xl mb-2">🚐</div>
+                                    <p class="font-bold">מסחרית</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer">
+                                <input type="radio" name="vehicleType" value="truck" class="hidden peer">
+                                <div class="bg-slate-700 border-2 border-slate-600 peer-checked:border-purple-500 peer-checked:bg-purple-500/20 rounded-xl p-4 text-center transition-all">
+                                    <div class="text-4xl mb-2">🚚</div>
+                                    <p class="font-bold">משאית</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">מספר רישוי רכב (אופציונלי)</label>
+                        <input type="text" id="vehiclePlate"
+                               placeholder="12-345-67"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Terms -->
+            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" id="terms" required class="mt-1">
+                    <span class="text-sm text-slate-300">
+                        אני מאשר/ת שקראתי והסכמתי לתנאי השימוש ומדיניות הפרטיות של M.M.H Delivery.
+                        אני מבין/ה שאני אעבוד כעצמאי/ת ולא כעובד/ת שכיר/ה.
+                    </span>
+                </label>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" class="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 font-bold py-4 rounded-xl text-lg shadow-lg">
+                ✅ שלח בקשת הצטרפות
+            </button>
+        </form>
+
+        <!-- Success Message -->
+        <div id="successMessage" class="hidden mt-8 bg-emerald-500/20 border border-emerald-500 rounded-xl p-6 text-center">
+            <div class="text-6xl mb-4">✅</div>
+            <h3 class="text-2xl font-bold mb-2">בקשתך נשלחה בהצלחה!</h3>
+            <p class="text-slate-300 mb-4">המנהלים יבדקו את הבקשה ויצרו איתך קשר בהקדם</p>
+            <a href="/" class="inline-block bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-bold">
+                חזור לדף הבית
+            </a>
+        </div>
+    </main>
+
+    <script>
+        async function registerCourier(event) {
+            event.preventDefault();
+
+            const formData = {
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                idNumber: document.getElementById('idNumber').value,
+                age: document.getElementById('age').value,
+                gender: document.getElementById('gender').value,
+                phone: document.getElementById('phone').value,
+                email: document.getElementById('email').value,
+                address: document.getElementById('address').value,
+                workArea: document.getElementById('workArea').value,
+                vehicleType: document.querySelector('input[name="vehicleType"]:checked').value,
+                vehiclePlate: document.getElementById('vehiclePlate').value
+            };
+
+            try {
+                const response = await fetch('/api/couriers/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+
+                if (response.ok) {
+                    document.getElementById('courierRegisterForm').classList.add('hidden');
+                    document.getElementById('successMessage').classList.remove('hidden');
+                    window.scrollTo(0, 0);
+                } else {
+                    const data = await response.json();
+                    alert('❌ ' + (data.error || 'שגיאה ברישום'));
+                }
+            } catch (error) {
+                console.error('Register error:', error);
+                alert('❌ שגיאת תקשורת');
+            }
+        }
+    </script>
+</body>
+</html>
