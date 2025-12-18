@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>הפרופיל שלי - M.M.H Delivery</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #0f172a;
+      color: white;
+      padding-bottom: 100px;
+    }
+    .header {
+      background: #1e293b;
+      border-bottom: 1px solid #475569;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .back-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.5rem;
+      background: #334155;
+      border: none;
+      color: white;
+      cursor: pointer;
+    }
+    .header-title { flex: 1; }
+    .header-title h1 { font-size: 1.25rem; font-weight: 700; }
+    .header-title p { font-size: 0.875rem; color: #9ca3af; }
+    .container { padding: 1rem; max-width: 600px; margin: 0 auto; }
+    
+    .profile-card {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      border-radius: 1.5rem;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+    .profile-avatar {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: white;
+      color: #6366f1;
+      font-size: 3rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+      font-weight: 700;
+    }
+    .profile-name {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .profile-phone {
+      font-size: 1rem;
+      opacity: 0.9;
+    }
+    
+    .section {
+      background: #1e293b;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      border: 1px solid #475569;
+    }
+    .section-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: #6366f1;
+    }
+    
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .stat-box {
+      background: #0f172a;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #6366f1;
+      margin-bottom: 0.25rem;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: #9ca3af;
+    }
+    
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: #e5e7eb;
+    }
+    .form-input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #475569;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      color: white;
+      font-size: 1rem;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+    .form-input:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 0.75rem;
+      border-radius: 0.75rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(to right, #6366f1, #4f46e5);
+      color: white;
+    }
+    .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .alert {
+      padding: 1rem;
+      border-radius: 0.75rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .alert-success {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #818cf8;
+    }
+    .alert-error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+    .hidden { display: none !important; }
+    
+    @media (max-width: 640px) {
+      .stats-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <button class="back-btn" onclick="goBack()">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </button>
+    <div class="header-title">
+      <h1>הפרופיל שלי</h1>
+      <p>ניהול פרטים אישיים</p>
+    </div>
+  </header>
+
+  <div class="container">
+    <div id="alertBox" class="alert alert-success hidden">
+      <span style="font-size: 1.5rem;">✅</span>
+      <div id="alertMessage"></div>
+    </div>
+
+    <div class="profile-card">
+      <div class="profile-avatar" id="avatar">👤</div>
+      <div class="profile-name" id="customerName">טוען...</div>
+      <div class="profile-phone" id="customerPhone">📞 ---</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📊 סטטיסטיקות</div>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-value" id="totalOrders">0</div>
+          <div class="stat-label">משלוחים</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-value" id="activeOrders">0</div>
+          <div class="stat-label">פעילים</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">👤 פרטים אישיים</div>
+      <form id="profileForm">
+        <div class="form-group">
+          <label class="form-label">שם מלא</label>
+          <input type="text" id="fullName" class="form-input" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">טלפון</label>
+          <input type="tel" id="phone" class="form-input" disabled>
+        </div>
+        <div class="form-group">
+          <label class="form-label">אימייל</label>
+          <input type="email" id="email" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">כתובת ברירת מחדל</label>
+          <input type="text" id="defaultAddress" class="form-input" placeholder="כתובת לשימוש חוזר במשלוחים">
+        </div>
+        <button type="submit" class="btn btn-primary" id="saveBtn">
+          <span>שמור שינויים</span>
+          <span>💾</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = window.location.origin;
+    let customerPhone = null;
+
+    async function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      customerPhone = urlParams.get('phone') || localStorage.getItem('customer_phone');
+      
+      if (!customerPhone) {
+        window.location.href = '/customer/login';
+        return;
+      }
+
+      await loadCustomerData();
+    }
+
+    async function loadCustomerData() {
+      try {
+        document.getElementById('phone').value = customerPhone;
+        document.getElementById('customerPhone').textContent = `📞 ${customerPhone}`;
+        
+        // Load orders statistics
+        const ordersResponse = await fetch(`${API_URL}/api/customers/${customerPhone}/orders`);
+        const ordersData = await ordersResponse.json();
+        
+        if (ordersData.success) {
+          const orders = ordersData.orders || [];
+          document.getElementById('totalOrders').textContent = orders.length;
+          
+          const activeOrders = orders.filter(o => 
+            ['new', 'published', 'taken', 'picked'].includes(o.status)
+          ).length;
+          document.getElementById('activeOrders').textContent = activeOrders;
+        }
+        
+        // Load saved profile data
+        const savedProfile = JSON.parse(localStorage.getItem('customer_profile') || '{}');
+        if (savedProfile.fullName) {
+          document.getElementById('fullName').value = savedProfile.fullName;
+          document.getElementById('customerName').textContent = savedProfile.fullName;
+          
+          const initials = savedProfile.fullName.split(' ').map(n => n[0]).join('').substring(0, 2);
+          document.getElementById('avatar').textContent = initials;
+        }
+        if (savedProfile.email) {
+          document.getElementById('email').value = savedProfile.email;
+        }
+        if (savedProfile.defaultAddress) {
+          document.getElementById('defaultAddress').value = savedProfile.defaultAddress;
+        }
+        
+      } catch (error) {
+        console.error('Error loading customer:', error);
+      }
+    }
+
+    document.getElementById('profileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const saveBtn = document.getElementById('saveBtn');
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<span>שומר...</span> ⏳';
+
+      try {
+        const profileData = {
+          fullName: document.getElementById('fullName').value,
+          email: document.getElementById('email').value,
+          defaultAddress: document.getElementById('defaultAddress').value,
+          phone: customerPhone
+        };
+
+        // Save to localStorage
+        localStorage.setItem('customer_profile', JSON.stringify(profileData));
+        
+        showAlert('הפרופיל עודכן בהצלחה!', 'success');
+        await loadCustomerData();
+        
+      } catch (error) {
+        console.error('Update error:', error);
+        showAlert('שגיאה בעדכון הפרופיל', 'error');
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<span>שמור שינויים</span> 💾';
+      }
+    });
+
+    function showAlert(message, type = 'success') {
+      const alertBox = document.getElementById('alertBox');
+      const alertMessage = document.getElementById('alertMessage');
+      
+      alertBox.className = `alert alert-${type}`;
+      alertMessage.textContent = message;
+      alertBox.classList.remove('hidden');
+      
+      setTimeout(() => {
+        alertBox.classList.add('hidden');
+      }, 5000);
+    }
+
+    function goBack() {
+      window.location.href = `/customer-dashboard.html?phone=${customerPhone}`;
+    }
+
+    init();
+  </script>
+</body>
+</html>

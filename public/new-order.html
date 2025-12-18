@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#10b981">
+  <title>משלוח חדש - M.M.H Delivery</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+      background-color: #0f172a;
+      color: #ffffff;
+      line-height: 1.5;
+      padding-bottom: 100px;
+    }
+
+    .header {
+      background: #1e293b;
+      border-bottom: 1px solid #475569;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      backdrop-filter: blur(20px);
+    }
+
+    .header-content {
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .back-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.5rem;
+      background: #334155;
+      border: none;
+      color: white;
+      cursor: pointer;
+    }
+
+    .header-title {
+      flex: 1;
+    }
+
+    .header-title h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .header-title p {
+      font-size: 0.875rem;
+      color: #9ca3af;
+    }
+
+    .container {
+      padding: 1rem;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .form-section {
+      background: #1e293b;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      border: 1px solid #475569;
+    }
+
+    .section-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #10b981;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.875rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: #e5e7eb;
+    }
+
+    .form-label.required::after {
+      content: " *";
+      color: #f87171;
+    }
+
+    .form-input,
+    .form-select,
+    .form-textarea {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #475569;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      color: white;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus,
+    .form-select:focus,
+    .form-textarea:focus {
+      outline: none;
+      border-color: #10b981;
+    }
+
+    .form-textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .vehicle-types {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+
+    .vehicle-card {
+      background: #0f172a;
+      border: 2px solid #475569;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .vehicle-card:hover {
+      border-color: #10b981;
+      background: #1e293b;
+    }
+
+    .vehicle-card.selected {
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    .vehicle-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .vehicle-name {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .vehicle-price {
+      font-size: 0.875rem;
+      color: #34d399;
+      font-weight: 600;
+    }
+
+    .price-summary {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      font-size: 0.875rem;
+    }
+
+    .price-row:last-child {
+      margin-bottom: 0;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.3);
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+
+    .distance-badge {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      display: inline-block;
+      margin-top: 0.5rem;
+    }
+
+    .btn-primary {
+      background: linear-gradient(to right, #10b981, #059669);
+      color: white;
+      border: none;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      font-weight: 600;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .alert {
+      padding: 1rem;
+      border-radius: 0.75rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .alert-info {
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #60a5fa;
+    }
+
+    .alert-warning {
+      background: rgba(251, 191, 36, 0.1);
+      border: 1px solid rgba(251, 191, 36, 0.3);
+      color: #fbbf24;
+    }
+
+    .alert-error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+
+    .alert-success {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+    }
+
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    .spinner {
+      border: 3px solid #475569;
+      border-top-color: #10b981;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .flex {
+      display: flex;
+    }
+
+    .items-center {
+      align-items: center;
+    }
+
+    .gap-2 {
+      gap: 0.5rem;
+    }
+
+    @media (max-width: 640px) {
+      .vehicle-types {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <button class="back-btn" onclick="goBack()">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header-title">
+        <h1>משלוח חדש</h1>
+        <p>הזן את פרטי המשלוח</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="container">
+    
+    <!-- Alert - Express Only -->
+    <div class="alert alert-info">
+      <span style="font-size: 1.5rem;">ℹ️</span>
+      <div>
+        <strong>משלוחי אקספרס בלבד</strong><br>
+        <small>למשלוחים משפטיים/רשויות, אנא צור קשר בוואטסאפ או טלפון</small>
+      </div>
+    </div>
+
+    <!-- Form -->
+    <form id="orderForm">
+      
+      <!-- Pickup Details -->
+      <div class="form-section">
+        <div class="section-title">
+          📍 פרטי איסוף
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label required">כתובת איסוף</label>
+          <input 
+            type="text" 
+            id="pickupAddress" 
+            class="form-input" 
+            placeholder="לדוגמה: רחוב הרצל 1, תל אביב"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label required">שם איש קשר לאיסוף</label>
+          <input 
+            type="text" 
+            id="pickupContact" 
+            class="form-input" 
+            placeholder="שם מלא"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label required">טלפון לאיסוף</label>
+          <input 
+            type="tel" 
+            id="pickupPhone" 
+            class="form-input" 
+            placeholder="050-1234567"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">הערות לאיסוף</label>
+          <textarea 
+            id="pickupNotes" 
+            class="form-textarea" 
+            placeholder="כניסה א', קומה 3, וכו..."
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- Delivery Details -->
+      <div class="form-section">
+        <div class="section-title">
+          🎯 פרטי מסירה
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label required">כתובת מסירה</label>
+          <input 
+            type="text" 
+            id="deliveryAddress" 
+            class="form-input" 
+            placeholder="לדוגמה: רחוב ביאליק 10, חיפה"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label required">שם מקבל</label>
+          <input 
+            type="text" 
+            id="deliveryContact" 
+            class="form-input" 
+            placeholder="שם מלא"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label required">טלפון מקבל</label>
+          <input 
+            type="tel" 
+            id="deliveryPhone" 
+            class="form-input" 
+            placeholder="050-1234567"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">הערות למסירה</label>
+          <textarea 
+            id="deliveryNotes" 
+            class="form-textarea" 
+            placeholder="כניסה ב', קומה 2, וכו..."
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- Package Details -->
+      <div class="form-section">
+        <div class="section-title">
+          📦 פרטי החבילה
+        </div>
+
+        <div class="form-group">
+          <label class="form-label required">תיאור החבילה</label>
+          <input 
+            type="text" 
+            id="packageDescription" 
+            class="form-input" 
+            placeholder="לדוגמה: מסמכים, חבילה קטנה, וכו..."
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">הערות נוספות</label>
+          <textarea 
+            id="additionalNotes" 
+            class="form-textarea" 
+            placeholder="כל מידע רלוונטי נוסף..."
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- Vehicle Type -->
+      <div class="form-section">
+        <div class="section-title">
+          🚗 סוג רכב
+        </div>
+
+        <div class="vehicle-types">
+          <div class="vehicle-card" data-type="motorcycle" data-base="70" onclick="selectVehicle(this)">
+            <div class="vehicle-icon">🏍️</div>
+            <div class="vehicle-name">אופנוע</div>
+            <div class="vehicle-price">מ-₪70</div>
+          </div>
+
+          <div class="vehicle-card" data-type="car" data-base="100" onclick="selectVehicle(this)">
+            <div class="vehicle-icon">🚗</div>
+            <div class="vehicle-name">רכב</div>
+            <div class="vehicle-price">מ-₪100</div>
+          </div>
+
+          <div class="vehicle-card" data-type="van" data-base="350" onclick="selectVehicle(this)">
+            <div class="vehicle-icon">🚐</div>
+            <div class="vehicle-name">מסחרית</div>
+            <div class="vehicle-price">מ-₪350</div>
+          </div>
+
+          <div class="vehicle-card" data-type="truck" data-base="950" onclick="selectVehicle(this)">
+            <div class="vehicle-icon">🚚</div>
+            <div class="vehicle-name">משאית</div>
+            <div class="vehicle-price">מ-₪950</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Price Summary -->
+      <div id="priceSummary" class="price-summary hidden">
+        <div class="price-row">
+          <span>מחיר בסיס:</span>
+          <span id="basePrice">₪0</span>
+        </div>
+        <div class="price-row">
+          <span>מרחק:</span>
+          <span id="distanceText">0 ק"מ</span>
+        </div>
+        <div class="price-row">
+          <span>תוספת מרחק:</span>
+          <span id="distancePrice">₪0</span>
+        </div>
+        <div class="price-row">
+          <span>סכום ביניים:</span>
+          <span id="subtotalPrice">₪0</span>
+        </div>
+        <div class="price-row">
+          <span>מע"ם (18%):</span>
+          <span id="vatPrice">₪0</span>
+        </div>
+        <div class="price-row">
+          <span>סה"כ כולל מע"ם:</span>
+          <span id="totalPrice">₪0</span>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <div style="color: #9ca3af;">מחשב מרחק ומחיר...</div>
+      </div>
+
+      <!-- Error Alert -->
+      <div id="errorAlert" class="alert alert-error hidden">
+        <span style="font-size: 1.5rem;">⚠️</span>
+        <div id="errorMessage"></div>
+      </div>
+
+      <!-- Submit Button -->
+      <button type="submit" class="btn-primary" id="submitBtn">
+        <span>שלח בקשה לאישור</span>
+        <span>📤</span>
+      </button>
+
+    </form>
+
+    <!-- Info Alert -->
+    <div class="alert alert-warning" style="margin-top: 1rem;">
+      <span style="font-size: 1.5rem;">💡</span>
+      <div>
+        <strong>שים לב:</strong><br>
+        <small>ההזמנה תישלח לאישור מנהל/נציג. תקבל עדכון לאחר האישור.</small>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const API_URL = window.location.origin;
+    const VAT_RATE = 0.18; // מע"ם 18%
+    let selectedVehicleType = null;
+    let selectedVehicleBase = 0;
+    let calculatedDistance = 0;
+    let customerPhone = null;
+
+    // Initialize
+    function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      customerPhone = urlParams.get('phone') || localStorage.getItem('customer_phone');
+      
+      if (!customerPhone) {
+        alert('נא להתחבר תחילה');
+        window.location.href = '/customer-dashboard.html';
+        return;
+      }
+
+      // Auto-calculate on address change
+      document.getElementById('pickupAddress').addEventListener('blur', calculatePrice);
+      document.getElementById('deliveryAddress').addEventListener('blur', calculatePrice);
+    }
+
+    function goBack() {
+      window.history.back();
+    }
+
+    function selectVehicle(card) {
+      // Remove previous selection
+      document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('selected'));
+      
+      // Select new
+      card.classList.add('selected');
+      selectedVehicleType = card.dataset.type;
+      selectedVehicleBase = parseInt(card.dataset.base);
+      
+      calculatePrice();
+    }
+
+    async function calculatePrice() {
+      const pickup = document.getElementById('pickupAddress').value.trim();
+      const delivery = document.getElementById('deliveryAddress').value.trim();
+      
+      if (!pickup || !delivery || !selectedVehicleType) {
+        return;
+      }
+
+      const loading = document.getElementById('loading');
+      const summary = document.getElementById('priceSummary');
+      const errorAlert = document.getElementById('errorAlert');
+      
+      loading.classList.add('active');
+      summary.classList.add('hidden');
+      errorAlert.classList.add('hidden');
+
+      try {
+        // Calculate distance using Google Maps API
+        const response = await fetch(`${API_URL}/api/calculate-distance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            origin: pickup, 
+            destination: delivery 
+          })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.message || 'שגיאה בחישוב מרחק');
+        }
+
+        calculatedDistance = data.distance;
+        const distancePrice = Math.max(0, (calculatedDistance - 1) * 2.5); // 2.5 לק"מ אחרי הק"מ הראשון
+        const subtotal = selectedVehicleBase + distancePrice;
+        const vat = subtotal * VAT_RATE;
+        const totalPrice = subtotal + vat;
+
+        // Update UI
+        document.getElementById('basePrice').textContent = `₪${selectedVehicleBase.toFixed(0)}`;
+        document.getElementById('distanceText').textContent = `${calculatedDistance.toFixed(1)} ק"מ`;
+        document.getElementById('distancePrice').textContent = `₪${distancePrice.toFixed(0)}`;
+        document.getElementById('subtotalPrice').textContent = `₪${subtotal.toFixed(0)}`;
+        document.getElementById('vatPrice').textContent = `₪${vat.toFixed(0)}`;
+        document.getElementById('totalPrice').textContent = `₪${totalPrice.toFixed(0)}`;
+
+        summary.classList.remove('hidden');
+        loading.classList.remove('active');
+
+      } catch (error) {
+        console.error('Calculate price error:', error);
+        loading.classList.remove('active');
+        errorAlert.classList.remove('hidden');
+        document.getElementById('errorMessage').textContent = error.message || 'שגיאה בחישוב מחיר. אנא בדוק את הכתובות.';
+      }
+    }
+
+    document.getElementById('orderForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (!selectedVehicleType) {
+        alert('אנא בחר סוג רכב');
+        return;
+      }
+
+      if (calculatedDistance === 0) {
+        alert('אנא המתן לחישוב המחיר');
+        return;
+      }
+
+      const submitBtn = document.getElementById('submitBtn');
+      const errorAlert = document.getElementById('errorAlert');
+      
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span>שולח...</span> ⏳';
+      errorAlert.classList.add('hidden');
+
+      try {
+        const distancePrice = Math.max(0, (calculatedDistance - 1) * 2.5);
+        const subtotal = selectedVehicleBase + distancePrice;
+        const vat = subtotal * VAT_RATE;
+        const totalPrice = subtotal + vat;
+
+        const formData = {
+          customerPhone: customerPhone,
+          pickupAddress: document.getElementById('pickupAddress').value.trim(),
+          pickupContact: document.getElementById('pickupContact').value.trim(),
+          pickupPhone: document.getElementById('pickupPhone').value.trim(),
+          pickupNotes: document.getElementById('pickupNotes').value.trim(),
+          deliveryAddress: document.getElementById('deliveryAddress').value.trim(),
+          deliveryContact: document.getElementById('deliveryContact').value.trim(),
+          deliveryPhone: document.getElementById('deliveryPhone').value.trim(),
+          deliveryNotes: document.getElementById('deliveryNotes').value.trim(),
+          packageDescription: document.getElementById('packageDescription').value.trim(),
+          additionalNotes: document.getElementById('additionalNotes').value.trim(),
+          vehicleType: selectedVehicleType,
+          distance: calculatedDistance,
+          basePrice: selectedVehicleBase,
+          subtotal: subtotal,
+          vat: vat,
+          totalPrice: totalPrice
+        };
+
+        const response = await fetch(`${API_URL}/api/orders/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('✅ ההזמנה נשלחה בהצלחה!\n\nההזמנה ממתינה לאישור מנהל. תקבל עדכון בהקדם.');
+          window.location.href = `/customer-dashboard.html?phone=${customerPhone}`;
+        } else {
+          throw new Error(data.message || 'שגיאה ביצירת הזמנה');
+        }
+
+      } catch (error) {
+        console.error('Submit order error:', error);
+        errorAlert.classList.remove('hidden');
+        document.getElementById('errorMessage').textContent = error.message || 'שגיאה ביצירת הזמנה';
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>שלח בקשה לאישור</span> 📤';
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

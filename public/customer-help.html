@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>עזרה ותמיכה - M.M.H Delivery</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, system-ui, sans-serif;
+      background: #0f172a;
+      color: white;
+      padding-bottom: 100px;
+    }
+    .header {
+      background: #1e293b;
+      border-bottom: 1px solid #475569;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .back-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0.5rem;
+      background: #334155;
+      border: none;
+      color: white;
+      cursor: pointer;
+    }
+    .header-title { flex: 1; }
+    .header-title h1 { font-size: 1.25rem; font-weight: 700; }
+    .header-title p { font-size: 0.875rem; color: #9ca3af; }
+    .container { padding: 1rem; max-width: 600px; margin: 0 auto; }
+    
+    .hero {
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      border-radius: 1.5rem;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+    .hero-icon { font-size: 4rem; margin-bottom: 1rem; }
+    .hero-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .hero-subtitle { opacity: 0.9; }
+    
+    .contact-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .contact-card {
+      background: #1e293b;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      text-align: center;
+      border: 1px solid #475569;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .contact-card:hover {
+      border-color: #6366f1;
+      transform: translateY(-2px);
+    }
+    .contact-icon {
+      font-size: 2.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .contact-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .contact-subtitle {
+      font-size: 0.875rem;
+      color: #9ca3af;
+    }
+    
+    .section {
+      background: #1e293b;
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      border: 1px solid #475569;
+    }
+    .section-title {
+      font-size: 1.125rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: #6366f1;
+    }
+    
+    .faq-item {
+      background: #0f172a;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+      border: 1px solid #334155;
+      cursor: pointer;
+    }
+    .faq-item:last-child { margin-bottom: 0; }
+    .faq-question {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .faq-answer {
+      color: #9ca3af;
+      font-size: 0.875rem;
+      line-height: 1.5;
+      display: none;
+      padding-top: 0.5rem;
+      border-top: 1px solid #334155;
+    }
+    .faq-item.active .faq-answer {
+      display: block;
+    }
+    .faq-icon {
+      color: #6366f1;
+      transition: transform 0.3s;
+    }
+    .faq-item.active .faq-icon {
+      transform: rotate(180deg);
+    }
+    
+    @media (max-width: 640px) {
+      .contact-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <button class="back-btn" onclick="goBack()">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </button>
+    <div class="header-title">
+      <h1>עזרה ותמיכה</h1>
+      <p>אנחנו כאן בשבילך</p>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="hero">
+      <div class="hero-icon">💬</div>
+      <div class="hero-title">איך נוכל לעזור?</div>
+      <div class="hero-subtitle">צוות התמיכה זמין 24/7</div>
+    </div>
+
+    <div class="contact-grid">
+      <div class="contact-card" onclick="contactWhatsApp()">
+        <div class="contact-icon">📱</div>
+        <div class="contact-title">WhatsApp</div>
+        <div class="contact-subtitle">תמיכה מיידית</div>
+      </div>
+
+      <div class="contact-card" onclick="contactPhone()">
+        <div class="contact-icon">📞</div>
+        <div class="contact-title">טלפון</div>
+        <div class="contact-subtitle">שיחה ישירה</div>
+      </div>
+
+      <div class="contact-card" onclick="contactEmail()">
+        <div class="contact-icon">✉️</div>
+        <div class="contact-title">אימייל</div>
+        <div class="contact-subtitle">support@mmh.co.il</div>
+      </div>
+
+      <div class="contact-card" onclick="trackOrder()">
+        <div class="contact-icon">📦</div>
+        <div class="contact-title">עקוב אחרי משלוח</div>
+        <div class="contact-subtitle">מעקב בזמן אמת</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">❓ שאלות נפוצות</div>
+      
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-question">
+          <span>כמה זמן לוקח משלוח?</span>
+          <span class="faq-icon">▼</span>
+        </div>
+        <div class="faq-answer">
+          משלוחי אקספרס מגיעים בדרך כלל תוך 1-3 שעות מרגע תפיסת המשלוח על ידי שליח. זמן המשלוח תלוי במרחק ובעומס התנועה.
+        </div>
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-question">
+          <span>איך אני יודע שהמשלוח נתפס?</span>
+          <span class="faq-icon">▼</span>
+        </div>
+        <div class="faq-answer">
+          תקבל התראת WhatsApp עם פרטי השליח (שם, טלפון, סוג רכב) ברגע שהמשלוח נתפס. תוכל גם לעקוב אחרי הסטטוס בדאשבורד.
+        </div>
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-question">
+          <span>מה עושים אם השליח לא מגיע?</span>
+          <span class="faq-icon">▼</span>
+        </div>
+        <div class="faq-answer">
+          ראשית, נסה ליצור קשר עם השליח בטלפון. אם אין מענה, פנה למוקד התמיכה שלנו ונטפל בזה מיד.
+        </div>
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-question">
+          <span>איך מחושב המחיר?</span>
+          <span class="faq-icon">▼</span>
+        </div>
+        <div class="faq-answer">
+          המחיר מחושב לפי: מחיר בסיס (לפי סוג רכב) + 2.5 ש"ח לק"מ + מע"מ 18%. המערכת מחשבת את המרחק אוטומטית דרך Google Maps.
+        </div>
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-question">
+          <span>מתי אני משלם?</span>
+          <span class="faq-icon">▼</span>
+        </div>
+        <div class="faq-answer">
+          התשלום מתבצע רק לאחר אישור ההזמנה על ידי המנהל. ניתן לשלם בביט, פייבוקס, כרטיס אשראי או העברה בנקאית.
+        </div>
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-question">
+          <span>אפשר לבטל משלוח?</span>
+          <span class="faq-icon">▼</span>
+        </div>
+        <div class="faq-answer">
+          ניתן לבטל משלוח עד שהשליח איסף את החבילה. פנה למוקד לביטול. ביטולים לאחר איסוף עלולים לכרוך בעמלת ביטול.
+        </div>
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-question">
+          <span>מה אם החבילה ניזוקה?</span>
+          <span class="faq-icon">▼</span>
+        </div>
+        <div class="faq-answer">
+          כל המשלוחים מבוטחים. במקרה של נזק, דווח מיד למוקד עם תמונות. ניפתח תהליך תביעה ונטפל בפיצוי.
+        </div>
+      </div>
+
+      <div class="faq-item" onclick="toggleFaq(this)">
+        <div class="faq-question">
+          <span>איך משנים כתובת בדרך?</span>
+          <span class="faq-icon">▼</span>
+        </div>
+        <div class="faq-answer">
+          צור קשר עם השליח ישירות בטלפון או דרך המוקד. שינוי כתובת עלול להשפיע על המחיר הסופי.
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">📋 מחירון</div>
+      <div style="background: #0f172a; padding: 1rem; border-radius: 0.75rem; font-size: 0.875rem; line-height: 1.8;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+          <span>🏍️ אופנוע - בסיס:</span>
+          <strong>₪70</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+          <span>🚗 רכב - בסיס:</span>
+          <strong>₪100</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+          <span>🚐 מסחרית - בסיס:</span>
+          <strong>₪350</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+          <span>🚚 משאית - בסיס:</span>
+          <strong>₪950</strong>
+        </div>
+        <div style="border-top: 1px solid #334155; padding-top: 0.5rem; margin-top: 0.5rem;">
+          <div style="display: flex; justify-content: space-between;">
+            <span>תוספת לק"מ:</span>
+            <strong>₪2.5</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; margin-top: 0.25rem; color: #9ca3af;">
+            <span>מע"מ:</span>
+            <span>18%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">ℹ️ מידע נוסף</div>
+      <div style="background: #0f172a; padding: 1rem; border-radius: 0.75rem; font-size: 0.875rem; color: #9ca3af; line-height: 1.8;">
+        <div><strong style="color: white;">שעות פעילות:</strong> 24/7</div>
+        <div><strong style="color: white;">אזורי שירות:</strong> כל הארץ</div>
+        <div><strong style="color: white;">זמן תגובה ממוצע:</strong> 2-5 דקות</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let customerPhone = null;
+
+    function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      customerPhone = urlParams.get('phone') || localStorage.getItem('customer_phone');
+      
+      if (!customerPhone) {
+        window.location.href = '/customer/login';
+        return;
+      }
+    }
+
+    function toggleFaq(element) {
+      element.classList.toggle('active');
+    }
+
+    function contactWhatsApp() {
+      window.open('https://wa.me/972501234567', '_blank');
+    }
+
+    function contactPhone() {
+      window.location.href = 'tel:+972501234567';
+    }
+
+    function contactEmail() {
+      window.location.href = 'mailto:support@mmh.co.il';
+    }
+
+    function trackOrder() {
+      window.location.href = `/customer-dashboard.html?phone=${customerPhone}`;
+    }
+
+    function goBack() {
+      window.location.href = `/customer-dashboard.html?phone=${customerPhone}`;
+    }
+
+    init();
+  </script>
+</body>
+</html>

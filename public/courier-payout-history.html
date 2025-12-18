@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>היסטוריית תשלומים - M.M.H Delivery</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, system-ui, sans-serif; background: #0f172a; color: white; padding-bottom: 100px; }
+    .header { background: #1e293b; border-bottom: 1px solid #475569; position: sticky; top: 0; z-index: 40; padding: 1rem; display: flex; align-items: center; gap: 1rem; }
+    .back-btn { width: 2.5rem; height: 2.5rem; display: flex; align-items: center; justify-content: center; border-radius: 0.5rem; background: #334155; border: none; color: white; cursor: pointer; }
+    .header-title { flex: 1; }
+    .header-title h1 { font-size: 1.25rem; font-weight: 700; }
+    .header-title p { font-size: 0.875rem; color: #9ca3af; }
+    .container { padding: 1rem; max-width: 600px; margin: 0 auto; }
+    .section { background: #1e293b; border-radius: 1rem; padding: 1.5rem; margin-bottom: 1rem; border: 1px solid #475569; }
+    .section-title { font-size: 1.125rem; font-weight: 700; margin-bottom: 1rem; color: #10b981; }
+    .request-item { background: #0f172a; border-radius: 0.75rem; padding: 1rem; margin-bottom: 0.75rem; border: 1px solid #334155; }
+    .request-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .request-amount { font-size: 1.25rem; font-weight: 700; color: #10b981; }
+    .request-date { font-size: 0.875rem; color: #9ca3af; }
+    .request-method { font-size: 0.875rem; color: #9ca3af; margin-bottom: 0.25rem; }
+    .status-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+    .status-pending { background: rgba(251, 191, 36, 0.1); color: #fbbf24; }
+    .status-approved { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
+    .status-completed { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+    .status-rejected { background: rgba(239, 68, 68, 0.1); color: #f87171; }
+    .empty-state { text-align: center; padding: 3rem 1rem; color: #9ca3af; }
+    .empty-icon { font-size: 4rem; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <button class="back-btn" onclick="goBack()">
+      <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </button>
+    <div class="header-title">
+      <h1>היסטוריית תשלומים</h1>
+      <p>מעקב אחרי בקשות משיכה</p>
+    </div>
+  </header>
+  <div class="container">
+    <div class="section">
+      <div class="section-title">💸 בקשות תשלום</div>
+      <div id="requestsList"></div>
+    </div>
+  </div>
+  <script>
+    const API_URL = window.location.origin;
+    let courier = null;
+    let courierPhone = null;
+    async function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      courierPhone = urlParams.get('phone') || localStorage.getItem('courier_phone');
+      if (!courierPhone) { window.location.href = '/courier/login'; return; }
+      const response = await fetch(`${API_URL}/api/couriers/phone/${courierPhone}`);
+      const data = await response.json();
+      if (data.success) { courier = data.courier; await loadPayoutHistory(); }
+    }
+    async function loadPayoutHistory() {
+      try {
+        const response = await fetch(`${API_URL}/api/couriers/${courier.id}/payout-history`);
+        const data = await response.json();
+        const container = document.getElementById('requestsList');
+        if (!data.success || data.requests.length === 0) {
+          container.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><div>אין בקשות תשלום עדיין</div></div>';
+          return;
+        }
+        container.innerHTML = data.requests.map(req => `
+          <div class="request-item">
+            <div class="request-header">
+              <div class="request-amount">₪${req.amount}</div>
+              <span class="status-badge status-${req.status}">${getStatusText(req.status)}</span>
+            </div>
+            <div class="request-method">שיטה: ${getMethodText(req.payment_method)}</div>
+            <div class="request-date">${formatDate(req.created_at)}</div>
+            ${req.admin_notes ? `<div style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid #334155; font-size: 0.875rem; color: #9ca3af;">${req.admin_notes}</div>` : ''}
+          </div>
+        `).join('');
+      } catch (error) {
+        console.error('Load history error:', error);
+      }
+    }
+    function getStatusText(status) {
+      const texts = { 'pending': 'ממתין לאישור', 'approved': 'אושר', 'completed': 'שולם', 'rejected': 'נדחה' };
+      return texts[status] || status;
+    }
+    function getMethodText(method) {
+      const texts = { 'bit': 'ביט', 'paybox': 'פייבוקס', 'bank': 'העברה בנקאית' };
+      return texts[method] || method;
+    }
+    function formatDate(dateString) {
+      return new Date(dateString).toLocaleDateString('he-IL', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+    function goBack() { window.location.href = `/courier-earnings.html?phone=${courierPhone}`; }
+    init();
+  </script>
+</body>
+</html>
