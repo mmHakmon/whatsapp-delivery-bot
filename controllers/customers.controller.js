@@ -379,7 +379,7 @@ class CustomersController {
       const supportInfo = {
         whatsapp: {
           number: process.env.SUPPORT_WHATSAPP || '972545025254',
-          url: `https://wa.me/${process.env.SUPPORT_WHATSAPP?.replace('+', '') || '972501234567'}`
+          url: `https://wa.me/${process.env.SUPPORT_WHATSAPP?.replace('+', '') || '972545025254'}`
         },
         phone: {
           number: process.env.SUPPORT_PHONE || '054-502-5254',
