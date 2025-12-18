@@ -832,20 +832,23 @@
       document.getElementById('menuModal').classList.toggle('hidden');
     }
 
-    function viewProfile() {
-      window.location.href = '/courier/profile?phone=' + courierPhone;
-    }
+function viewProfile() {
+  // אם יש קובץ courier-profile.html בתיקיית public
+  window.location.href = '/courier-profile.html?phone=' + courierPhone;
+}
 
-    function viewEarnings() {
-      window.location.href = '/courier/earnings?phone=' + courierPhone;
-    }
+function viewProfile() {
+  // אם יש קובץ courier-earnings.html בתיקיית public
+  window.location.href = '/courier-earnings.html?phone=' + courierPhone;
+}
 
-    function viewSettings() {
-      window.location.href = '/courier/settings?phone=' + courierPhone;
-    }
+function viewProfile() {
+  // אם יש קובץ courier-settings.html בתיקיית public
+  window.location.href = '/courier-settings.html?phone=' + courierPhone;
+}
 
     function viewHelp() {
-      window.location.href = '/courier/help';
+      window.location.href = 'courier-help.html';
     }
 
     function logout() {
