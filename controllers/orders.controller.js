@@ -342,6 +342,9 @@ class OrdersController {
       // Send WhatsApp to customer
       await whatsappService.notifyCourierAssigned(order.sender_phone, updatedOrder, courier);
 
+      // Announce to group that order was taken
+      await whatsappService.announceOrderTaken(updatedOrder, courier);
+
       // Notify via WebSocket
       websocketService.notifyOrderTaken(updatedOrder);
 
