@@ -184,7 +184,7 @@ CREATE TABLE order_ratings (
 );
 
 -- ==========================================
--- COURIER LOCATIONS TABLE
+-- COURIER LOCATIONS TABLE (ללא UNIQUE!)
 -- ==========================================
 CREATE TABLE courier_locations (
   id SERIAL PRIMARY KEY,
@@ -260,7 +260,7 @@ CREATE INDEX idx_payments_created_at ON payments(created_at DESC);
 CREATE INDEX idx_order_ratings_courier_id ON order_ratings(courier_id);
 CREATE INDEX idx_order_ratings_order_id ON order_ratings(order_id);
 
--- Courier Locations
+-- Courier Locations (רק index רגיל, לא UNIQUE!)
 CREATE INDEX idx_courier_locations_courier_id ON courier_locations(courier_id);
 CREATE INDEX idx_courier_locations_created_at ON courier_locations(created_at DESC);
 
@@ -286,6 +286,20 @@ INSERT INTO settings (key, value) VALUES
 ('min_payout_amount', '50');
 
 -- ==========================================
+-- FIX EXISTING CONSTRAINT (if running on existing DB)
+-- ==========================================
+
+DO $$
+BEGIN
+  -- הסר constraint ישן אם קיים
+  ALTER TABLE courier_locations DROP CONSTRAINT IF EXISTS courier_locations_courier_id_key;
+  RAISE NOTICE '✅ Removed old UNIQUE constraint from courier_locations';
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE NOTICE 'No constraint to remove';
+END $$;
+
+-- ==========================================
 -- SUCCESS MESSAGE
 -- ==========================================
 
@@ -303,7 +317,7 @@ BEGIN
   RAISE NOTICE '   - payout_requests';
   RAISE NOTICE '   - payments';
   RAISE NOTICE '   - order_ratings';
-  RAISE NOTICE '   - courier_locations';
+  RAISE NOTICE '   - courier_locations (FIXED!)';
   RAISE NOTICE '   - activity_log';
   RAISE NOTICE '   - settings';
   RAISE NOTICE '';
