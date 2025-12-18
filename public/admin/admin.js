@@ -440,10 +440,156 @@ function editOrder(orderId) {
 // ==========================================
 
 function showCreateOrderModal() {
-    // Redirect to customer order page
-    const confirmed = confirm('פתיחת טופס הזמנה חדש?\n\nתועבר לטופס ההזמנה המלא.');
-    if (confirmed) {
-        window.open('/customer/order.html', '_blank');
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto';
+    modal.innerHTML = `
+        <div class="bg-slate-800 rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">📦 הזמנה חדשה</h2>
+                <button onclick="this.closest('.fixed').remove()" class="text-4xl hover:text-red-500">&times;</button>
+            </div>
+            
+            <form id="createOrderForm" onsubmit="handleCreateOrder(event)" class="space-y-4">
+                <!-- Sender Details -->
+                <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                    <h3 class="font-bold text-blue-400 mb-3">📤 פרטי שולח</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm mb-1">שם מלא</label>
+                            <input type="text" name="senderName" required
+                                   class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1">טלפון</label>
+                            <input type="tel" name="senderPhone" required pattern="[0-9]{10}"
+                                   class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="block text-sm mb-1">כתובת איסוף</label>
+                        <input type="text" name="pickupAddress" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div class="mt-3">
+                        <label class="block text-sm mb-1">הערות לאיסוף</label>
+                        <input type="text" name="pickupNotes"
+                               class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                    </div>
+                </div>
+                
+                <!-- Receiver Details -->
+                <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                    <h3 class="font-bold text-emerald-400 mb-3">📥 פרטי מקבל</h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-sm mb-1">שם מלא</label>
+                            <input type="text" name="receiverName" required
+                                   class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-1">טלפון</label>
+                            <input type="tel" name="receiverPhone" required pattern="[0-9]{10}"
+                                   class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="block text-sm mb-1">כתובת מסירה</label>
+                        <input type="text" name="deliveryAddress" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div class="mt-3">
+                        <label class="block text-sm mb-1">הערות למסירה</label>
+                        <input type="text" name="deliveryNotes"
+                               class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                    </div>
+                </div>
+                
+                <!-- Package Details -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <h3 class="font-bold mb-3">📦 פרטי חבילה</h3>
+                    <div class="mb-3">
+                        <label class="block text-sm mb-1">תיאור חבילה</label>
+                        <input type="text" name="packageDescription"
+                               class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-sm mb-1">סוג רכב</label>
+                        <select name="vehicleType" required
+                                class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
+                            <option value="motorcycle">🏍️ אופנוע - ₪70</option>
+                            <option value="car">🚗 רכב פרטי - ₪75</option>
+                            <option value="van">🚐 מסחרית - ₪120</option>
+                            <option value="truck">🚚 משאית - ₪200</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-1">הערות כלליות</label>
+                        <textarea name="notes" rows="2"
+                                  class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm"></textarea>
+                    </div>
+                </div>
+                
+                <div class="flex gap-3 pt-4">
+                    <button type="submit" class="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        ✅ צור הזמנה
+                    </button>
+                    <button type="button" onclick="this.closest('.fixed').remove()" 
+                            class="flex-1 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+                        ביטול
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+async function handleCreateOrder(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(event.target);
+    const data = {
+        senderName: formData.get('senderName'),
+        senderPhone: formData.get('senderPhone'),
+        pickupAddress: formData.get('pickupAddress'),
+        pickupNotes: formData.get('pickupNotes'),
+        receiverName: formData.get('receiverName'),
+        receiverPhone: formData.get('receiverPhone'),
+        deliveryAddress: formData.get('deliveryAddress'),
+        deliveryNotes: formData.get('deliveryNotes'),
+        packageDescription: formData.get('packageDescription'),
+        vehicleType: formData.get('vehicleType'),
+        notes: formData.get('notes')
+    };
+    
+    try {
+        const response = await fetch('/api/orders', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            showNotification(`✅ הזמנה ${result.order.order_number} נוצרה בהצלחה!`);
+            
+            // Close modal
+            event.target.closest('.fixed').remove();
+            
+            // Reload orders
+            loadOrders();
+            loadStatistics();
+        } else {
+            const error = await response.json();
+            showNotification('❌ ' + (error.error || 'שגיאה ביצירת הזמנה'), 'error');
+        }
+    } catch (error) {
+        console.error('Create order error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
     }
 }
 
