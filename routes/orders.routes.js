@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ordersController = require('../controllers/orders.controller');
 const { authenticateToken, requireAdmin, authenticateCourier } = require('../middleware/auth');
-const { validateOrder } = require('../middleware/validation');
+const { validateOrderCreation } = require('../middleware/validation');
 
 // ==========================================
 // PUBLIC ROUTES (לקוחות)
@@ -15,14 +15,14 @@ router.get('/track/:orderNumber', ordersController.getOrderByNumber);
 router.post('/calculate', ordersController.calculatePricingEndpoint);
 
 // Create order from customer (public - NO AUTH!)
-router.post('/public', validateOrder, ordersController.createOrderPublic);
+router.post('/public', validateOrderCreation, ordersController.createOrderPublic);
 
 // ==========================================
 // ADMIN ROUTES
 // ==========================================
 
 // Create order (admin/agent)
-router.post('/', authenticateToken, validateOrder, ordersController.createOrder);
+router.post('/', authenticateToken, validateOrderCreation, ordersController.createOrder);
 router.get('/', authenticateToken, ordersController.getOrders);
 router.get('/statistics', authenticateToken, ordersController.getStatistics);
 router.get('/:id', authenticateToken, ordersController.getOrderById);
