@@ -89,16 +89,20 @@ websocketService.initialize(server);
 
 // Start server
 const PORT = process.env.PORT || 10000;
+const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+
 server.listen(PORT, () => {
-  logger.success(`🚀 Server running on port ${PORT}`);
-  logger.info(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.info(`🌐 Public URL: ${process.env.PUBLIC_URL || `http://localhost:${PORT}`}`);
+  console.log('✅ WebSocket server initialized');
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 Public URL: ${PUBLIC_URL}`);
   console.log('');
   console.log('✅ M.M.H Delivery System is ready!');
   console.log('');
-  console.log('📍 Admin Panel: /admin');
-  console.log('📍 Courier App: /courier');
-  console.log('📍 Create Order: /');
+  console.log('📍 Admin Panel:', `${PUBLIC_URL}/admin`);
+  console.log('📍 Courier App:', `${PUBLIC_URL}/courier`);
+  console.log('📍 Customer Form:', `${PUBLIC_URL}/`);
+  console.log('📍 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
   console.log('');
 });
 
