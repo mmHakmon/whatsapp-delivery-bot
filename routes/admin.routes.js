@@ -60,3 +60,24 @@ router.post('/archive-delivered', adminController.archiveDelivered);
 router.delete('/orders/:id', adminController.deleteOrder);
 
 module.exports = router;
+
+// ==========================================
+// PAYMENTS & COURIERS MANAGEMENT
+// ==========================================
+router.post('/reset-payments', adminController.resetPayments);
+router.post('/reset-courier-earnings', adminController.resetCourierEarnings);
+router.post('/reset-courier-ratings', adminController.resetCourierRatings);
+router.post('/reset-all-couriers', adminController.resetAllCouriers);
+router.post('/payout-payments', adminController.payoutPayments);
+
+
+// ==========================================
+// PAYMENTS & COURIERS MANAGEMENT
+// ==========================================
+router.post('/reset-payments', adminController.resetPayments);
+router.post('/reset-courier-earnings', adminController.resetCourierEarnings);
+router.post('/reset-courier-ratings', adminController.resetCourierRatings);
+router.post('/reset-all-couriers', adminController.resetAllCouriers);
+router.post('/payout-payments', adminController.payoutPayments);
+
+module.exports = router;
