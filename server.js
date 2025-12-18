@@ -485,7 +485,7 @@ const takeOrder = async (orderNum, cd) => {
   await sendWhatsApp(waId, msg);
   if (CONFIG.WHAPI.GROUP_ID) await sendWhatsApp(CONFIG.WHAPI.GROUP_ID, `✅ המשלוח ${o.order_number} נתפס על ידי ${cd.firstName} ${cd.lastName}`);
 
-  // שליחת התראה ללקוח עם פרטי השליח
+ // שליחת התראה ללקוח עם פרטי השליח
 if (o.sender_phone) {
   const vehicleTypeHe = {
     'motorcycle': '🏍️ אופנוע',
