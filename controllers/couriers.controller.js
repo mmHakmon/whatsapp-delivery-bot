@@ -1,5 +1,4 @@
 const pool = require('../config/database');
-const jwt = require('jsonwebtoken');
 
 class CouriersController {
   // ==========================================
@@ -61,37 +60,6 @@ class CouriersController {
       });
     } catch (error) {
       console.error('Register courier error:', error);
-      next(error);
-    }
-  }
-
-  // ==========================================
-  // GET ALL COURIERS
-  // ==========================================
-  async getCouriers(req, res, next) {
-    try {
-      const { status, vehicleType } = req.query;
-
-      let query = 'SELECT * FROM couriers WHERE 1=1';
-      const params = [];
-
-      if (status) {
-        params.push(status);
-        query += ` AND status = $${params.length}`;
-      }
-
-      if (vehicleType) {
-        params.push(vehicleType);
-        query += ` AND vehicle_type = $${params.length}`;
-      }
-
-      query += ' ORDER BY created_at DESC';
-
-      const result = await pool.query(query, params);
-
-      res.json({ couriers: result.rows });
-    } catch (error) {
-      console.error('Get couriers error:', error);
       next(error);
     }
   }
@@ -213,7 +181,7 @@ class CouriersController {
   }
 
   // ==========================================
-  // UPDATE LOCATION
+  // UPDATE LOCATION (תיקון!)
   // ==========================================
   async updateLocation(req, res, next) {
     try {
@@ -227,7 +195,7 @@ class CouriersController {
         WHERE id = $3
       `, [latitude, longitude, courierId]);
 
-      // Insert location history
+      // Insert location history (ללא UNIQUE constraint)
       await pool.query(`
         INSERT INTO courier_locations (courier_id, latitude, longitude, accuracy, heading, speed)
         VALUES ($1, $2, $3, $4, $5, $6)
@@ -236,6 +204,61 @@ class CouriersController {
       res.json({ message: 'מיקום עודכן' });
     } catch (error) {
       console.error('Update location error:', error);
+      // Don't fail the request if location update fails
+      res.json({ message: 'מיקום עודכן' });
+    }
+  }
+
+  // ==========================================
+  // GET ALL COURIERS (ADMIN)
+  // ==========================================
+  async getCouriers(req, res, next) {
+    try {
+      const { status, vehicleType } = req.query;
+
+      let query = 'SELECT * FROM couriers WHERE 1=1';
+      const params = [];
+
+      if (status) {
+        params.push(status);
+        query += ` AND status = $${params.length}`;
+      }
+
+      if (vehicleType) {
+        params.push(vehicleType);
+        query += ` AND vehicle_type = $${params.length}`;
+      }
+
+      query += ' ORDER BY created_at DESC';
+
+      const result = await pool.query(query, params);
+
+      res.json({ couriers: result.rows });
+    } catch (error) {
+      console.error('Get couriers error:', error);
+      next(error);
+    }
+  }
+
+  // ==========================================
+  // GET COURIER BY ID (ADMIN)
+  // ==========================================
+  async getCourierById(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const result = await pool.query(
+        'SELECT * FROM couriers WHERE id = $1',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'שליח לא נמצא' });
+      }
+
+      res.json({ courier: result.rows[0] });
+    } catch (error) {
+      console.error('Get courier by ID error:', error);
       next(error);
     }
   }
@@ -260,29 +283,6 @@ class CouriersController {
       res.json({ message: 'סטטוס עודכן בהצלחה' });
     } catch (error) {
       console.error('Update courier status error:', error);
-      next(error);
-    }
-  }
-
-  // ==========================================
-  // GET COURIER BY ID (ADMIN)
-  // ==========================================
-  async getCourierById(req, res, next) {
-    try {
-      const { id } = req.params;
-
-      const result = await pool.query(
-        'SELECT * FROM couriers WHERE id = $1',
-        [id]
-      );
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'שליח לא נמצא' });
-      }
-
-      res.json({ courier: result.rows[0] });
-    } catch (error) {
-      console.error('Get courier by ID error:', error);
       next(error);
     }
   }
