@@ -6,25 +6,280 @@
     <title>M.M.H Delivery - הזמנת משלוח</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
         * { font-family: 'Heebo', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .step-active { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .step-inactive { background: #475569; }
     </style>
 </head>
 <body class="bg-slate-900 text-white min-h-screen">
-    <div class="container mx-auto px-4 py-8 max-w-2xl">
-        <div class="text-center mb-8">
-            <div class="text-6xl mb-4">📦</div>
-            <h1 class="text-3xl font-bold mb-2">הזמנת משלוח</h1>
-            <p class="text-slate-400">מלא את הפרטים ונמצא לך שליח</p>
+    <!-- Header -->
+    <header class="gradient-bg border-b border-white/20 sticky top-0 z-10">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="text-4xl">📦</div>
+                    <div>
+                        <h1 class="text-2xl font-bold">הזמנת משלוח</h1>
+                        <p class="text-sm text-white/80">מלא את הפרטים בקלות</p>
+                    </div>
+                </div>
+                <a href="/" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg text-sm">
+                    חזור לדף הבית
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Progress Steps -->
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <div class="grid grid-cols-4 gap-2 mb-8">
+            <div class="text-center">
+                <div id="step1" class="step-active w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl mb-2">
+                    📤
+                </div>
+                <p class="text-xs">שולח</p>
+            </div>
+            <div class="text-center">
+                <div id="step2" class="step-inactive w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl mb-2">
+                    📥
+                </div>
+                <p class="text-xs">מקבל</p>
+            </div>
+            <div class="text-center">
+                <div id="step3" class="step-inactive w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl mb-2">
+                    📦
+                </div>
+                <p class="text-xs">חבילה</p>
+            </div>
+            <div class="text-center">
+                <div id="step4" class="step-inactive w-12 h-12 mx-auto rounded-full flex items-center justify-center text-2xl mb-2">
+                    ✅
+                </div>
+                <p class="text-xs">אישור</p>
+            </div>
         </div>
 
-        <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
-            <p class="text-center text-lg mb-4">🚧 בבנייה 🚧</p>
-            <p class="text-center text-slate-400 mb-6">עדיין עובדים על טופס ההזמנה המלא</p>
-            <a href="/" class="block w-full bg-purple-600 hover:bg-purple-700 text-center font-bold py-3 rounded-lg">
-                חזור לדף הבית
-            </a>
+        <!-- Form -->
+        <form id="orderForm">
+            <!-- Step 1: Sender -->
+            <div id="senderStep" class="form-step bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                    <span class="text-3xl">📤</span>
+                    <span>פרטי השולח</span>
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">שם מלא *</label>
+                        <input type="text" id="senderName" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">טלפון *</label>
+                        <input type="tel" id="senderPhone" required pattern="[0-9]{10}"
+                               placeholder="0501234567"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">כתובת איסוף *</label>
+                        <input type="text" id="pickupAddress" required
+                               placeholder="רחוב, מספר, עיר"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">הערות לאיסוף</label>
+                        <textarea id="pickupNotes" rows="2"
+                                  placeholder="קומה, דירה, קוד כניסה..."
+                                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500"></textarea>
+                    </div>
+                </div>
+                <button type="button" onclick="nextStep()" class="w-full mt-6 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                    המשך ➡️
+                </button>
+            </div>
+
+            <!-- Step 2: Receiver -->
+            <div id="receiverStep" class="form-step hidden bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                    <span class="text-3xl">📥</span>
+                    <span>פרטי המקבל</span>
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">שם מלא *</label>
+                        <input type="text" id="receiverName" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">טלפון *</label>
+                        <input type="tel" id="receiverPhone" required pattern="[0-9]{10}"
+                               placeholder="0501234567"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">כתובת מסירה *</label>
+                        <input type="text" id="deliveryAddress" required
+                               placeholder="רחוב, מספר, עיר"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">הערות למסירה</label>
+                        <textarea id="deliveryNotes" rows="2"
+                                  placeholder="קומה, דירה, קוד כניסה..."
+                                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500"></textarea>
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button type="button" onclick="prevStep()" class="flex-1 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+                        ⬅️ חזור
+                    </button>
+                    <button type="button" onclick="nextStep()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        המשך ➡️
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 3: Package -->
+            <div id="packageStep" class="form-step hidden bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                    <span class="text-3xl">📦</span>
+                    <span>פרטי החבילה</span>
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">סוג רכב נדרש *</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label class="cursor-pointer vehicle-option">
+                                <input type="radio" name="vehicleType" value="motorcycle" checked class="hidden peer">
+                                <div class="vehicle-card bg-slate-700 border-2 border-purple-500 peer-checked:border-purple-500 peer-checked:bg-purple-500/20 rounded-xl p-4 text-center transition-all">
+                                    <div class="text-4xl mb-2">🏍️</div>
+                                    <p class="font-bold">אופנוע</p>
+                                    <p class="text-xs text-slate-400">מחיר בסיס: ₪70</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer vehicle-option">
+                                <input type="radio" name="vehicleType" value="car" class="hidden peer">
+                                <div class="vehicle-card bg-slate-700 border-2 border-slate-600 peer-checked:border-purple-500 peer-checked:bg-purple-500/20 rounded-xl p-4 text-center transition-all">
+                                    <div class="text-4xl mb-2">🚗</div>
+                                    <p class="font-bold">רכב פרטי</p>
+                                    <p class="text-xs text-slate-400">מחיר בסיס: ₪75</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer vehicle-option">
+                                <input type="radio" name="vehicleType" value="van" class="hidden peer">
+                                <div class="vehicle-card bg-slate-700 border-2 border-slate-600 peer-checked:border-purple-500 peer-checked:bg-purple-500/20 rounded-xl p-4 text-center transition-all">
+                                    <div class="text-4xl mb-2">🚐</div>
+                                    <p class="font-bold">מסחרית</p>
+                                    <p class="text-xs text-slate-400">מחיר בסיס: ₪120</p>
+                                </div>
+                            </label>
+                            <label class="cursor-pointer vehicle-option">
+                                <input type="radio" name="vehicleType" value="truck" class="hidden peer">
+                                <div class="vehicle-card bg-slate-700 border-2 border-slate-600 peer-checked:border-purple-500 peer-checked:bg-purple-500/20 rounded-xl p-4 text-center transition-all">
+                                    <div class="text-4xl mb-2">🚚</div>
+                                    <p class="font-bold">משאית</p>
+                                    <p class="text-xs text-slate-400">מחיר בסיס: ₪200</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">תיאור החבילה</label>
+                        <input type="text" id="packageDescription"
+                               placeholder="מה נמצא בחבילה?"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">הערות נוספות</label>
+                        <textarea id="notes" rows="2"
+                                  placeholder="מידע נוסף שחשוב לשליח לדעת..."
+                                  class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500"></textarea>
+                    </div>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button type="button" onclick="prevStep()" class="flex-1 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+                        ⬅️ חזור
+                    </button>
+                    <button type="button" onclick="calculatePrice()" class="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        חשב מחיר ➡️
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Confirm -->
+            <div id="confirmStep" class="form-step hidden">
+                <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700 mb-4">
+                    <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                        <span class="text-3xl">✅</span>
+                        <span>סיכום והזמנה</span>
+                    </h2>
+                    <div id="orderSummary" class="mb-6">
+                        <!-- Summary will be populated by JS -->
+                    </div>
+                </div>
+
+                <div class="bg-emerald-500/20 border border-emerald-500 rounded-2xl p-6 mb-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-sm">מרחק:</span>
+                        <span class="font-bold" id="distance">-</span>
+                    </div>
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-sm">מחיר לפני מע"מ:</span>
+                        <span class="font-bold" id="priceBeforeVat">-</span>
+                    </div>
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="text-sm">מע"מ (18%):</span>
+                        <span class="font-bold" id="vat">-</span>
+                    </div>
+                    <div class="h-px bg-emerald-500 my-3"></div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xl font-bold">סה"כ לתשלום:</span>
+                        <span class="text-3xl font-black text-emerald-400" id="totalPrice">-</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button type="button" onclick="prevStep()" class="flex-1 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+                        ⬅️ חזור
+                    </button>
+                    <button type="submit" class="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        ✅ אשר הזמנה
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="text-6xl mb-4 animate-bounce">📦</div>
+            <p class="text-xl font-bold">מחשב מרחק ומחיר...</p>
         </div>
     </div>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div class="bg-slate-800 rounded-2xl p-8 max-w-md w-full border border-emerald-500 text-center">
+            <div class="text-6xl mb-4">✅</div>
+            <h3 class="text-2xl font-bold mb-4">ההזמנה נוצרה בהצלחה!</h3>
+            <div class="bg-slate-700 rounded-xl p-4 mb-6">
+                <p class="text-sm text-slate-400 mb-2">מספר הזמנה:</p>
+                <p class="text-3xl font-bold text-emerald-400" id="orderNumber">-</p>
+            </div>
+            <p class="text-slate-300 mb-6">נשלחה הודעת WhatsApp עם פרטי ההזמנה.<br>המערכת תשבץ שליח בהקדם!</p>
+            <div class="flex gap-3">
+                <button onclick="trackOrder()" class="flex-1 bg-blue-500 hover:bg-blue-600 font-bold py-3 rounded-lg">
+                    🔍 עקוב אחר המשלוח
+                </button>
+                <a href="/" class="flex-1 bg-purple-600 hover:bg-purple-700 font-bold py-3 rounded-lg flex items-center justify-center">
+                    🏠 דף הבית
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script src="/customer/customer.js"></script>
 </body>
 </html>
