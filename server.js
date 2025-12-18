@@ -104,6 +104,11 @@ app.get('/track/:orderNumber', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'customer', 'track.html'));
 });
 
+// Quick take from WhatsApp link
+app.get('/take/:orderId', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'take.html'));
+});
+
 // Error handlers
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -148,3 +153,4 @@ process.on('SIGINT', () => {
 });
 
 module.exports = app;
+
