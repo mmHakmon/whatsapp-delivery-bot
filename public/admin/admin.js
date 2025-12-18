@@ -163,8 +163,11 @@ async function loadStatistics() {
             
             // הכנסות ורווח נקי
             const totalRevenue = parseFloat(stats.total_revenue || 0);
-            const totalPayout = parseFloat(stats.total_courier_payout || 0);
-            const netProfit = totalRevenue - totalPayout;
+            
+            // חישוב עמלה (רווח) - 25% מההכנסות
+            const commissionRate = 0.25;
+            const netProfit = Math.floor(totalRevenue * commissionRate);
+            const courierPayout = totalRevenue - netProfit;
             
             document.getElementById('statRevenue').textContent = `₪${totalRevenue.toLocaleString()}`;
             
@@ -172,6 +175,12 @@ async function loadStatistics() {
             const netProfitEl = document.getElementById('statNetProfit');
             if (netProfitEl) {
                 netProfitEl.textContent = `₪${netProfit.toLocaleString()}`;
+            }
+            
+            // הוסף תשלום לשליחים אם יש אלמנט
+            const courierPayoutEl = document.getElementById('statCourierPayout');
+            if (courierPayoutEl) {
+                courierPayoutEl.textContent = `₪${courierPayout.toLocaleString()}`;
             }
         }
     } catch (error) {
