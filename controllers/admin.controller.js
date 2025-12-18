@@ -714,6 +714,121 @@ class AdminController {
         order: result.rows[0]
       });
     } catch (error) {
+  // ==========================================
+  // PAYMENTS & COURIERS MANAGEMENT
+  // ==========================================
+
+  async resetPayments(req, res, next) {
+    try {
+      const result = await pool.query('DELETE FROM payments RETURNING id');
+      
+      res.json({ 
+        success: true, 
+        message: `${result.rowCount} תשלומים נמחקו בהצלחה`,
+        deleted: result.rowCount
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetCourierEarnings(req, res, next) {
+    try {
+      const result = await pool.query(`
+        UPDATE couriers 
+        SET total_earnings = 0, 
+            pending_payout = 0
+        RETURNING id
+      `);
+      
+      res.json({ 
+        success: true, 
+        message: `רווחים אופסו עבור ${result.rowCount} שליחים`,
+        updated: result.rowCount
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetCourierRatings(req, res, next) {
+    try {
+      const result = await pool.query(`
+        UPDATE couriers 
+        SET rating = 0, 
+            total_deliveries = 0,
+            successful_deliveries = 0
+        RETURNING id
+      `);
+      
+      res.json({ 
+        success: true, 
+        message: `דירוגים אופסו עבור ${result.rowCount} שליחים`,
+        updated: result.rowCount
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetAllCouriers(req, res, next) {
+    try {
+      const result = await pool.query('DELETE FROM couriers RETURNING id');
+      
+      res.json({ 
+        success: true, 
+        message: `${result.rowCount} שליחים נמחקו בהצלחה`,
+        deleted: result.rowCount
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async payoutPayments(req, res, next) {
+    try {
+      const { courierId } = req.body;
+      
+      let query = `
+        UPDATE payments 
+        SET status = 'paid', 
+            paid_at = NOW()
+        WHERE status = 'pending'
+      `;
+      const params = [];
+      
+      if (courierId) {
+        query += ' AND courier_id = $1';
+        params.push(courierId);
+      }
+      
+      query += ' RETURNING id, courier_id, amount';
+      
+      const result = await pool.query(query, params);
+      
+      // Update courier pending_payout
+      if (result.rows.length > 0) {
+        const courierIds = [...new Set(result.rows.map(r => r.courier_id))];
+        
+        for (const cId of courierIds) {
+          const totalPaid = result.rows
+            .filter(r => r.courier_id === cId)
+            .reduce((sum, r) => sum + parseFloat(r.amount), 0);
+          
+          await pool.query(`
+            UPDATE couriers 
+            SET pending_payout = GREATEST(pending_payout - $1, 0)
+            WHERE id = $2
+          `, [totalPaid, cId]);
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        message: `${result.rowCount} תשלומים בוצעו בהצלחה`,
+        paidCount: result.rowCount
+      });
+    } catch (error) {
       next(error);
     }
   }
