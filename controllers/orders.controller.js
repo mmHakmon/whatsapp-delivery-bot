@@ -579,6 +579,28 @@ class OrdersController {
   // ==========================================
   // QUICK TAKE ORDER (WhatsApp Link)
   // ==========================================
+  // ==========================================
+  // DELETE ORDER (ADMIN ONLY)
+  // ==========================================
+  async deleteOrder(req, res, next) {
+    try {
+      const { id } = req.params;
+      const checkResult = await pool.query("SELECT * FROM orders WHERE id = $1", [id]);
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: "הזמנה לא נמצאה" });
+      }
+      const order = checkResult.rows[0];
+      if (order.status === "taken" || order.status === "picked") {
+        return res.status(400).json({ error: "לא ניתן למחוק הזמנה פעילה" });
+      }
+      await pool.query("DELETE FROM orders WHERE id = $1", [id]);
+      websocketService.broadcast({ type: "order_deleted", orderId: id });
+      res.json({ success: true, message: "ההזמנה נמחקה", orderId: id });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async quickTakeOrder(req, res, next) {
     try {
       const { orderId } = req.params;
