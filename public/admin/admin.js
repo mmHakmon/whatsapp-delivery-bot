@@ -215,7 +215,7 @@ function displayOrders(orders) {
                     </div>
                     <p class="text-sm text-slate-400">
                         ${new Date(order.created_at).toLocaleDateString('he-IL')} • 
-                        ${order.created_by_name || 'מערכת'}
+                        ${order.created_by_name || 'לקוח'}
                     </p>
                 </div>
                 <div class="text-left">
@@ -244,12 +244,15 @@ function displayOrders(orders) {
             <div class="flex gap-2">
                 ${order.status === 'new' ? `
                     <button onclick="publishOrder(${order.id})" class="flex-1 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg text-sm font-bold">
-                        📢 פרסם לשליחים
+                        📢 פרסם
+                    </button>
+                    <button onclick="editOrder(${order.id})" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-sm">
+                        ✏️
                     </button>
                 ` : ''}
-                ${order.status === 'new' || order.status === 'published' ? `
-                    <button onclick="cancelOrder(${order.id})" class="flex-1 bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-bold">
-                        ❌ בטל
+                ${order.status !== 'delivered' && order.status !== 'cancelled' ? `
+                    <button onclick="cancelOrder(${order.id})" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm">
+                        ❌
                     </button>
                 ` : ''}
                 <button onclick="viewOrderDetails(${order.id})" class="flex-1 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-sm font-bold">
@@ -321,7 +324,115 @@ async function cancelOrder(orderId) {
 }
 
 function viewOrderDetails(orderId) {
-    showNotification('📋 פרטי הזמנה - בקרוב!');
+    fetch(`/api/orders/${orderId}`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+        const order = data.order;
+        
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+        modal.innerHTML = `
+            <div class="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-2">${order.order_number}</h2>
+                        ${getStatusBadge(order.status)}
+                    </div>
+                    <button onclick="this.closest('.fixed').remove()" class="text-4xl hover:text-red-500">&times;</button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                        <p class="font-bold text-blue-400 mb-2">📤 פרטי שולח</p>
+                        <p><strong>שם:</strong> ${order.sender_name}</p>
+                        <p><strong>טלפון:</strong> ${order.sender_phone}</p>
+                        <p><strong>כתובת:</strong> ${order.pickup_address}</p>
+                        ${order.pickup_notes ? `<p class="text-sm text-slate-400 mt-2">📝 ${order.pickup_notes}</p>` : ''}
+                    </div>
+                    
+                    <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                        <p class="font-bold text-emerald-400 mb-2">📥 פרטי מקבל</p>
+                        <p><strong>שם:</strong> ${order.receiver_name}</p>
+                        <p><strong>טלפון:</strong> ${order.receiver_phone}</p>
+                        <p><strong>כתובת:</strong> ${order.delivery_address}</p>
+                        ${order.delivery_notes ? `<p class="text-sm text-slate-400 mt-2">📝 ${order.delivery_notes}</p>` : ''}
+                    </div>
+                    
+                    ${order.courier_first_name ? `
+                    <div class="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
+                        <p class="font-bold text-purple-400 mb-2">🏍️ פרטי שליח</p>
+                        <p><strong>שם:</strong> ${order.courier_first_name} ${order.courier_last_name}</p>
+                        <p><strong>טלפון:</strong> ${order.courier_phone}</p>
+                        <p><strong>רכב:</strong> ${getVehicleNameHebrew(order.courier_vehicle_type)}</p>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <p class="font-bold mb-2">💰 פרטי מחיר</p>
+                        <div class="space-y-1 text-sm">
+                            <div class="flex justify-between">
+                                <span>מרחק:</span>
+                                <span>${order.distance_km} ק"מ</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>מחיר לפני מע"מ:</span>
+                                <span>₪${(order.price - order.vat).toFixed(2)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>מע"מ:</span>
+                                <span>₪${order.vat}</span>
+                            </div>
+                            <div class="h-px bg-slate-600 my-2"></div>
+                            <div class="flex justify-between font-bold text-lg">
+                                <span>סה"כ:</span>
+                                <span class="text-emerald-400">₪${order.price}</span>
+                            </div>
+                            <div class="flex justify-between text-slate-400">
+                                <span>עמלה (${order.commission_rate}%):</span>
+                                <span>₪${order.commission}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>תשלום לשליח:</span>
+                                <span class="text-emerald-400">₪${order.courier_payout}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    ${order.package_description ? `
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <p class="font-bold mb-2">📦 תיאור חבילה</p>
+                        <p class="text-slate-300">${order.package_description}</p>
+                    </div>
+                    ` : ''}
+                </div>
+                
+                <div class="mt-6 flex gap-3">
+                    ${order.status === 'new' ? `
+                        <button onclick="publishOrder(${order.id}); this.closest('.fixed').remove();" class="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                            📢 פרסם לשליחים
+                        </button>
+                    ` : ''}
+                    ${order.status !== 'delivered' && order.status !== 'cancelled' ? `
+                        <button onclick="cancelOrder(${order.id}); this.closest('.fixed').remove();" class="flex-1 bg-red-500 hover:bg-red-600 font-bold py-3 rounded-lg">
+                            ❌ בטל הזמנה
+                        </button>
+                    ` : ''}
+                    <button onclick="this.closest('.fixed').remove()" class="flex-1 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+                        סגור
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+    });
+}
+
+function editOrder(orderId) {
+    showNotification('✏️ עריכת הזמנה - בקרוב!');
+    // TODO: Implement edit functionality
 }
 
 // ==========================================
