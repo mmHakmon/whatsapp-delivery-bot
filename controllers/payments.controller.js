@@ -146,6 +146,12 @@ class PaymentsController {
         WHERE id = $4
       `, [PAYMENT_STATUS.APPROVED, req.user.id, notes, id]);
 
+      // 🔥 CRITICAL FIX: Deduct balance immediately when approving!
+      await client.query(
+        'UPDATE couriers SET balance = balance - $1 WHERE id = $2',
+        [request.amount, request.courier_id]
+      );
+
       await client.query('COMMIT');
 
       // Send WhatsApp notification
@@ -195,11 +201,7 @@ class PaymentsController {
         [PAYMENT_STATUS.COMPLETED, id]
       );
 
-      // Deduct from courier balance
-      await client.query(
-        'UPDATE couriers SET balance = balance - $1 WHERE id = $2',
-        [request.amount, request.courier_id]
-      );
+      // Note: Balance already deducted in approvePayoutRequest
 
       // Record payment
       await client.query(`
