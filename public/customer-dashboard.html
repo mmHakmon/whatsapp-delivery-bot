@@ -546,17 +546,24 @@
     }
 
 function viewProfile() {
-  // אם יש קובץ courier-profile.html בתיקיית public
-  window.location.href = '/customer-profile.html?phone=' + courierPhone;
+  // אם יש קובץ customer-profile.html בתיקיית public
+  window.location.href = '/customer-profile.html?phone=' + customerPhone;
 }
 
-function viewSettings() {
-  // אם יש קובץ courier-settings.html בתיקיית public
-  window.location.href = '/customer-settings.html?phone=' + courierPhone;
-}
+    function viewPayments() {
+      showToast('בקרוב: עמוד תשלומים');
+    }
 
-    function viewHelp() {
-      window.location.href = 'customer-help.html';
+    function viewHistory() {
+      showToast('בקרוב: היסטוריה מלאה');
+    }
+
+    function viewSupport() {
+      showToast('בקרוב: תמיכה');
+    }
+
+    function viewAllHistory() {
+      showToast('בקרוב: היסטוריה מלאה');
     }
 
     // ==================== HELPERS ====================
