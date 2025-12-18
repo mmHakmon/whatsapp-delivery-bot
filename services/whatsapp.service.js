@@ -190,10 +190,21 @@ class WhatsAppService {
       `📍 מרחק: ${order.distance_km} ק"מ\n\n` +
       `📍 מ: ${order.pickup_address}\n` +
       `📍 ל: ${order.delivery_address}\n\n` +
-      `⚡ היכנס לאפליקציה ותפוס! ⚡\n` +
-      `${this.publicUrl}/courier`;
+      `⚡ תפוס עכשיו! ⚡\n` +
+      `🔗 ${this.publicUrl}/take/${order.id}\n\n` +
+      `או היכנס לאפליקציה: ${this.publicUrl}/courier`;
 
     return this.sendToGroup(message, process.env.WHATSAPP_IMAGE_URL);
+  }
+
+  // Announce order was taken
+  async announceOrderTaken(order, courier) {
+    const message = `✅ *משלוח נתפס!*\n\n` +
+      `📦 ${order.order_number}\n` +
+      `🏍️ השליח *${courier.first_name} ${courier.last_name}* תפס את המשלוח!\n` +
+      `💰 ₪${order.courier_payout}`;
+
+    return this.sendToGroup(message);
   }
 
   // Helper functions
