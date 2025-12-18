@@ -63,21 +63,45 @@ app.use('/api/couriers', couriersRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Serve frontend pages
+// ==========================================
+// FRONTEND ROUTES
+// ==========================================
+
+// Landing page
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Admin
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin', 'index.html'));
 });
 
+// Courier
 app.get('/courier', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'courier', 'index.html'));
 });
 
+app.get('/courier/register.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'courier', 'register.html'));
+});
+
+// Customer
+app.get('/customer/order.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer', 'order.html'));
+});
+
+app.get('/customer/track.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer', 'track.html'));
+});
+
+app.get('/customer/dashboard.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer', 'dashboard.html'));
+});
+
+// Track order by number
 app.get('/track/:orderNumber', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'track.html'));
+  res.sendFile(path.join(__dirname, 'public', 'customer', 'track.html'));
 });
 
 // Error handlers
@@ -101,7 +125,7 @@ server.listen(PORT, () => {
   console.log('');
   console.log('📍 Admin Panel:', `${PUBLIC_URL}/admin`);
   console.log('📍 Courier App:', `${PUBLIC_URL}/courier`);
-  console.log('📍 Customer Form:', `${PUBLIC_URL}/`);
+  console.log('📍 Customer Order:', `${PUBLIC_URL}/customer/order.html`);
   console.log('📍 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
   console.log('');
 });
