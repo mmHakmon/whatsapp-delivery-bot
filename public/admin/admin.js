@@ -273,7 +273,7 @@ function getStatusBadge(status) {
 }
 
 async function publishOrder(orderId) {
-    if (!confirm('האם לפרסם את ההזמנה לשליחים?')) return;
+    if (!confirm('האם לפרסם את ההזמנה לשליחים ב-WhatsApp?')) return;
     
     try {
         const response = await fetch(`/api/orders/${orderId}/publish`, {
@@ -329,12 +329,11 @@ function viewOrderDetails(orderId) {
 // ==========================================
 
 function showCreateOrderModal() {
-    showNotification('📦 טופס יצירת הזמנה - בשלבי פיתוח');
-    showNotification('💡 בינתיים השתמש בטופס הלקוח: ' + window.location.origin + '/customer/order.html');
-}
-
-function closeCreateOrderModal() {
-    document.getElementById('createOrderModal')?.classList.add('hidden');
+    // Redirect to customer order page
+    const confirmed = confirm('פתיחת טופס הזמנה חדש?\n\nתועבר לטופס ההזמנה המלא.');
+    if (confirmed) {
+        window.open('/customer/order.html', '_blank');
+    }
 }
 
 // ==========================================
@@ -472,7 +471,7 @@ async function toggleCourierStatus(courierId, currentStatus) {
 
 async function loadPayments() {
     try {
-        const response = await fetch('/api/payments/payout-requests', {
+        const response = await fetch('/api/payments/requests', {
             headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
@@ -502,7 +501,7 @@ function displayPayments(requests) {
         <div class="bg-slate-700 rounded-lg p-4 border border-slate-600">
             <div class="flex justify-between items-start mb-3">
                 <div>
-                    <p class="font-bold text-lg">${req.courier_first_name} ${req.courier_last_name}</p>
+                    <p class="font-bold text-lg">${req.courier_name}</p>
                     <p class="text-sm text-slate-400">📞 ${req.courier_phone}</p>
                     <p class="text-sm text-slate-400">📅 ${new Date(req.created_at).toLocaleDateString('he-IL')}</p>
                 </div>
@@ -539,7 +538,7 @@ async function approvePayoutRequest(requestId) {
     if (!confirm('האם לאשר את בקשת המשיכה?')) return;
     
     try {
-        const response = await fetch(`/api/payments/payout-requests/${requestId}/approve`, {
+        const response = await fetch(`/api/payments/requests/${requestId}/approve`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${adminToken}` }
         });
@@ -560,7 +559,7 @@ async function rejectPayoutRequest(requestId) {
     if (!reason) return;
     
     try {
-        const response = await fetch(`/api/payments/payout-requests/${requestId}/reject`, {
+        const response = await fetch(`/api/payments/requests/${requestId}/reject`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${adminToken}`,
