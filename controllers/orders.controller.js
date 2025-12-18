@@ -572,6 +572,77 @@ class OrdersController {
       next(error);
     }
   }
+
+  // ==========================================
+  // QUICK TAKE ORDER (WhatsApp Link)
+  // ==========================================
+  async quickTakeOrder(req, res, next) {
+    try {
+      const { orderId } = req.params;
+      const { courierId } = req.body;
+
+      if (!courierId) {
+        return res.status(400).json({ error: 'נדרש מזהה שליח' });
+      }
+
+      // Verify courier exists and is active
+      const courierResult = await pool.query(
+        'SELECT * FROM couriers WHERE id = $1 AND status = $2',
+        [courierId, 'active']
+      );
+
+      if (courierResult.rows.length === 0) {
+        return res.status(403).json({ error: 'שליח לא פעיל' });
+      }
+
+      const courier = courierResult.rows[0];
+
+      // Get order
+      const orderResult = await pool.query(
+        'SELECT * FROM orders WHERE id = $1',
+        [orderId]
+      );
+
+      if (orderResult.rows.length === 0) {
+        return res.status(404).json({ error: 'הזמנה לא נמצאה' });
+      }
+
+      const order = orderResult.rows[0];
+
+      if (order.status !== ORDER_STATUS.PUBLISHED) {
+        return res.status(400).json({ error: 'ההזמנה כבר נתפסה או לא זמינה' });
+      }
+
+      // Update order
+      const result = await pool.query(
+        'UPDATE orders SET status = $1, courier_id = $2, taken_at = NOW() WHERE id = $3 RETURNING *',
+        [ORDER_STATUS.TAKEN, courierId, orderId]
+      );
+
+      const updatedOrder = result.rows[0];
+
+      // Send WhatsApp to courier with pickup details
+      await whatsappService.sendOrderToCourier(courier.phone, updatedOrder, 'pickup');
+
+      // Send WhatsApp to customer
+      await whatsappService.notifyCourierAssigned(order.sender_phone, updatedOrder, courier);
+
+      // Announce to group
+      await whatsappService.announceOrderTaken(updatedOrder, courier);
+
+      // Notify via WebSocket
+      websocketService.notifyOrderTaken(updatedOrder);
+
+      res.json({ 
+        success: true,
+        order: updatedOrder,
+        message: `✅ ${courier.first_name} ${courier.last_name} תפס את המשלוח!`
+      });
+    } catch (error) {
+      console.error('Quick take order error:', error);
+      next(error);
+    }
+  }
 }
 
 module.exports = new OrdersController();
