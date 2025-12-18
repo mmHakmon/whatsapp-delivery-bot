@@ -606,12 +606,45 @@ class AdminController {
   // SETTINGS PANEL FUNCTIONS
   // ==========================================
 
+
+  // ==========================================
+  // SETTINGS PANEL FUNCTIONS
+  // ==========================================
+
   async resetStatistics(req, res, next) {
     try {
       const { period } = req.body;
+      
+      let dateCondition = '';
+      let periodText = '';
+
+      if (period === 'daily') {
+        dateCondition = "AND DATE(created_at) = CURRENT_DATE";
+        periodText = 'יומיות';
+      } else if (period === 'weekly') {
+        dateCondition = "AND created_at >= date_trunc('week', CURRENT_DATE)";
+        periodText = 'שבועיות';
+      } else if (period === 'monthly') {
+        dateCondition = "AND created_at >= date_trunc('month', CURRENT_DATE)";
+        periodText = 'חודשיות';
+      } else {
+        return res.json({ 
+          success: false, 
+          message: 'נא לבחור תקופה (daily/weekly/monthly)'
+        });
+      }
+
+      // Delete orders for the period
+      const ordersResult = await pool.query(`
+        DELETE FROM orders 
+        WHERE 1=1 ${dateCondition}
+        RETURNING id
+      `);
+
       res.json({ 
         success: true, 
-        message: `סטטיסטיקות ${period || 'כלליות'} אופסו בהצלחה` 
+        message: `סטטיסטיקות ${periodText} אופסו - ${ordersResult.rowCount} הזמנות נמחקו`,
+        deleted: ordersResult.rowCount
       });
     } catch (error) {
       next(error);
@@ -656,6 +689,29 @@ class AdminController {
         success: true, 
         message: `${result.rowCount} הזמנות הועברו לארכיון`,
         archived: result.rowCount
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteOrder(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const result = await pool.query(
+        'DELETE FROM orders WHERE id = $1 RETURNING id, order_number',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'הזמנה לא נמצאה' });
+      }
+
+      res.json({ 
+        success: true, 
+        message: 'הזמנה נמחקה בהצלחה',
+        order: result.rows[0]
       });
     } catch (error) {
       next(error);
