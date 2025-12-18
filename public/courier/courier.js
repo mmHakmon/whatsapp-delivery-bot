@@ -11,54 +11,6 @@ let locationInterval = null;
 // AUTHENTICATION
 // ==========================================
 
-function showPhoneLogin() {
-    document.getElementById('phoneLoginForm').classList.remove('hidden');
-    document.getElementById('idLoginForm').classList.add('hidden');
-    document.getElementById('btnPhoneLogin').className = 'flex-1 bg-purple-600 py-2 rounded-lg font-bold';
-    document.getElementById('btnIdLogin').className = 'flex-1 bg-slate-700 py-2 rounded-lg';
-}
-
-function showIdLogin() {
-    document.getElementById('phoneLoginForm').classList.add('hidden');
-    document.getElementById('idLoginForm').classList.remove('hidden');
-    document.getElementById('btnIdLogin').className = 'flex-1 bg-purple-600 py-2 rounded-lg font-bold';
-    document.getElementById('btnPhoneLogin').className = 'flex-1 bg-slate-700 py-2 rounded-lg';
-}
-
-async function courierLogin(event) {
-    event.preventDefault();
-    
-    const phone = document.getElementById('loginPhone').value;
-    
-    try {
-        const response = await fetch('/api/auth/courier-login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            courierToken = data.token;
-            courierData = data.courier;
-            localStorage.setItem('courierToken', courierToken);
-            localStorage.setItem('courierData', JSON.stringify(courierData));
-            
-            showMainApp();
-        } else if (data.needsRegistration) {
-            document.getElementById('loginForm').classList.add('hidden');
-            document.getElementById('registerForm').classList.remove('hidden');
-            document.getElementById('regPhone').value = phone;
-        } else {
-            showLoginError(data.error || 'שגיאה בהתחברות');
-        }
-    } catch (error) {
-        showLoginError('שגיאת תקשורת');
-        console.error('Login error:', error);
-    }
-}
-
 async function courierLoginById(event) {
     event.preventDefault();
     
@@ -95,42 +47,6 @@ function showLoginError(message) {
     alert(message);
 }
 
-function showLoginForm() {
-    document.getElementById('registerForm').classList.add('hidden');
-    document.getElementById('loginForm').classList.remove('hidden');
-}
-
-async function registerCourier(event) {
-    event.preventDefault();
-    
-    const formData = {
-        firstName: document.getElementById('regFirstName').value,
-        lastName: document.getElementById('regLastName').value,
-        idNumber: document.getElementById('regIdNumber').value,
-        phone: document.getElementById('regPhone').value,
-        vehicleType: document.getElementById('regVehicleType').value
-    };
-    
-    try {
-        const response = await fetch('/api/couriers/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(formData)
-        });
-        
-        if (response.ok) {
-            alert('✅ הרישום בוצע בהצלחה! המנהל יאשר את חשבונך בקרוב.');
-            showLoginForm();
-        } else {
-            const data = await response.json();
-            alert('❌ ' + (data.error || 'שגיאה ברישום'));
-        }
-    } catch (error) {
-        console.error('Register error:', error);
-        alert('❌ שגיאת תקשורת');
-    }
-}
-
 function checkAuth() {
     courierToken = localStorage.getItem('courierToken');
     const savedData = localStorage.getItem('courierData');
@@ -141,6 +57,23 @@ function checkAuth() {
     } else {
         document.getElementById('loginScreen').classList.remove('hidden');
         document.getElementById('mainApp').classList.add('hidden');
+    }
+}
+
+function logoutCourier() {
+    if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
+        localStorage.removeItem('courierToken');
+        localStorage.removeItem('courierData');
+        
+        if (ws) {
+            ws.close();
+        }
+        
+        if (locationInterval) {
+            clearInterval(locationInterval);
+        }
+        
+        window.location.reload();
     }
 }
 
