@@ -1108,6 +1108,24 @@ async function saveSystemSettings() {
     showNotification('ℹ️ הגדרות אלו דורשות שינוי ב-Environment Variables ב-Render', 'error');
 }
 
+function showAddAgent() {
+    showNotification('👥 הוספת נציג - בקרוב!');
+}
+
+function manageAgents() {
+    showNotification('📋 ניהול נציגים - בקרוב!');
+}
+
+async function dangerResetAll() {
+    if (!confirm('⚠️ האם אתה בטוח שברצונך למחוק את כל הנתונים?')) return;
+    if (!confirm('⚠️⚠️ פעולה זו תמחק הכל ללא אפשרות שחזור! האם להמשיך?')) return;
+    
+    const password = prompt('הזן את סיסמת המנהל לאישור:');
+    if (!password) return;
+    
+    showNotification('🔥 מוחק את כל הנתונים...', 'error');
+    showNotification('⚠️ פונקציה זו מושבתת למניעת מחיקה בטעות', 'error');
+}
 
 // ==========================================
 // USER MANAGEMENT
@@ -1181,7 +1199,7 @@ async function handleAddAgent(event) {
         const response = await fetch('/api/admin/users', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${adminToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ username, password, role })
@@ -1208,7 +1226,7 @@ async function handleAddAgent(event) {
 async function manageAgents() {
     try {
         const response = await fetch('/api/admin/users', {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
         const data = await response.json();
@@ -1219,6 +1237,15 @@ async function manageAgents() {
         }
         
         const users = data.users || [];
+        
+        // Get current user ID from token
+        let currentUserId = null;
+        try {
+            const tokenData = JSON.parse(atob(adminToken.split('.')[1]));
+            currentUserId = tokenData.id;
+        } catch (e) {
+            console.error('Error parsing token:', e);
+        }
         
         const modal = document.createElement('div');
         modal.id = 'manageAgentsModal';
@@ -1311,7 +1338,7 @@ async function changeUserPassword(userId, username) {
         const response = await fetch(`/api/admin/users/${userId}/password`, {
             method: 'PUT',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${adminToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ password: newPassword })
@@ -1336,7 +1363,7 @@ async function deleteUserConfirm(userId, username) {
     try {
         const response = await fetch(`/api/admin/users/${userId}`, {
             method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
         const data = await response.json();
@@ -1351,23 +1378,4 @@ async function deleteUserConfirm(userId, username) {
         console.error('Delete user error:', error);
         showNotification('❌ שגיאת תקשורת', 'error');
     }
-}
-
-// Get current user ID from token
-let currentUserId = null;
-try {
-    const tokenData = JSON.parse(atob(token.split('.')[1]));
-    currentUserId = tokenData.id;
-} catch (e) {
-    console.error('Error parsing token:', e);
-}
-async function dangerResetAll() {
-    if (!confirm('⚠️ האם אתה בטוח שברצונך למחוק את כל הנתונים?')) return;
-    if (!confirm('⚠️⚠️ פעולה זו תמחק הכל ללא אפשרות שחזור! האם להמשיך?')) return;
-    
-    const password = prompt('הזן את סיסמת המנהל לאישור:');
-    if (!password) return;
-    
-    showNotification('🔥 מוחק את כל הנתונים...', 'error');
-    showNotification('⚠️ פונקציה זו מושבתת למניעת מחיקה בטעות', 'error');
 }
