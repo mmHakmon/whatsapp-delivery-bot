@@ -1,54 +1,122 @@
-const { body, validationResult } = require('express-validator');
+// Validation middleware for requests
 
-// Validation error handler
-function handleValidationErrors(req, res, next) {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+const validatePayoutRequest = (req, res, next) => {
+  const { amount, paymentMethod } = req.body;
+
+  // Validate amount
+  if (!amount || typeof amount !== 'number' || amount <= 0) {
+    return res.status(400).json({ error: 'סכום לא תקין' });
   }
+
+  // Check minimum amount
+  const minPayout = parseFloat(process.env.MIN_PAYOUT_AMOUNT || 50);
+  if (amount < minPayout) {
+    return res.status(400).json({ error: `סכום מינימלי למשיכה: ₪${minPayout}` });
+  }
+
+  // Validate payment method (optional)
+  if (paymentMethod) {
+    const validMethods = ['bank_transfer', 'paypal', 'cash', 'other'];
+    if (!validMethods.includes(paymentMethod)) {
+      return res.status(400).json({ error: 'אמצעי תשלום לא תקין' });
+    }
+  }
+
   next();
-}
+};
 
-// Order validation rules
-const validateOrder = [
-  body('senderName').trim().notEmpty().withMessage('Sender name is required'),
-  body('senderPhone').trim().matches(/^[0-9]{9,10}$/).withMessage('Valid phone number required'),
-  body('pickupAddress').trim().notEmpty().withMessage('Pickup address is required'),
-  body('receiverName').trim().notEmpty().withMessage('Receiver name is required'),
-  body('receiverPhone').trim().matches(/^[0-9]{9,10}$/).withMessage('Valid phone number required'),
-  body('deliveryAddress').trim().notEmpty().withMessage('Delivery address is required'),
-  body('vehicleType').optional().isIn(['motorcycle', 'car', 'van', 'truck']),
-  handleValidationErrors
-];
+const validateOrderCreation = (req, res, next) => {
+  const { 
+    senderPhone, 
+    receiverPhone, 
+    pickupAddress, 
+    deliveryAddress,
+    vehicleType 
+  } = req.body;
 
-// Login validation rules
-const validateLogin = [
-  body('username').trim().notEmpty().withMessage('Username is required'),
-  body('password').notEmpty().withMessage('Password is required'),
-  handleValidationErrors
-];
+  // Validate required fields
+  if (!senderPhone || !receiverPhone || !pickupAddress || !deliveryAddress || !vehicleType) {
+    return res.status(400).json({ error: 'חסרים פרטים נדרשים' });
+  }
 
-// Courier registration validation
-const validateCourierRegistration = [
-  body('firstName').trim().notEmpty().withMessage('First name is required'),
-  body('lastName').trim().notEmpty().withMessage('Last name is required'),
-  body('idNumber').trim().matches(/^[0-9]{9}$/).withMessage('Valid ID number required'),
-  body('phone').trim().matches(/^[0-9]{9,10}$/).withMessage('Valid phone number required'),
-  body('vehicleType').isIn(['motorcycle', 'car', 'van', 'truck']).withMessage('Valid vehicle type required'),
-  handleValidationErrors
-];
+  // Validate phone numbers (10 digits)
+  const phoneRegex = /^0\d{9}$/;
+  if (!phoneRegex.test(senderPhone)) {
+    return res.status(400).json({ error: 'מספר טלפון שולח לא תקין' });
+  }
+  if (!phoneRegex.test(receiverPhone)) {
+    return res.status(400).json({ error: 'מספר טלפון מקבל לא תקין' });
+  }
 
-// Payout request validation
-const validatePayoutRequest = [
-  body('amount').isFloat({ min: 50 }).withMessage('Minimum payout is ₪50'),
-  body('paymentMethod').isIn(['bank_transfer', 'bit', 'cash']).withMessage('Valid payment method required'),
-  body('accountInfo').notEmpty().withMessage('Account information is required'),
-  handleValidationErrors
-];
+  // Validate vehicle type
+  const validVehicles = ['bike', 'scooter', 'car', 'van', 'truck'];
+  if (!validVehicles.includes(vehicleType)) {
+    return res.status(400).json({ error: 'סוג רכב לא תקין' });
+  }
+
+  next();
+};
+
+const validateCourierRegistration = (req, res, next) => {
+  const { 
+    firstName, 
+    lastName, 
+    phone, 
+    idNumber, 
+    vehicleType 
+  } = req.body;
+
+  // Validate required fields
+  if (!firstName || !lastName || !phone || !idNumber || !vehicleType) {
+    return res.status(400).json({ error: 'חסרים פרטים נדרשים' });
+  }
+
+  // Validate phone (10 digits)
+  const phoneRegex = /^0\d{9}$/;
+  if (!phoneRegex.test(phone)) {
+    return res.status(400).json({ error: 'מספר טלפון לא תקין' });
+  }
+
+  // Validate ID number (9 digits)
+  const idRegex = /^\d{9}$/;
+  if (!idRegex.test(idNumber)) {
+    return res.status(400).json({ error: 'תעודת זהות לא תקינה' });
+  }
+
+  // Validate vehicle type
+  const validVehicles = ['bike', 'scooter', 'car', 'van', 'truck'];
+  if (!validVehicles.includes(vehicleType)) {
+    return res.status(400).json({ error: 'סוג רכב לא תקין' });
+  }
+
+  next();
+};
+
+const validateCustomerRegistration = (req, res, next) => {
+  const { name, phone, password } = req.body;
+
+  // Validate required fields
+  if (!name || !phone || !password) {
+    return res.status(400).json({ error: 'חסרים פרטים נדרשים' });
+  }
+
+  // Validate phone (10 digits)
+  const phoneRegex = /^0\d{9}$/;
+  if (!phoneRegex.test(phone)) {
+    return res.status(400).json({ error: 'מספר טלפון לא תקין' });
+  }
+
+  // Validate password length
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'סיסמה חייבת להכיל לפחות 6 תווים' });
+  }
+
+  next();
+};
 
 module.exports = {
-  validateOrder,
-  validateLogin,
+  validatePayoutRequest,
+  validateOrderCreation,
   validateCourierRegistration,
-  validatePayoutRequest
+  validateCustomerRegistration
 };
