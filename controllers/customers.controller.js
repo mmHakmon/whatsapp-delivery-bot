@@ -378,15 +378,15 @@ class CustomersController {
     try {
       const supportInfo = {
         whatsapp: {
-          number: process.env.SUPPORT_WHATSAPP || '972501234567',
+          number: process.env.SUPPORT_WHATSAPP || '972545025254',
           url: `https://wa.me/${process.env.SUPPORT_WHATSAPP?.replace('+', '') || '972501234567'}`
         },
         phone: {
-          number: process.env.SUPPORT_PHONE || '050-123-4567',
-          url: `tel:${process.env.SUPPORT_PHONE || '0501234567'}`
+          number: process.env.SUPPORT_PHONE || '054-502-5254',
+          url: `tel:${process.env.SUPPORT_PHONE || '0545025254'}`
         },
-        email: process.env.SUPPORT_EMAIL || 'support@mmh-delivery.com',
-        hours: 'א׳-ה׳: 8:00-18:00, ו׳: 8:00-14:00'
+        email: process.env.SUPPORT_EMAIL || 'm.m.hakmon@gmail.com',
+        hours: 'א׳-ה׳: 8:00-20:00, ו׳: 8:00-14:00'
       };
 
       res.json({ support: supportInfo });
