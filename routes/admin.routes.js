@@ -44,14 +44,19 @@ router.get('/settings', adminController.getSettings);
 router.put('/settings', adminController.updateSetting);
 
 // ==========================================
-// MAINTENANCE
+// MAINTENANCE & CLEANUP
 // ==========================================
 router.post('/cleanup', adminController.cleanupOldData);
 router.get('/database-stats', adminController.getDatabaseStats);
-
 
 // Settings panel actions
 router.post('/reset-statistics', adminController.resetStatistics);
 router.post('/delete-old-orders', adminController.deleteOldOrders);
 router.post('/archive-delivered', adminController.archiveDelivered);
+
+// ==========================================
+// ORDERS MANAGEMENT
+// ==========================================
+router.delete('/orders/:id', adminController.deleteOrder);
+
 module.exports = router;
