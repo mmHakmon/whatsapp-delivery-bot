@@ -205,7 +205,7 @@
           💳 תשלומים
         </a>
         <a href="#" onclick="viewHistory()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
-          📋 היסטוריית משלוחים
+          ⚙️ הגדרות
         </a>
         <a href="#" onclick="viewSupport()" class="block p-3 rounded-lg bg-dark-700 hover:bg-dark-600">
           ❓ תמיכה
@@ -516,7 +516,7 @@
 
     // ==================== ACTIONS ====================
     function newOrder() {
-      window.location.href = `/customer/new-order?phone=${customerPhone}`;
+      window.location.href = `/new-order=${customerPhone}`;
     }
 
     function callCourier(phone) {
@@ -555,12 +555,14 @@ function viewProfile() {
     }
 
     function viewHistory() {
-      showToast('בקרוב: היסטוריה מלאה');
-    }
+  // אם יש קובץ ccustomer-settings.html בתיקיית public
+  window.location.href = '/customer-settings.html?phone=' + customerPhone;
+}
 
     function viewSupport() {
-      showToast('בקרוב: תמיכה');
-    }
+  // אם יש קובץ customer-help.html בתיקיית public
+  window.location.href = '/customer-help.html?phone=' + customerPhone;
+}
 
     function viewAllHistory() {
       showToast('בקרוב: היסטוריה מלאה');
