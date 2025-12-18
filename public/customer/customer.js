@@ -123,27 +123,77 @@ async function calculatePrice() {
             vehicleType
         };
 
-        // Simulate distance calculation
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Call API to get real distance and pricing
+        const response = await fetch('/api/orders/calculate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pickupAddress,
+                deliveryAddress,
+                vehicleType
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            currentPricing = data.pricing;
+            
+            // Display price
+            document.getElementById('distance').textContent = `${currentPricing.distanceKm} ק"מ`;
+            document.getElementById('priceBeforeVat').textContent = `₪${currentPricing.priceBeforeVat}`;
+            document.getElementById('vat').textContent = `₪${currentPricing.vat}`;
+            document.getElementById('totalPrice').textContent = `₪${currentPricing.totalPrice}`;
+            
+            // Build summary
+            buildOrderSummary(formData);
+            
+            // Move to confirmation
+            nextStep();
+        } else {
+            // Fallback to mock if API fails
+            const mockDistance = (Math.random() * 20 + 5).toFixed(2);
+            currentPricing = calculateMockPricing(parseFloat(mockDistance), vehicleType);
+            
+            document.getElementById('distance').textContent = `${currentPricing.distanceKm} ק"מ (משוערך)`;
+            document.getElementById('priceBeforeVat').textContent = `₪${currentPricing.priceBeforeVat}`;
+            document.getElementById('vat').textContent = `₪${currentPricing.vat}`;
+            document.getElementById('totalPrice').textContent = `₪${currentPricing.totalPrice}`;
+            
+            buildOrderSummary(formData);
+            nextStep();
+            
+            showAlert('⚠️ חישוב משוערך - המנהל יאשר מחיר סופי', 'info');
+        }
+    } catch (error) {
+        console.error('Calculate error:', error);
         
-        // Mock pricing based on approximate distance
+        // Fallback to mock
         const mockDistance = (Math.random() * 20 + 5).toFixed(2);
         currentPricing = calculateMockPricing(parseFloat(mockDistance), vehicleType);
         
-        // Display price
-        document.getElementById('distance').textContent = `${currentPricing.distanceKm} ק"מ`;
+        document.getElementById('distance').textContent = `${currentPricing.distanceKm} ק"מ (משוערך)`;
         document.getElementById('priceBeforeVat').textContent = `₪${currentPricing.priceBeforeVat}`;
         document.getElementById('vat').textContent = `₪${currentPricing.vat}`;
         document.getElementById('totalPrice').textContent = `₪${currentPricing.totalPrice}`;
         
-        // Build summary
-        buildOrderSummary(formData);
+        const formData = {
+            senderName: document.getElementById('senderName').value,
+            senderPhone: document.getElementById('senderPhone').value,
+            pickupAddress,
+            pickupNotes: document.getElementById('pickupNotes').value,
+            receiverName: document.getElementById('receiverName').value,
+            receiverPhone: document.getElementById('receiverPhone').value,
+            deliveryAddress,
+            deliveryNotes: document.getElementById('deliveryNotes').value,
+            packageDescription: document.getElementById('packageDescription').value,
+            notes: document.getElementById('notes').value,
+            vehicleType
+        };
         
-        // Move to confirmation
+        buildOrderSummary(formData);
         nextStep();
-    } catch (error) {
-        console.error('Calculate error:', error);
-        showAlert('❌ שגיאה בחישוב מרחק. אנא בדוק את הכתובות.', 'error');
+        
+        showAlert('⚠️ חישוב משוערך - המנהל יאשר מחיר סופי', 'info');
     } finally {
         document.getElementById('loadingOverlay').classList.add('hidden');
     }
@@ -219,51 +269,47 @@ document.getElementById('orderForm').addEventListener('submit', async (e) => {
         return;
     }
 
-    const message = `
-📦 *פרטי ההזמנה שלך:*
-
-📤 שולח: ${document.getElementById('senderName').value}
-📍 מ: ${document.getElementById('pickupAddress').value}
-
-📥 מקבל: ${document.getElementById('receiverName').value}
-📍 ל: ${document.getElementById('deliveryAddress').value}
-
-🚗 רכב: ${document.querySelector('input[name="vehicleType"]:checked').value}
-📏 מרחק: ${currentPricing.distanceKm} ק"מ
-💰 *מחיר: ₪${currentPricing.totalPrice}*
-
-לאישור ההזמנה, נציג יצור איתך קשר בהקדם!
-
-או התקשר: 050-123-4567
-    `.trim();
-
-    if (!confirm('האם לשלוח את ההזמנה?\n\nנציג יצור איתך קשר לאישור סופי.')) {
+    if (!confirm(`האם לאשר הזמנה בסך ₪${currentPricing.totalPrice}?`)) {
         return;
     }
 
     document.getElementById('loadingOverlay').classList.remove('hidden');
 
+    const formData = {
+        senderName: document.getElementById('senderName').value,
+        senderPhone: document.getElementById('senderPhone').value,
+        pickupAddress: document.getElementById('pickupAddress').value,
+        pickupNotes: document.getElementById('pickupNotes').value,
+        receiverName: document.getElementById('receiverName').value,
+        receiverPhone: document.getElementById('receiverPhone').value,
+        deliveryAddress: document.getElementById('deliveryAddress').value,
+        deliveryNotes: document.getElementById('deliveryNotes').value,
+        packageDescription: document.getElementById('packageDescription').value,
+        notes: document.getElementById('notes').value,
+        vehicleType: document.querySelector('input[name="vehicleType"]:checked').value
+    };
+
     try {
-        // Generate mock order number
-        const timestamp = Date.now().toString().slice(-6);
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        createdOrderNumber = `MMH-${timestamp}${random}`;
-        
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        document.getElementById('orderNumber').textContent = createdOrderNumber;
-        document.getElementById('loadingOverlay').classList.add('hidden');
-        document.getElementById('successModal').classList.remove('hidden');
-        
-        // Copy message to clipboard for user
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(message);
+        const response = await fetch('/api/orders/public', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            createdOrderNumber = data.order.order_number;
+            
+            document.getElementById('orderNumber').textContent = createdOrderNumber;
+            document.getElementById('successModal').classList.remove('hidden');
+        } else {
+            const data = await response.json();
+            showAlert('❌ ' + (data.error || 'לא הצלחנו ליצור הזמנה'), 'error');
         }
-        
     } catch (error) {
         console.error('Create order error:', error);
         showAlert('❌ שגיאת תקשורת', 'error');
+    } finally {
         document.getElementById('loadingOverlay').classList.add('hidden');
     }
 });
