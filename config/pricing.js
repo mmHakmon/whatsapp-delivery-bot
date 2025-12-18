@@ -29,8 +29,10 @@ function calculatePricing(distanceKm, vehicleType = 'motorcycle') {
   const vat = priceBeforeVat * vatRate;
   const totalPrice = Math.ceil(priceBeforeVat + vat);
   
-  const commission = priceBeforeVat * commissionRate;
-  const courierPayout = Math.floor(priceBeforeVat - commission);
+  // ⚡ החישוב הפשוט שביקשת!
+  // עמלה מהמחיר הסופי (כולל מע"מ)
+  const commission = Math.floor(totalPrice * commissionRate);
+  const courierPayout = totalPrice - commission;
 
   return {
     distanceKm: parseFloat(distanceKm.toFixed(2)),
@@ -42,7 +44,7 @@ function calculatePricing(distanceKm, vehicleType = 'motorcycle') {
     vat: parseFloat(vat.toFixed(2)),
     totalPrice,
     commissionRate: commissionRate * 100,
-    commission: parseFloat(commission.toFixed(2)),
+    commission,
     courierPayout
   };
 }
