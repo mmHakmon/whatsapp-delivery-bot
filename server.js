@@ -3751,6 +3751,16 @@ app.post('/api/orders/:id/rate', rateLimit(10), async (req, res) => {
          comment = $8`,
       [id, courier_id, sender_phone, rating, speed_rating, courtesy_rating, professionalism_rating, comment]
     );
+
+/**
+ * Courier Profile Page
+ */
+app.get('/courier/profile', (req, res) => {
+  const path = require('path');
+  const filePath = path.join(process.cwd(), 'public', 'courier-profile.html');
+  console.log('📂 Serving courier profile from:', filePath);
+  res.sendFile(filePath);
+});
     
     // Update courier average rating
     const avgRating = await pool.query(
