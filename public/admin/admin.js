@@ -1378,4 +1378,159 @@ async function deleteUserConfirm(userId, username) {
         console.error('Delete user error:', error);
         showNotification('❌ שגיאת תקשורת', 'error');
     }
+// ==========================================
+// PAYMENTS & COURIERS RESET FUNCTIONS
+// ==========================================
+
+async function resetCourierPayments() {
+    if (!confirm('⚠️ האם לאפס את כל התשלומים הממתינים לשליחים?')) return;
+    if (!confirm('⚠️⚠️ פעולה זו תמחק את כל רשומות התשלומים! האם להמשיך?')) return;
+    
+    showNotification('⏳ מאפס תשלומים...');
+    
+    try {
+        const response = await fetch('/api/admin/reset-payments', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'תשלומים אופסו בהצלחה'}`);
+            loadStatistics();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה באיפוס תשלומים'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset payments error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function resetCourierEarnings() {
+    if (!confirm('⚠️ האם לאפס את הרווחים של כל השליחים?')) return;
+    if (!confirm('⚠️⚠️ פעולה זו תאפס את עמודת הרווחים לכל השליחים! האם להמשיך?')) return;
+    
+    showNotification('⏳ מאפס רווחי שליחים...');
+    
+    try {
+        const response = await fetch('/api/admin/reset-courier-earnings', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'רווחי שליחים אופסו בהצלחה'}`);
+            loadStatistics();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה באיפוס רווחים'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset courier earnings error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function resetCourierRatings() {
+    if (!confirm('⚠️ האם לאפס את הדירוגים של כל השליחים?')) return;
+    
+    showNotification('⏳ מאפס דירוגים...');
+    
+    try {
+        const response = await fetch('/api/admin/reset-courier-ratings', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'דירוגי שליחים אופסו בהצלחה'}`);
+            loadStatistics();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה באיפוס דירוגים'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset ratings error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function resetAllCouriers() {
+    if (!confirm('⚠️ האם לאפס את כל נתוני השליחים?')) return;
+    if (!confirm('⚠️⚠️ פעולה זו תמחק את כל השליחים והרישומים שלהם! האם להמשיך?')) return;
+    if (!confirm('⚠️⚠️⚠️ פעולה אחרונה לאישור - האם באמת למחוק הכל?')) return;
+    
+    showNotification('⏳ מוחק את כל נתוני השליחים...');
+    
+    try {
+        const response = await fetch('/api/admin/reset-all-couriers', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'כל נתוני השליחים נמחקו'}`);
+            loadStatistics();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה במחיקת שליחים'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset all couriers error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function payoutPendingPayments() {
+    const courierId = prompt('הכנס מזהה שליח (או השאר ריק לכל השליחים):');
+    
+    const confirmMsg = courierId 
+        ? `האם לבצע תשלום לשליח ${courierId}?`
+        : 'האם לבצע תשלום לכל השליחים עם תשלומים ממתינים?';
+    
+    if (!confirm(confirmMsg)) return;
+    
+    showNotification('⏳ מעבד תשלומים...');
+    
+    try {
+        const body = courierId ? { courierId: parseInt(courierId) } : {};
+        
+        const response = await fetch('/api/admin/payout-payments', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'תשלומים בוצעו בהצלחה'}`);
+            loadStatistics();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה בביצוע תשלומים'), 'error');
+        }
+    } catch (error) {
+        console.error('Payout error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
 }
