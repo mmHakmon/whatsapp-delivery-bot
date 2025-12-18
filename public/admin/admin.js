@@ -2,9 +2,10 @@
 // M.M.H DELIVERY - ADMIN DASHBOARD
 // ==========================================
 
-let token = localStorage.getItem('adminToken');
-let currentFilter = 'all';
+let adminToken = localStorage.getItem('adminToken');
+let userData = null;
 let ws = null;
+let currentFilter = 'all';
 
 // ==========================================
 // AUTHENTICATION
@@ -26,18 +27,12 @@ async function login(event) {
         const data = await response.json();
         
         if (response.ok) {
-            token = data.accessToken;
-            localStorage.setItem('adminToken', token);
-            localStorage.setItem('refreshToken', data.refreshToken);
-            localStorage.setItem('user', JSON.stringify(data.user));
+            adminToken = data.accessToken;
+            userData = data.user;
+            localStorage.setItem('adminToken', adminToken);
+            localStorage.setItem('userData', JSON.stringify(userData));
             
-            document.getElementById('loginModal').classList.add('hidden');
-            document.getElementById('mainContent').classList.remove('hidden');
-            
-            document.getElementById('userName').textContent = data.user.name;
-            document.getElementById('userRole').textContent = data.user.role === 'admin' ? 'מנהל' : 'מנהל תפעול';
-            
-            initDashboard();
+            showDashboard();
         } else {
             showLoginError(data.error || 'שגיאה בהתחברות');
         }
@@ -55,22 +50,42 @@ function showLoginError(message) {
 }
 
 function logout() {
-    localStorage.clear();
-    location.reload();
+    if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
+        localStorage.clear();
+        location.reload();
+    }
 }
 
 function checkAuth() {
-    if (!token) {
+    adminToken = localStorage.getItem('adminToken');
+    const savedData = localStorage.getItem('userData');
+    
+    if (adminToken && savedData) {
+        userData = JSON.parse(savedData);
+        showDashboard();
+    } else {
         document.getElementById('loginModal').classList.remove('hidden');
         document.getElementById('mainContent').classList.add('hidden');
-    } else {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        document.getElementById('userName').textContent = user.name || 'Admin';
-        document.getElementById('userRole').textContent = user.role === 'admin' ? 'מנהל' : 'מנהל תפעול';
-        document.getElementById('loginModal').classList.add('hidden');
-        document.getElementById('mainContent').classList.remove('hidden');
-        initDashboard();
     }
+}
+
+function showDashboard() {
+    document.getElementById('loginModal').classList.add('hidden');
+    document.getElementById('mainContent').classList.remove('hidden');
+    
+    document.getElementById('userName').textContent = userData.name;
+    document.getElementById('userRole').textContent = getRoleNameHebrew(userData.role);
+    
+    initDashboard();
+}
+
+function getRoleNameHebrew(role) {
+    const roles = {
+        'admin': 'מנהל',
+        'manager': 'מנהל',
+        'agent': 'נציג'
+    };
+    return roles[role] || 'משתמש';
 }
 
 // ==========================================
@@ -86,11 +101,10 @@ function connectWebSocket() {
     
     ws.onopen = () => {
         console.log('✅ WebSocket connected');
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
         ws.send(JSON.stringify({
             type: 'auth',
-            userId: user.id,
-            role: user.role,
+            userId: userData.id,
+            role: userData.role,
             userType: 'admin'
         }));
     };
@@ -104,25 +118,17 @@ function connectWebSocket() {
         console.log('❌ WebSocket disconnected');
         setTimeout(connectWebSocket, 3000);
     };
-    
-    ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-    };
 }
 
 function handleWebSocketMessage(data) {
     switch (data.type) {
         case 'new_order':
-            showNotification('📦 הזמנה חדשה נוצרה!');
+            showNotification('📦 הזמנה חדשה התקבלה!');
             loadOrders();
             loadStatistics();
             break;
         case 'order_updated':
-        case 'order_taken':
-        case 'order_picked':
-        case 'order_delivered':
             loadOrders();
-            loadStatistics();
             break;
     }
 }
@@ -143,8 +149,8 @@ async function initDashboard() {
 
 async function loadStatistics() {
     try {
-        const response = await fetch('/api/orders/statistics', {
-            headers: { 'Authorization': `Bearer ${token}` }
+        const response = await fetch('/api/admin/dashboard-stats', {
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
         if (response.ok) {
@@ -152,8 +158,7 @@ async function loadStatistics() {
             const stats = data.statistics;
             
             document.getElementById('statTotalOrders').textContent = stats.total_orders || 0;
-            document.getElementById('statActiveOrders').textContent = 
-                (parseInt(stats.taken_orders || 0) + parseInt(stats.picked_orders || 0));
+            document.getElementById('statActiveOrders').textContent = stats.active_orders || 0;
             document.getElementById('statDelivered').textContent = stats.delivered_orders || 0;
             document.getElementById('statRevenue').textContent = `₪${parseFloat(stats.total_revenue || 0).toLocaleString()}`;
         }
@@ -166,14 +171,15 @@ async function loadStatistics() {
 // ORDERS
 // ==========================================
 
-async function loadOrders() {
+async function loadOrders(status = null) {
     try {
-        const url = currentFilter === 'all' 
-            ? '/api/orders' 
-            : `/api/orders?status=${currentFilter}`;
+        let url = '/api/orders?limit=100';
+        if (status && status !== 'all') {
+            url += `&status=${status}`;
+        }
         
         const response = await fetch(url, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
         if (response.ok) {
@@ -190,16 +196,17 @@ function displayOrders(orders) {
     
     if (!orders || orders.length === 0) {
         container.innerHTML = `
-            <div class="text-center py-8 text-slate-400">
+            <div class="text-center py-12 text-slate-400">
                 <div class="text-6xl mb-4">📭</div>
-                <p>אין הזמנות להצגה</p>
+                <p class="text-lg font-bold mb-2">אין הזמנות</p>
+                <p class="text-sm">צור הזמנה חדשה כדי להתחיל</p>
             </div>
         `;
         return;
     }
     
     container.innerHTML = orders.map(order => `
-        <div class="bg-slate-700 rounded-lg p-4 border border-slate-600">
+        <div class="bg-slate-700 rounded-xl p-4 border border-slate-600">
             <div class="flex justify-between items-start mb-3">
                 <div>
                     <div class="flex items-center gap-2 mb-1">
@@ -207,7 +214,8 @@ function displayOrders(orders) {
                         ${getStatusBadge(order.status)}
                     </div>
                     <p class="text-sm text-slate-400">
-                        ${new Date(order.created_at).toLocaleString('he-IL')}
+                        ${new Date(order.created_at).toLocaleDateString('he-IL')} • 
+                        ${order.created_by_name || 'מערכת'}
                     </p>
                 </div>
                 <div class="text-left">
@@ -218,23 +226,17 @@ function displayOrders(orders) {
             
             <div class="space-y-2 text-sm mb-3">
                 <div class="flex items-start gap-2">
-                    <span>📤</span>
-                    <div>
-                        <p class="font-medium">${order.sender_name} • ${order.sender_phone}</p>
-                        <p class="text-slate-400">${order.pickup_address}</p>
-                    </div>
+                    <span>📍</span>
+                    <p class="text-slate-300">${order.pickup_address}</p>
                 </div>
                 <div class="flex items-start gap-2">
-                    <span>📥</span>
-                    <div>
-                        <p class="font-medium">${order.receiver_name} • ${order.receiver_phone}</p>
-                        <p class="text-slate-400">${order.delivery_address}</p>
-                    </div>
+                    <span>🏠</span>
+                    <p class="text-slate-300">${order.delivery_address}</p>
                 </div>
                 ${order.courier_first_name ? `
                 <div class="flex items-center gap-2 bg-slate-600 rounded p-2">
                     <span>🏍️</span>
-                    <p>שליח: <strong>${order.courier_first_name} ${order.courier_last_name}</strong> • ${order.courier_phone}</p>
+                    <p>שליח: <strong>${order.courier_first_name} ${order.courier_last_name}</strong></p>
                 </div>
                 ` : ''}
             </div>
@@ -242,15 +244,15 @@ function displayOrders(orders) {
             <div class="flex gap-2">
                 ${order.status === 'new' ? `
                     <button onclick="publishOrder(${order.id})" class="flex-1 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg text-sm font-bold">
-                        📤 פרסם
+                        📢 פרסם לשליחים
                     </button>
                 ` : ''}
-                ${order.status !== 'delivered' && order.status !== 'cancelled' ? `
+                ${order.status === 'new' || order.status === 'published' ? `
                     <button onclick="cancelOrder(${order.id})" class="flex-1 bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-bold">
                         ❌ בטל
                     </button>
                 ` : ''}
-                <button onclick="viewOrderDetails(${order.id})" class="flex-1 bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm">
+                <button onclick="viewOrderDetails(${order.id})" class="flex-1 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-sm font-bold">
                     👁️ פרטים
                 </button>
             </div>
@@ -276,7 +278,7 @@ async function publishOrder(orderId) {
     try {
         const response = await fetch(`/api/orders/${orderId}/publish`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
         if (response.ok) {
@@ -284,7 +286,7 @@ async function publishOrder(orderId) {
             loadOrders();
         } else {
             const data = await response.json();
-            showNotification('❌ ' + (data.error || 'שגיאה בפרסום'), 'error');
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
         }
     } catch (error) {
         console.error('Publish error:', error);
@@ -293,14 +295,14 @@ async function publishOrder(orderId) {
 }
 
 async function cancelOrder(orderId) {
-    const reason = prompt('סיבת ביטול:');
-    if (!reason) return;
+    const reason = prompt('סיבת ביטול (אופציונלי):');
+    if (reason === null) return;
     
     try {
         const response = await fetch(`/api/orders/${orderId}/cancel`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${adminToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ reason })
@@ -311,7 +313,7 @@ async function cancelOrder(orderId) {
             loadOrders();
         } else {
             const data = await response.json();
-            showNotification('❌ ' + (data.error || 'שגיאה בביטול'), 'error');
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
         }
     } catch (error) {
         console.error('Cancel error:', error);
@@ -319,20 +321,7 @@ async function cancelOrder(orderId) {
 }
 
 function viewOrderDetails(orderId) {
-    // TODO: Show order details modal
-    alert('פרטי הזמנה - בקרוב!');
-}
-
-function filterOrders(status) {
-    currentFilter = status;
-    
-    // Update button styles
-    document.querySelectorAll('[id^="filter"]').forEach(btn => {
-        btn.className = 'filter-btn px-4 py-2 rounded-lg';
-    });
-    document.getElementById('filter' + status.charAt(0).toUpperCase() + status.slice(1)).className = 'filter-btn-active px-4 py-2 rounded-lg';
-    
-    loadOrders();
+    showNotification('📋 פרטי הזמנה - בקרוב!');
 }
 
 // ==========================================
@@ -340,8 +329,51 @@ function filterOrders(status) {
 // ==========================================
 
 function showCreateOrderModal() {
-    // TODO: Show create order modal
-    alert('יצירת הזמנה חדשה - בקרוב!\n\nאו השתמש בדף הלקוח: /');
+    showNotification('📦 טופס יצירת הזמנה - בשלבי פיתוח');
+    showNotification('💡 בינתיים השתמש בטופס הלקוח: ' + window.location.origin + '/customer/order.html');
+}
+
+function closeCreateOrderModal() {
+    document.getElementById('createOrderModal')?.classList.add('hidden');
+}
+
+// ==========================================
+// FILTERS
+// ==========================================
+
+function filterOrders(status) {
+    currentFilter = status;
+    
+    // Update buttons
+    document.querySelectorAll('.filter-btn, .filter-btn-active').forEach(btn => {
+        btn.className = 'filter-btn px-4 py-2 rounded-lg';
+    });
+    
+    const btnId = 'filter' + status.charAt(0).toUpperCase() + status.slice(1);
+    const activeBtn = document.getElementById(btnId);
+    if (activeBtn) {
+        activeBtn.className = 'filter-btn-active px-4 py-2 rounded-lg';
+    }
+    
+    loadOrders(status === 'all' ? null : status);
+}
+
+// ==========================================
+// TABS
+// ==========================================
+
+function switchTab(tab) {
+    // Update tabs
+    document.querySelectorAll('[id^="tab"]').forEach(t => t.className = 'tab-inactive px-6 py-3');
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+    
+    document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).className = 'tab-active px-6 py-3 font-bold';
+    document.getElementById(`${tab}Tab`).classList.remove('hidden');
+    
+    // Load data
+    if (tab === 'orders') loadOrders();
+    if (tab === 'couriers') loadCouriers();
+    if (tab === 'payments') loadPayments();
 }
 
 // ==========================================
@@ -351,7 +383,7 @@ function showCreateOrderModal() {
 async function loadCouriers() {
     try {
         const response = await fetch('/api/couriers', {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
         if (response.ok) {
@@ -368,7 +400,7 @@ function displayCouriers(couriers) {
     
     if (!couriers || couriers.length === 0) {
         container.innerHTML = `
-            <div class="text-center py-8 text-slate-400">
+            <div class="text-center py-12 text-slate-400">
                 <div class="text-6xl mb-4">🏍️</div>
                 <p>אין שליחים רשומים</p>
             </div>
@@ -380,80 +412,58 @@ function displayCouriers(couriers) {
         <div class="bg-slate-700 rounded-lg p-4 border border-slate-600">
             <div class="flex justify-between items-start">
                 <div>
-                    <h3 class="text-lg font-bold mb-1">${courier.first_name} ${courier.last_name}</h3>
-                    <p class="text-sm text-slate-400 mb-2">📞 ${courier.phone}</p>
-                    <div class="flex gap-2 items-center">
-                        <span class="text-2xl">${getVehicleEmoji(courier.vehicle_type)}</span>
-                        <span class="text-sm text-slate-300">${getVehicleNameHebrew(courier.vehicle_type)}</span>
-                        ${courier.status === 'active' 
-                            ? '<span class="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400">פעיל</span>'
-                            : '<span class="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400">חסום</span>'
-                        }
+                    <p class="font-bold text-lg">${courier.first_name} ${courier.last_name}</p>
+                    <p class="text-sm text-slate-400">📞 ${courier.phone}</p>
+                    <p class="text-sm text-slate-400">🚗 ${getVehicleNameHebrew(courier.vehicle_type)}</p>
+                    <div class="mt-2 flex items-center gap-2">
+                        ${getCourierStatusBadge(courier.status)}
+                        <span class="text-xs text-slate-400">⭐ ${courier.rating} • ${courier.total_deliveries} משלוחים</span>
                     </div>
                 </div>
                 <div class="text-left">
-                    <p class="text-2xl font-bold text-emerald-400">₪${parseFloat(courier.balance || 0).toLocaleString()}</p>
+                    <p class="text-lg font-bold text-emerald-400">₪${parseFloat(courier.balance).toLocaleString()}</p>
                     <p class="text-xs text-slate-400">יתרה</p>
-                    <p class="text-sm text-slate-300 mt-2">⭐ ${parseFloat(courier.rating || 5).toFixed(1)}</p>
-                    <p class="text-xs text-slate-400">${courier.total_deliveries || 0} משלוחים</p>
+                    <button onclick="toggleCourierStatus(${courier.id}, '${courier.status}')" 
+                            class="mt-2 px-3 py-1 rounded text-xs ${courier.status === 'active' ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}">
+                        ${courier.status === 'active' ? '🔴 השהה' : '✅ הפעל'}
+                    </button>
                 </div>
-            </div>
-            <div class="mt-3 flex gap-2">
-                <button onclick="toggleCourierStatus(${courier.id}, '${courier.status === 'active' ? 'blocked' : 'active'}')"
-                        class="${courier.status === 'active' ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'} flex-1 px-4 py-2 rounded-lg text-sm font-bold">
-                    ${courier.status === 'active' ? '🚫 חסום' : '✅ הפעל'}
-                </button>
-                <button onclick="viewCourierDetails(${courier.id})" class="flex-1 bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm">
-                    📊 פרטים
-                </button>
             </div>
         </div>
     `).join('');
 }
 
-async function toggleCourierStatus(courierId, newStatus) {
+function getCourierStatusBadge(status) {
+    const badges = {
+        'active': '<span class="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">פעיל</span>',
+        'inactive': '<span class="px-2 py-1 rounded-full text-xs bg-slate-500/20 text-slate-400 border border-slate-500/50">לא פעיל</span>',
+        'blocked': '<span class="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400 border border-red-500/50">חסום</span>'
+    };
+    return badges[status] || '';
+}
+
+async function toggleCourierStatus(courierId, currentStatus) {
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    
     try {
         const response = await fetch(`/api/couriers/${courierId}/status`, {
             method: 'PUT',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${adminToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ status: newStatus })
         });
         
         if (response.ok) {
-            showNotification('✅ סטטוס שליח עודכן');
+            showNotification('✅ סטטוס שונה בהצלחה');
             loadCouriers();
+        } else {
+            showNotification('❌ שגיאה בשינוי סטטוס', 'error');
         }
     } catch (error) {
         console.error('Toggle status error:', error);
     }
-}
-
-function viewCourierDetails(courierId) {
-    // TODO: Show courier details modal
-    alert('פרטי שליח - בקרוב!');
-}
-
-function getVehicleEmoji(type) {
-    const emojis = {
-        'motorcycle': '🏍️',
-        'car': '🚗',
-        'van': '🚐',
-        'truck': '🚚'
-    };
-    return emojis[type] || '🚗';
-}
-
-function getVehicleNameHebrew(type) {
-    const names = {
-        'motorcycle': 'אופנוע',
-        'car': 'רכב פרטי',
-        'van': 'מסחרית',
-        'truck': 'משאית'
-    };
-    return names[type] || 'רכב';
 }
 
 // ==========================================
@@ -462,8 +472,8 @@ function getVehicleNameHebrew(type) {
 
 async function loadPayments() {
     try {
-        const response = await fetch('/api/payments/requests', {
-            headers: { 'Authorization': `Bearer ${token}` }
+        const response = await fetch('/api/payments/payout-requests', {
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
         if (response.ok) {
@@ -480,7 +490,7 @@ function displayPayments(requests) {
     
     if (!requests || requests.length === 0) {
         container.innerHTML = `
-            <div class="text-center py-8 text-slate-400">
+            <div class="text-center py-12 text-slate-400">
                 <div class="text-6xl mb-4">💰</div>
                 <p>אין בקשות משיכה</p>
             </div>
@@ -492,32 +502,24 @@ function displayPayments(requests) {
         <div class="bg-slate-700 rounded-lg p-4 border border-slate-600">
             <div class="flex justify-between items-start mb-3">
                 <div>
-                    <h3 class="text-lg font-bold mb-1">${req.courier_name}</h3>
+                    <p class="font-bold text-lg">${req.courier_first_name} ${req.courier_last_name}</p>
                     <p class="text-sm text-slate-400">📞 ${req.courier_phone}</p>
-                    <p class="text-xs text-slate-400 mt-1">${new Date(req.created_at).toLocaleString('he-IL')}</p>
+                    <p class="text-sm text-slate-400">📅 ${new Date(req.created_at).toLocaleDateString('he-IL')}</p>
                 </div>
                 <div class="text-left">
                     <p class="text-2xl font-bold text-emerald-400">₪${parseFloat(req.amount).toLocaleString()}</p>
                     ${getPaymentStatusBadge(req.status)}
                 </div>
             </div>
-            <div class="text-sm mb-3">
-                <p><strong>אמצעי תשלום:</strong> ${getPaymentMethodName(req.payment_method)}</p>
-                ${req.admin_notes ? `<p class="text-slate-400 mt-1">📝 ${req.admin_notes}</p>` : ''}
-            </div>
             ${req.status === 'pending' ? `
                 <div class="flex gap-2">
-                    <button onclick="approvePayoutRequest(${req.id})" class="flex-1 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg text-sm font-bold">
+                    <button onclick="approvePayoutRequest(${req.id})" class="flex-1 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg font-bold">
                         ✅ אשר
                     </button>
-                    <button onclick="rejectPayoutRequest(${req.id})" class="flex-1 bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm font-bold">
+                    <button onclick="rejectPayoutRequest(${req.id})" class="flex-1 bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-bold">
                         ❌ דחה
                     </button>
                 </div>
-            ` : req.status === 'approved' ? `
-                <button onclick="completePayoutRequest(${req.id})" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-sm font-bold">
-                    💸 סמן כהועבר
-                </button>
             ` : ''}
         </div>
     `).join('');
@@ -533,34 +535,20 @@ function getPaymentStatusBadge(status) {
     return badges[status] || '';
 }
 
-function getPaymentMethodName(method) {
-    const names = {
-        'bank_transfer': 'העברה בנקאית',
-        'bit': 'ביט',
-        'cash': 'מזומן'
-    };
-    return names[method] || method;
-}
-
 async function approvePayoutRequest(requestId) {
-    const notes = prompt('הערות (אופציונלי):');
+    if (!confirm('האם לאשר את בקשת המשיכה?')) return;
     
     try {
-        const response = await fetch(`/api/payments/requests/${requestId}/approve`, {
+        const response = await fetch(`/api/payments/payout-requests/${requestId}/approve`, {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ notes })
+            headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
         if (response.ok) {
             showNotification('✅ בקשה אושרה');
             loadPayments();
         } else {
-            const data = await response.json();
-            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+            showNotification('❌ שגיאה באישור', 'error');
         }
     } catch (error) {
         console.error('Approve error:', error);
@@ -572,10 +560,10 @@ async function rejectPayoutRequest(requestId) {
     if (!reason) return;
     
     try {
-        const response = await fetch(`/api/payments/requests/${requestId}/reject`, {
+        const response = await fetch(`/api/payments/payout-requests/${requestId}/reject`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${adminToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ reason })
@@ -584,52 +572,27 @@ async function rejectPayoutRequest(requestId) {
         if (response.ok) {
             showNotification('✅ בקשה נדחתה');
             loadPayments();
+        } else {
+            showNotification('❌ שגיאה בדחייה', 'error');
         }
     } catch (error) {
         console.error('Reject error:', error);
     }
 }
 
-async function completePayoutRequest(requestId) {
-    if (!confirm('האם התשלום בוצע? פעולה זו תקזז את הכסף מיתרת השליח.')) return;
-    
-    try {
-        const response = await fetch(`/api/payments/requests/${requestId}/complete`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (response.ok) {
-            showNotification('✅ התשלום הושלם');
-            loadPayments();
-        }
-    } catch (error) {
-        console.error('Complete error:', error);
-    }
+// ==========================================
+// HELPERS
+// ==========================================
+
+function getVehicleNameHebrew(type) {
+    const names = {
+        'motorcycle': 'אופנוע',
+        'car': 'רכב פרטי',
+        'van': 'מסחרית',
+        'truck': 'משאית'
+    };
+    return names[type] || 'רכב';
 }
-
-// ==========================================
-// TABS
-// ==========================================
-
-function switchTab(tab) {
-    // Hide all tabs
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
-    document.querySelectorAll('[id^="tab"]').forEach(t => t.className = 'tab-inactive px-6 py-3');
-    
-    // Show selected tab
-    document.getElementById(`${tab}Tab`).classList.remove('hidden');
-    document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).className = 'tab-active px-6 py-3 font-bold';
-    
-    // Load data
-    if (tab === 'orders') loadOrders();
-    if (tab === 'couriers') loadCouriers();
-    if (tab === 'payments') loadPayments();
-}
-
-// ==========================================
-// NOTIFICATIONS
-// ==========================================
 
 function showNotification(message, type = 'success') {
     const notification = document.createElement('div');
