@@ -1,24 +1,48 @@
 const express = require('express');
 const router = express.Router();
 const couriersController = require('../controllers/couriers.controller');
-const { authenticateToken, requireAdmin, authenticateCourier } = require('../middleware/auth');
-const { validateCourierRegistration } = require('../middleware/validation');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
-// Public routes
-router.post('/register', validateCourierRegistration, couriersController.registerCourier);
+// ==========================================
+// PUBLIC ROUTES
+// ==========================================
 
-// Courier routes
-router.get('/me', authenticateCourier, couriersController.getMyProfile);
-router.put('/me', authenticateCourier, couriersController.updateProfile);
-router.get('/my-orders', authenticateCourier, couriersController.getMyCourierOrders);
-router.get('/available-orders', authenticateCourier, couriersController.getAvailableOrders);
-router.get('/my-statistics', authenticateCourier, couriersController.getMyStatistics);
-router.get('/earnings-breakdown', authenticateCourier, couriersController.getEarningsBreakdown);
-router.post('/location', authenticateCourier, couriersController.updateLocation);
+// Register new courier
+router.post('/register', couriersController.registerCourier);
 
-// Admin routes
+// ==========================================
+// COURIER ROUTES (require authentication)
+// ==========================================
+
+// Get courier profile
+router.get('/me', authenticateToken, couriersController.getCourierProfile);
+
+// Get available orders for courier
+router.get('/available-orders', authenticateToken, couriersController.getAvailableOrders);
+
+// Get courier's orders
+router.get('/my-orders', authenticateToken, couriersController.getMyOrders);
+
+// Get courier statistics
+router.get('/my-statistics', authenticateToken, couriersController.getMyStatistics);
+
+// Update courier location
+router.post('/location', authenticateToken, couriersController.updateLocation);
+
+// ==========================================
+// ADMIN ROUTES
+// ==========================================
+
+// Get all couriers
 router.get('/', authenticateToken, requireAdmin, couriersController.getCouriers);
+
+// Get courier by ID
 router.get('/:id', authenticateToken, requireAdmin, couriersController.getCourierById);
-router.put('/:id/status', authenticateToken, requireAdmin, couriersController.toggleCourierStatus);
+
+// Update courier status
+router.put('/:id/status', authenticateToken, requireAdmin, couriersController.updateCourierStatus);
+
+// Delete courier
+router.delete('/:id', authenticateToken, requireAdmin, couriersController.deleteCourier);
 
 module.exports = router;
