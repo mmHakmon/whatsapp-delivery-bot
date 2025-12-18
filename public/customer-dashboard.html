@@ -545,24 +545,18 @@
       document.getElementById('menuModal').classList.toggle('hidden');
     }
 
-    function viewProfile() {
-      showToast('בקרוב: עמוד פרופיל');
-    }
+function viewProfile() {
+  // אם יש קובץ courier-profile.html בתיקיית public
+  window.location.href = '/customer-profile.html?phone=' + courierPhone;
+}
 
-    function viewPayments() {
-      showToast('בקרוב: עמוד תשלומים');
-    }
+function viewSettings() {
+  // אם יש קובץ courier-settings.html בתיקיית public
+  window.location.href = '/customer-settings.html?phone=' + courierPhone;
+}
 
-    function viewHistory() {
-      showToast('בקרוב: היסטוריה מלאה');
-    }
-
-    function viewSupport() {
-      showToast('בקרוב: תמיכה');
-    }
-
-    function viewAllHistory() {
-      showToast('בקרוב: היסטוריה מלאה');
+    function viewHelp() {
+      window.location.href = 'customer-help.html';
     }
 
     // ==================== HELPERS ====================
