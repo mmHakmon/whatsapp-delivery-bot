@@ -7,7 +7,9 @@ const websocketService = require('../services/websocket.service');
 const { generateOrderNumber } = require('../utils/helpers');
 
 class OrdersController {
-  // Create new order
+  // ==========================================
+  // CREATE ORDER (ADMIN/AGENT)
+  // ==========================================
   async createOrder(req, res, next) {
     try {
       const {
@@ -61,7 +63,11 @@ class OrdersController {
       const order = result.rows[0];
 
       // Send WhatsApp to customer
-      await whatsappService.sendOrderConfirmation(senderPhone, order);
+      try {
+        await whatsappService.sendOrderConfirmation(senderPhone, order);
+      } catch (error) {
+        console.error('WhatsApp error:', error);
+      }
 
       // Notify admins via WebSocket
       websocketService.notifyNewOrder(order);
@@ -72,6 +78,87 @@ class OrdersController {
         message: 'הזמנה נוצרה בהצלחה' 
       });
     } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================
+  // CREATE ORDER PUBLIC (לקוחות - ללא אימות!)
+  // ==========================================
+  async createOrderPublic(req, res, next) {
+    try {
+      const {
+        senderName,
+        senderPhone,
+        pickupAddress,
+        pickupNotes,
+        receiverName,
+        receiverPhone,
+        deliveryAddress,
+        deliveryNotes,
+        packageDescription,
+        notes,
+        vehicleType = 'motorcycle',
+        priority = 'normal'
+      } = req.body;
+
+      // Calculate distance using Google Maps
+      const distanceKm = await mapsService.calculateDistance(pickupAddress, deliveryAddress);
+      
+      // Calculate pricing
+      const pricing = calculatePricing(distanceKm, vehicleType);
+
+      // Get coordinates
+      const pickupCoords = await mapsService.geocodeAddress(pickupAddress);
+      const deliveryCoords = await mapsService.geocodeAddress(deliveryAddress);
+
+      // Generate order number
+      const orderNumber = generateOrderNumber();
+
+      // Insert order - created_by is NULL for public orders
+      const result = await pool.query(`
+        INSERT INTO orders (
+          order_number, status, priority,
+          sender_name, sender_phone, pickup_address, pickup_lat, pickup_lng, pickup_notes,
+          receiver_name, receiver_phone, delivery_address, delivery_lat, delivery_lng, delivery_notes,
+          package_description, notes, vehicle_type, distance_km,
+          price, vat, commission_rate, commission, courier_payout,
+          created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NULL)
+        RETURNING *
+      `, [
+        orderNumber, ORDER_STATUS.NEW, priority,
+        senderName, senderPhone, pickupAddress, pickupCoords.lat, pickupCoords.lng, pickupNotes,
+        receiverName, receiverPhone, deliveryAddress, deliveryCoords.lat, deliveryCoords.lng, deliveryNotes,
+        packageDescription, notes, vehicleType, pricing.distanceKm,
+        pricing.totalPrice, pricing.vat, pricing.commissionRate, pricing.commission, pricing.courierPayout
+      ]);
+
+      const order = result.rows[0];
+
+      // Send WhatsApp to customer
+      try {
+        await whatsappService.sendOrderConfirmation(senderPhone, order);
+      } catch (whatsappError) {
+        console.error('WhatsApp error:', whatsappError);
+        // Continue even if WhatsApp fails
+      }
+
+      // Notify admins via WebSocket
+      try {
+        websocketService.notifyNewOrder(order);
+      } catch (wsError) {
+        console.error('WebSocket error:', wsError);
+        // Continue even if WebSocket fails
+      }
+
+      res.status(201).json({ 
+        order, 
+        pricing,
+        message: 'הזמנה נוצרה בהצלחה! המנהלים יאשרו אותה בקרוב.'
+      });
+    } catch (error) {
+      console.error('Create public order error:', error);
       next(error);
     }
   }
@@ -458,6 +545,30 @@ class OrdersController {
 
       res.json({ statistics: stats.rows[0] });
     } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================
+  // CALCULATE PRICING (PUBLIC)
+  // ==========================================
+  async calculatePricingEndpoint(req, res, next) {
+    try {
+      const { pickupAddress, deliveryAddress, vehicleType = 'motorcycle' } = req.body;
+
+      if (!pickupAddress || !deliveryAddress) {
+        return res.status(400).json({ error: 'כתובות נדרשות' });
+      }
+
+      // Calculate distance
+      const distanceKm = await mapsService.calculateDistance(pickupAddress, deliveryAddress);
+      
+      // Calculate pricing
+      const pricing = calculatePricing(distanceKm, vehicleType);
+
+      res.json({ pricing });
+    } catch (error) {
+      console.error('Calculate pricing error:', error);
       next(error);
     }
   }
