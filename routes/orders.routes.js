@@ -32,6 +32,7 @@ router.post('/:id/publish', authenticateToken, requireAdmin, ordersController.pu
 
 // Cancel order
 router.post('/:id/cancel', authenticateToken, requireAdmin, ordersController.cancelOrder);
+router.delete("/:id", authenticateToken, requireAdmin, ordersController.deleteOrder);
 
 // ==========================================
 // COURIER ROUTES
