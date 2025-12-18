@@ -160,7 +160,19 @@ async function loadStatistics() {
             document.getElementById('statTotalOrders').textContent = stats.total_orders || 0;
             document.getElementById('statActiveOrders').textContent = stats.active_orders || 0;
             document.getElementById('statDelivered').textContent = stats.delivered_orders || 0;
-            document.getElementById('statRevenue').textContent = `₪${parseFloat(stats.total_revenue || 0).toLocaleString()}`;
+            
+            // הכנסות ורווח נקי
+            const totalRevenue = parseFloat(stats.total_revenue || 0);
+            const totalPayout = parseFloat(stats.total_courier_payout || 0);
+            const netProfit = totalRevenue - totalPayout;
+            
+            document.getElementById('statRevenue').textContent = `₪${totalRevenue.toLocaleString()}`;
+            
+            // הוסף רווח נקי אם יש אלמנט
+            const netProfitEl = document.getElementById('statNetProfit');
+            if (netProfitEl) {
+                netProfitEl.textContent = `₪${netProfit.toLocaleString()}`;
+            }
         }
     } catch (error) {
         console.error('Statistics error:', error);
@@ -871,3 +883,210 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
+// ==========================================
+// SETTINGS TAB
+// ==========================================
+
+function showSettings() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+        <div class="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">⚙️ הגדרות מערכת</h2>
+                <button onclick="this.closest('.fixed').remove()" class="text-4xl hover:text-red-500">&times;</button>
+            </div>
+            
+            <div class="space-y-4">
+                <!-- Statistics Management -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <h3 class="font-bold text-lg mb-3">📊 ניהול סטטיסטיקות</h3>
+                    <div class="space-y-3">
+                        <button onclick="resetStatistics('today')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-left">
+                            🔄 איפוס סטטיסטיקות יומיות
+                        </button>
+                        <button onclick="resetStatistics('week')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-left">
+                            🔄 איפוס סטטיסטיקות שבועיות
+                        </button>
+                        <button onclick="resetStatistics('month')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-left">
+                            🔄 איפוס סטטיסטיקות חודשיות
+                        </button>
+                        <button onclick="resetStatistics('all')" class="w-full bg-red-500 hover:bg-red-600 px-4 py-3 rounded-lg text-left font-bold">
+                            ⚠️ איפוס כל הסטטיסטיקות
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Orders Management -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <h3 class="font-bold text-lg mb-3">📦 ניהול הזמנות</h3>
+                    <div class="space-y-3">
+                        <button onclick="deleteOldOrders()" class="w-full bg-orange-500 hover:bg-orange-600 px-4 py-3 rounded-lg text-left">
+                            🗑️ מחק הזמנות ישנות (מעל 6 חודשים)
+                        </button>
+                        <button onclick="archiveDeliveredOrders()" class="w-full bg-orange-500 hover:bg-orange-600 px-4 py-3 rounded-lg text-left">
+                            📁 העבר הזמנות שהושלמו לארכיון
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- System Settings -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <h3 class="font-bold text-lg mb-3">⚙️ הגדרות מערכת</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-sm mb-2">אחוז עמלה (%)</label>
+                            <input type="number" id="commissionRate" value="25" min="0" max="100" step="1"
+                                   class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2">
+                        </div>
+                        <div>
+                            <label class="block text-sm mb-2">מע"מ (%)</label>
+                            <input type="number" id="vatRate" value="18" min="0" max="30" step="1"
+                                   class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2">
+                        </div>
+                        <button onclick="saveSystemSettings()" class="w-full bg-emerald-500 hover:bg-emerald-600 px-4 py-3 rounded-lg font-bold">
+                            💾 שמור הגדרות
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- User Management -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <h3 class="font-bold text-lg mb-3">👥 ניהול משתמשים</h3>
+                    <div class="space-y-3">
+                        <button onclick="showAddAgent()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
+                            ➕ הוסף נציג חדש
+                        </button>
+                        <button onclick="manageAgents()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
+                            📋 ניהול נציגים
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Danger Zone -->
+                <div class="bg-red-500/10 border border-red-500 rounded-lg p-4">
+                    <h3 class="font-bold text-lg mb-3 text-red-400">⚠️ אזור מסוכן</h3>
+                    <div class="space-y-3">
+                        <button onclick="dangerResetAll()" class="w-full bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-bold">
+                            💀 איפוס מלא של המערכת
+                        </button>
+                        <p class="text-xs text-red-300">פעולה זו תמחק את כל הנתונים ללא אפשרות שחזור!</p>
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="this.closest('.fixed').remove()" class="w-full mt-6 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+                סגור
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+async function resetStatistics(period) {
+    const messages = {
+        'today': 'האם לאפס את הסטטיסטיקות של היום?',
+        'week': 'האם לאפס את הסטטיסטיקות של השבוע?',
+        'month': 'האם לאפס את הסטטיסטיקות של החודש?',
+        'all': 'האם לאפס את כל הסטטיסטיקות? (פעולה בלתי הפיכה!)'
+    };
+    
+    if (!confirm(messages[period])) return;
+    
+    try {
+        const response = await fetch(`/api/admin/reset-statistics`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ period })
+        });
+        
+        if (response.ok) {
+            showNotification(`✅ סטטיסטיקות ${period === 'all' ? 'כל' : ''} אופסו בהצלחה!`);
+            loadStatistics();
+        } else {
+            const data = await response.json();
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset statistics error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function deleteOldOrders() {
+    if (!confirm('האם למחוק הזמנות ישנות מעל 6 חודשים?')) return;
+    
+    try {
+        const response = await fetch('/api/admin/delete-old-orders', {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification(`✅ נמחקו ${data.deleted} הזמנות ישנות`);
+            loadOrders();
+        } else {
+            showNotification('❌ שגיאה במחיקה', 'error');
+        }
+    } catch (error) {
+        console.error('Delete old orders error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function archiveDeliveredOrders() {
+    if (!confirm('האם להעביר הזמנות שהושלמו לארכיון?')) return;
+    
+    showNotification('⏳ מעביר לארכיון...');
+    
+    try {
+        const response = await fetch('/api/admin/archive-delivered', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            showNotification(`✅ ${data.archived} הזמנות הועברו לארכיון`);
+            loadOrders();
+        } else {
+            showNotification('❌ שגיאה בארכוב', 'error');
+        }
+    } catch (error) {
+        console.error('Archive error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function saveSystemSettings() {
+    const commission = document.getElementById('commissionRate').value;
+    const vat = document.getElementById('vatRate').value;
+    
+    showNotification('💾 שומר הגדרות...');
+    showNotification('ℹ️ הגדרות אלו דורשות שינוי ב-Environment Variables ב-Render', 'error');
+}
+
+function showAddAgent() {
+    showNotification('👥 הוספת נציג - בקרוב!');
+}
+
+function manageAgents() {
+    showNotification('📋 ניהול נציגים - בקרוב!');
+}
+
+async function dangerResetAll() {
+    if (!confirm('⚠️ האם אתה בטוח שברצונך למחוק את כל הנתונים?')) return;
+    if (!confirm('⚠️⚠️ פעולה זו תמחק הכל ללא אפשרות שחזור! האם להמשיך?')) return;
+    
+    const password = prompt('הזן את סיסמת המנהל לאישור:');
+    if (!password) return;
+    
+    showNotification('🔥 מוחק את כל הנתונים...', 'error');
+    showNotification('⚠️ פונקציה זו מושבתת למניעת מחיקה בטעות', 'error');
+}
