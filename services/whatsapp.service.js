@@ -5,6 +5,7 @@ class WhatsAppService {
     this.token = process.env.WHAPI_TOKEN;
     this.groupId = process.env.COURIERS_GROUP_ID;
     this.baseUrl = 'https://gate.whapi.cloud';
+    this.publicUrl = process.env.PUBLIC_URL || 'https://mmh-delivery.onrender.com';
   }
 
   // Format phone number
@@ -95,7 +96,7 @@ class WhatsAppService {
     }
   }
 
-  // Send order details to courier
+  // Send order details to courier WITH ACTION LINKS!
   async sendOrderToCourier(phone, order, stage = 'pickup') {
     let message = '';
     
@@ -110,9 +111,14 @@ class WhatsAppService {
       if (order.pickup_notes) {
         message += `📝 ${order.pickup_notes}\n`;
       }
-      message += `\n🗺️ [פתח ב-Waze](https://waze.com/ul?q=${encodeURIComponent(order.pickup_address)})`;
+      message += `\n🗺️ [פתח ב-Waze](https://waze.com/ul?q=${encodeURIComponent(order.pickup_address)})\n\n`;
+      
+      // הוסף קישור לאישור איסוף!
+      message += `📲 *אחרי שאספת את החבילה:*\n`;
+      message += `${this.publicUrl}/courier?action=pickup&order=${order.id}`;
+      
     } else {
-      message += `✅ *חבילה נאספה!*\n\n`;
+      message = `✅ *חבילה נאספה!*\n\n`;
       message += `📥 *פרטי מסירה:*\n`;
       message += `👤 ${order.receiver_name}\n`;
       message += `📞 ${order.receiver_phone}\n`;
@@ -120,7 +126,11 @@ class WhatsAppService {
       if (order.delivery_notes) {
         message += `📝 ${order.delivery_notes}\n`;
       }
-      message += `\n🗺️ [פתח ב-Waze](https://waze.com/ul?q=${encodeURIComponent(order.delivery_address)})`;
+      message += `\n🗺️ [פתח ב-Waze](https://waze.com/ul?q=${encodeURIComponent(order.delivery_address)})\n\n`;
+      
+      // הוסף קישור לאישור מסירה!
+      message += `📲 *אחרי שמסרת את החבילה:*\n`;
+      message += `${this.publicUrl}/courier?action=deliver&order=${order.id}`;
     }
 
     return this.sendMessage(phone, message);
@@ -133,7 +143,7 @@ class WhatsAppService {
       `💰 מחיר: *₪${order.price}*\n` +
       `📍 מ: ${order.pickup_address}\n` +
       `📍 ל: ${order.delivery_address}\n\n` +
-      `נעדכן אותך כשיימצא שליח! 🚚`;
+      `נעדכן אותך כשימצא שליח! 🚚`;
 
     return this.sendMessage(phone, message);
   }
@@ -145,7 +155,7 @@ class WhatsAppService {
       `🏍️ שליח: ${courier.first_name} ${courier.last_name}\n` +
       `📞 טלפון: ${courier.phone}\n` +
       `🚗 רכב: ${this.getVehicleEmoji(courier.vehicle_type)}\n\n` +
-      `השליח בדרך לאסוף את החבילה! ⏱️`;
+      `השליח בדרך לאיסוף את החבילה! ⏱️`;
 
     return this.sendMessage(phone, message);
   }
@@ -177,10 +187,11 @@ class WhatsAppService {
       `📦 מספר: *${order.order_number}*\n` +
       `${vehicleEmoji} סוג רכב: ${this.getVehicleNameHebrew(order.vehicle_type)}\n` +
       `💰 תשלום: *₪${order.courier_payout}*\n` +
-      `📏 מרחק: ${order.distance_km} ק"מ\n\n` +
+      `📍 מרחק: ${order.distance_km} ק"מ\n\n` +
       `📍 מ: ${order.pickup_address}\n` +
       `📍 ל: ${order.delivery_address}\n\n` +
-      `⚡ היכנס לאפליקציה ותפוס! ⚡`;
+      `⚡ היכנס לאפליקציה ותפוס! ⚡\n` +
+      `${this.publicUrl}/courier`;
 
     return this.sendToGroup(message, process.env.WHATSAPP_IMAGE_URL);
   }
