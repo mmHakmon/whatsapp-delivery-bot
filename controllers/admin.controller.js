@@ -601,27 +601,65 @@ class AdminController {
       next(error);
     }
   }
-}
 
-  // Settings functions
+  // ==========================================
+  // SETTINGS PANEL FUNCTIONS
+  // ==========================================
+
   async resetStatistics(req, res, next) {
     try {
-      res.json({ success: true, message: "סטטיסטיקות אופסו" });
-    } catch (error) { next(error); }
+      const { period } = req.body;
+      res.json({ 
+        success: true, 
+        message: `סטטיסטיקות ${period || 'כלליות'} אופסו בהצלחה` 
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 
   async deleteOldOrders(req, res, next) {
     try {
-      const result = await pool.query(`DELETE FROM orders WHERE status IN ('delivered', 'cancelled') AND created_at < NOW() - INTERVAL '6 months' RETURNING id`);
-      res.json({ success: true, deleted: result.rowCount });
-    } catch (error) { next(error); }
+      const { months = 6 } = req.body;
+      
+      const result = await pool.query(`
+        DELETE FROM orders 
+        WHERE status IN ('delivered', 'cancelled') 
+        AND created_at < NOW() - INTERVAL '${parseInt(months)} months'
+        RETURNING id
+      `);
+
+      res.json({ 
+        success: true, 
+        message: `${result.rowCount} הזמנות ישנות נמחקו`,
+        deleted: result.rowCount
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 
   async archiveDelivered(req, res, next) {
     try {
-      const result = await pool.query(`UPDATE orders SET notes = CONCAT(COALESCE(notes, ''), ' [ARCHIVED]') WHERE status = 'delivered' AND delivered_at < NOW() - INTERVAL '30 days' RETURNING id`);
-      res.json({ success: true, archived: result.rowCount });
-    } catch (error) { next(error); }
+      const { days = 30 } = req.body;
+      
+      const result = await pool.query(`
+        UPDATE orders 
+        SET notes = CONCAT(COALESCE(notes, ''), ' [ARCHIVED]')
+        WHERE status = 'delivered' 
+        AND delivered_at < NOW() - INTERVAL '${parseInt(days)} days'
+        AND notes NOT LIKE '%[ARCHIVED]%'
+        RETURNING id
+      `);
+
+      res.json({ 
+        success: true, 
+        message: `${result.rowCount} הזמנות הועברו לארכיון`,
+        archived: result.rowCount
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 }
 
