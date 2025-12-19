@@ -330,8 +330,8 @@ class CouriersController {
 
       const balance = await pool.query(`
         SELECT 
-          COALESCE(pending_payout, 0) as pending_payout,
-          COALESCE(total_earnings, 0) as total_earnings
+          COALESCE(balance, 0) as pending_payout,
+          COALESCE(total_earned, 0) as total_earnings
         FROM couriers
         WHERE id = $1
       `, [courierId]);
