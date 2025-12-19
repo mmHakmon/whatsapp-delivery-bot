@@ -7,6 +7,10 @@ let courierData = null;
 let ws = null;
 let locationInterval = null;
 
+// ✅ הוסף משתנים חדשים לגרפים
+let earningsChart = null;
+let hourlyChart = null;
+
 // ==========================================
 // AUTHENTICATION
 // ==========================================
@@ -95,6 +99,7 @@ function initCourierApp() {
     connectWebSocket();
     startLocationTracking();
     loadCourierStatistics();
+    loadAdvancedDashboard(); // ✅ הוסף שורה זו!
     loadAvailableOrders();
     loadMyOrders();
 }
@@ -192,7 +197,7 @@ async function sendLocation(coords) {
 }
 
 // ==========================================
-// STATISTICS
+// STATISTICS (הישנות - עדיין צריך!)
 // ==========================================
 
 async function loadCourierStatistics() {
@@ -215,6 +220,333 @@ async function loadCourierStatistics() {
         console.error('Statistics error:', error);
     }
 }
+
+// ==========================================
+// ✅ ADVANCED DASHBOARD - חדש!
+// ==========================================
+
+async function loadAdvancedDashboard() {
+    await Promise.all([
+        loadAdvancedStatistics(),
+        loadGoals(),
+        loadRanking(),
+        loadEarningsProjection(),
+        loadPerformanceMetrics()
+    ]);
+}
+
+async function loadAdvancedStatistics() {
+    try {
+        const response = await fetch('/api/couriers/advanced-statistics', {
+            headers: { 'Authorization': `Bearer ${courierToken}` }
+        });
+        
+        if (!response.ok) return;
+        const data = await response.json();
+        const stats = data.statistics;
+        
+        // עדכן סטטיסטיקות מתקדמות
+        document.getElementById('todayEarnings').textContent = `₪${stats.today_earnings.toFixed(0)}`;
+        document.getElementById('weekEarnings').textContent = `₪${stats.week_earnings.toFixed(0)}`;
+        document.getElementById('monthEarnings').textContent = `₪${stats.month_earnings.toFixed(0)}`;
+        
+        const avgElem = document.getElementById('avgPerDelivery');
+        if (avgElem) avgElem.textContent = `₪${stats.avg_earning_per_delivery.toFixed(0)}`;
+        
+        const completionElem = document.getElementById('completionRate');
+        if (completionElem) completionElem.textContent = `${stats.completion_percentage}%`;
+        
+        // צור גרפים
+        createEarningsChart(data.dailyEarnings);
+        createHourlyChart(data.hourlyDeliveries);
+        
+    } catch (error) {
+        console.error('Advanced statistics error:', error);
+    }
+}
+
+function createEarningsChart(data) {
+    const ctx = document.getElementById('earningsChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    
+    if (earningsChart) earningsChart.destroy();
+    
+    const days = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
+    const earnings = new Array(7).fill(0);
+    
+    data.forEach(day => {
+        const date = new Date(day.date);
+        earnings[date.getDay()] = parseFloat(day.earnings);
+    });
+    
+    earningsChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: days,
+            datasets: [{
+                data: earnings,
+                backgroundColor: 'rgba(34, 197, 94, 0.5)',
+                borderColor: 'rgb(34, 197, 94)',
+                borderWidth: 2,
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: '#334155' }
+                },
+                x: {
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: '#334155' }
+                }
+            }
+        }
+    });
+}
+
+function createHourlyChart(data) {
+    const ctx = document.getElementById('hourlyChart');
+    if (!ctx || typeof Chart === 'undefined') return;
+    
+    if (hourlyChart) hourlyChart.destroy();
+    
+    const hours = [];
+    const deliveries = [];
+    
+    data.forEach(item => {
+        hours.push(`${item.hour}:00`);
+        deliveries.push(parseInt(item.deliveries));
+    });
+    
+    // אם אין נתונים, הצג גרף ריק
+    if (hours.length === 0) {
+        hours.push('8:00', '12:00', '16:00', '20:00');
+        deliveries.push(0, 0, 0, 0);
+    }
+    
+    hourlyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: hours,
+            datasets: [{
+                data: deliveries,
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: { color: '#94a3b8', stepSize: 1 },
+                    grid: { color: '#334155' }
+                },
+                x: {
+                    ticks: { color: '#94a3b8' },
+                    grid: { color: '#334155' }
+                }
+            }
+        }
+    });
+}
+
+async function loadGoals() {
+    try {
+        const response = await fetch('/api/couriers/goals', {
+            headers: { 'Authorization': `Bearer ${courierToken}` }
+        });
+        
+        if (!response.ok) return;
+        const data = await response.json();
+        
+        // יעד יומי
+        const daily = data.daily.deliveries;
+        const dailyGoalText = document.getElementById('dailyGoalText');
+        const dailyGoalBar = document.getElementById('dailyGoalBar');
+        const dailyGoalRemaining = document.getElementById('dailyGoalRemaining');
+        
+        if (dailyGoalText) dailyGoalText.textContent = `${daily.current} / ${daily.goal}`;
+        if (dailyGoalBar) dailyGoalBar.style.width = `${daily.percentage}%`;
+        if (dailyGoalRemaining) {
+            const remaining = daily.goal - daily.current;
+            dailyGoalRemaining.textContent = remaining > 0 ? `עוד ${remaining} משלוחים!` : 'היעד הושג! 🎉';
+        }
+        
+        // יעד הכנסות
+        const dailyEarnings = data.daily.earnings;
+        const dailyEarningsGoalText = document.getElementById('dailyEarningsGoalText');
+        const dailyEarningsGoalBar = document.getElementById('dailyEarningsGoalBar');
+        
+        if (dailyEarningsGoalText) {
+            dailyEarningsGoalText.textContent = `₪${dailyEarnings.current.toFixed(0)} / ₪${dailyEarnings.goal}`;
+        }
+        if (dailyEarningsGoalBar) {
+            dailyEarningsGoalBar.style.width = `${dailyEarnings.percentage}%`;
+        }
+        
+        // יעד שבועי
+        const weekly = data.weekly.deliveries;
+        const weeklyGoalText = document.getElementById('weeklyGoalText');
+        const weeklyGoalBar = document.getElementById('weeklyGoalBar');
+        
+        if (weeklyGoalText) weeklyGoalText.textContent = `${weekly.current} / ${weekly.goal}`;
+        if (weeklyGoalBar) weeklyGoalBar.style.width = `${weekly.percentage}%`;
+        
+    } catch (error) {
+        console.error('Goals error:', error);
+    }
+}
+
+async function loadRanking() {
+    try {
+        const response = await fetch('/api/couriers/ranking', {
+            headers: { 'Authorization': `Bearer ${courierToken}` }
+        });
+        
+        if (!response.ok) return;
+        const data = await response.json();
+        const myRank = data.myRank;
+        
+        const myRankElem = document.getElementById('myRank');
+        const totalCouriersElem = document.getElementById('totalCouriers');
+        const rankMedalElem = document.getElementById('rankMedal');
+        
+        if (myRankElem) myRankElem.textContent = myRank.rank;
+        if (totalCouriersElem) totalCouriersElem.textContent = myRank.totalCouriers;
+        
+        if (rankMedalElem) {
+            const medals = { 1: '🥇', 2: '🥈', 3: '🥉' };
+            rankMedalElem.textContent = medals[myRank.rank] || '🏅';
+        }
+        
+        // Top 5
+        const topCouriersListElem = document.getElementById('topCouriersList');
+        if (topCouriersListElem && data.topCouriers) {
+            const listHTML = data.topCouriers.map(c => `
+                <div class="flex justify-between ${c.isMe ? 'text-emerald-400' : ''}">
+                    <span>${c.rank === 1 ? '🥇' : c.rank === 2 ? '🥈' : c.rank === 3 ? '🥉' : c.rank}. ${c.name}</span>
+                    <span>${c.monthDeliveries}</span>
+                </div>
+            `).join('');
+            topCouriersListElem.innerHTML = listHTML;
+        }
+        
+    } catch (error) {
+        console.error('Ranking error:', error);
+    }
+}
+
+async function loadEarningsProjection() {
+    try {
+        const response = await fetch('/api/couriers/earnings-projection', {
+            headers: { 'Authorization': `Bearer ${courierToken}` }
+        });
+        
+        if (!response.ok) return;
+        const data = await response.json();
+        
+        const currentMonthEarningsElem = document.getElementById('currentMonthEarnings');
+        const currentMonthDaysElem = document.getElementById('currentMonthDays');
+        const dailyRateElem = document.getElementById('dailyRate');
+        const projectedEarningsElem = document.getElementById('projectedEarnings');
+        
+        if (currentMonthEarningsElem) {
+            currentMonthEarningsElem.textContent = `₪${data.currentMonth.total.toLocaleString()}`;
+        }
+        if (currentMonthDaysElem) {
+            currentMonthDaysElem.textContent = `${data.currentMonth.daysElapsed} ימים`;
+        }
+        if (dailyRateElem) {
+            dailyRateElem.textContent = `₪${data.projection.dailyRate.toLocaleString()}`;
+        }
+        if (projectedEarningsElem) {
+            projectedEarningsElem.textContent = `₪${data.projection.projectedTotal.toLocaleString()}`;
+        }
+        
+        // יום הכי טוב
+        if (data.bestDay.date) {
+            const date = new Date(data.bestDay.date);
+            const bestDayEarningsElem = document.getElementById('bestDayEarnings');
+            const bestDayDateElem = document.getElementById('bestDayDate');
+            const bestDayDeliveriesElem = document.getElementById('bestDayDeliveries');
+            
+            if (bestDayEarningsElem) {
+                bestDayEarningsElem.textContent = `₪${data.bestDay.earnings.toLocaleString()}`;
+            }
+            if (bestDayDateElem) {
+                bestDayDateElem.textContent = date.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
+            }
+            if (bestDayDeliveriesElem) {
+                bestDayDeliveriesElem.textContent = `${data.bestDay.deliveries} משלוחים`;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Earnings projection error:', error);
+    }
+}
+
+async function loadPerformanceMetrics() {
+    try {
+        const response = await fetch('/api/couriers/performance-metrics', {
+            headers: { 'Authorization': `Bearer ${courierToken}` }
+        });
+        
+        if (!response.ok) return;
+        const data = await response.json();
+        
+        const avgTimeElem = document.getElementById('avgTime');
+        const fastestTimeElem = document.getElementById('fastestTime');
+        
+        if (avgTimeElem) avgTimeElem.textContent = `${data.timing.avgTime} דק'`;
+        if (fastestTimeElem) fastestTimeElem.textContent = `${data.timing.fastestTime} דק'`;
+        
+        // פיצול שעות
+        const dist = data.distribution;
+        
+        const morningDelElem = document.getElementById('morningDeliveries');
+        const morningPercElem = document.getElementById('morningPercentage');
+        if (morningDelElem) morningDelElem.textContent = dist.morning.deliveries;
+        if (morningPercElem) morningPercElem.textContent = `${dist.morning.percentage}%`;
+        
+        const noonDelElem = document.getElementById('noonDeliveries');
+        const noonPercElem = document.getElementById('noonPercentage');
+        if (noonDelElem) noonDelElem.textContent = dist.noon.deliveries;
+        if (noonPercElem) noonPercElem.textContent = `${dist.noon.percentage}%`;
+        
+        const eveningDelElem = document.getElementById('eveningDeliveries');
+        const eveningPercElem = document.getElementById('eveningPercentage');
+        if (eveningDelElem) eveningDelElem.textContent = dist.evening.deliveries;
+        if (eveningPercElem) eveningPercElem.textContent = `${dist.evening.percentage}%`;
+        
+        const nightDelElem = document.getElementById('nightDeliveries');
+        const nightPercElem = document.getElementById('nightPercentage');
+        if (nightDelElem) nightDelElem.textContent = dist.night.deliveries;
+        if (nightPercElem) nightPercElem.textContent = `${dist.night.percentage}%`;
+        
+    } catch (error) {
+        console.error('Performance metrics error:', error);
+    }
+}
+
+// רענון אוטומטי כל דקה
+setInterval(() => {
+    if (courierToken) {
+        loadAdvancedDashboard();
+    }
+}, 60000);
 
 // ==========================================
 // AVAILABLE ORDERS
@@ -293,7 +625,8 @@ async function takeOrder(orderId) {
             showNotification('✅ המשלוח נתפס! פרטי איסוף נשלחו בוואטסאפ');
             loadAvailableOrders();
             loadMyOrders();
-            switchCourierTab('active'); // Switch to active tab
+            loadAdvancedDashboard(); // ✅ רענן סטטיסטיקות
+            switchCourierTab('active');
         } else {
             const data = await response.json();
             showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
@@ -305,19 +638,17 @@ async function takeOrder(orderId) {
 }
 
 // ==========================================
-// MY ORDERS (ACTIVE) - תיקון!
+// MY ORDERS (ACTIVE)
 // ==========================================
 
 async function loadMyOrders() {
     try {
-        // Load all my orders, then filter
         const response = await fetch('/api/couriers/my-orders', {
             headers: { 'Authorization': `Bearer ${courierToken}` }
         });
         
         if (response.ok) {
             const data = await response.json();
-            // Filter only taken and picked orders
             const activeOrders = data.orders.filter(o => o.status === 'taken' || o.status === 'picked');
             displayMyOrders(activeOrders);
         }
@@ -402,6 +733,7 @@ async function markAsPickedUp(orderId) {
         if (response.ok) {
             showNotification('✅ החבילה נאספה! עכשיו לך למסירה');
             loadMyOrders();
+            loadAdvancedDashboard(); // ✅ רענן סטטיסטיקות
         } else {
             const data = await response.json();
             showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
@@ -425,6 +757,7 @@ async function markAsDelivered(orderId) {
             showNotification(`🎉 כל הכבוד! הרווחת ₪${data.earned}`);
             loadMyOrders();
             loadCourierStatistics();
+            loadAdvancedDashboard(); // ✅ רענן סטטיסטיקות
             loadOrderHistory();
         } else {
             const data = await response.json();
