@@ -332,7 +332,6 @@ function createEarningsChart(data) {
         },
         options: {
             responsive: true,
-            animation: false,
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
@@ -384,7 +383,6 @@ function createHourlyChart(data) {
         },
         options: {
             responsive: true,
-            animation: false,
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
             scales: {
