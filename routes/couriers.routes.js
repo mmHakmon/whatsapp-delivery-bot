@@ -27,6 +27,14 @@ router.get('/my-orders', authenticateToken, couriersController.getMyOrders);
 router.get('/my-statistics', authenticateToken, couriersController.getMyStatistics);
 
 // Update courier location
+
+// Advanced statistics & analytics
+router.get('/advanced-statistics', authenticateToken, couriersController.getAdvancedStatistics);
+router.get('/goals', authenticateToken, couriersController.getGoals);
+router.get('/ranking', authenticateToken, couriersController.getRanking);
+router.get('/earnings-projection', authenticateToken, couriersController.getEarningsProjection);
+router.get('/performance-metrics', authenticateToken, couriersController.getPerformanceMetrics);
+
 router.post('/location', authenticateToken, couriersController.updateLocation);
 
 // ==========================================
