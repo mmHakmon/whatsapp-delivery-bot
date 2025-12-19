@@ -17,6 +17,9 @@ router.post('/calculate', ordersController.calculatePricingEndpoint);
 // Create order from customer (public - NO AUTH!)
 router.post('/public', validateOrderCreation, ordersController.createOrderPublic);
 
+// Quick take from WhatsApp link (NO AUTH!)
+router.post('/quick-take/:orderId', ordersController.quickTakeOrder);
+
 // ==========================================
 // ADMIN ROUTES
 // ==========================================
