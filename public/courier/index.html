@@ -24,11 +24,32 @@
             color: #94a3b8;
             border: 1px solid #334155;
         }
+        
+        /* חלון קבוע למשלוחים */
+        .orders-container {
+            height: 45vh;
+            overflow-y: auto;
+        }
+        
+        /* סגנון סקרול */
+        .orders-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .orders-container::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .orders-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .orders-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-white">
     <!-- Header -->
-    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-10">
+    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-20">
         <div class="container mx-auto px-4 py-3 flex justify-between items-center">
             <div class="flex items-center gap-2">
                 <img src="/assets/logo.png" alt="M.M.H Logo" class="h-10">
@@ -100,18 +121,58 @@
         </div>
 
         <!-- ========================================== -->
-        <!-- טאבים ראשיים - בולטים! -->
+        <!-- חלון המשלוחים הקבוע - תמיד נראה! -->
         <!-- ========================================== -->
-        <div class="bg-slate-800 border-b border-slate-700 px-4 py-2">
+        <div class="bg-slate-800 border-b-4 border-emerald-500">
+            <div class="container mx-auto px-4 py-3">
+                <!-- כותרת + מתג -->
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-xl font-bold flex items-center gap-2">
+                        <span id="ordersTitle">📦 משלוחים זמינים</span>
+                        <span id="ordersCount" class="px-2 py-1 bg-emerald-500 rounded-full text-xs">0</span>
+                    </h2>
+                    
+                    <!-- מתג בין זמינים לפעילים -->
+                    <div class="flex gap-2">
+                        <button onclick="switchOrdersView('available')" id="btnAvailable" 
+                                class="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-500 text-white">
+                            📦 זמינים
+                        </button>
+                        <button onclick="switchOrdersView('active')" id="btnActive"
+                                class="px-4 py-2 rounded-lg text-sm font-bold bg-slate-700 text-slate-300">
+                            🔵 פעילים
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- רשימת משלוחים - חלון גלילה קבוע -->
+                <div id="ordersContainer" class="orders-container space-y-3">
+                    <!-- זמינים -->
+                    <div id="availableOrdersList">
+                        <div class="text-center py-12 text-slate-400">
+                            <div class="text-6xl mb-4">⏳</div>
+                            <p>טוען משלוחים זמינים...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- פעילים (מוסתר בהתחלה) -->
+                    <div id="activeOrdersList" class="hidden">
+                        <div class="text-center py-12 text-slate-400">
+                            <div class="text-6xl mb-4">⏳</div>
+                            <p>טוען משלוחים פעילים...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- טאבים למטה - ללא משלוחים! -->
+        <!-- ========================================== -->
+        <div class="bg-slate-800 border-b border-slate-700 px-4 py-2 sticky top-[73px] z-10">
             <div class="container mx-auto">
-                <div class="grid grid-cols-5 gap-2">
-                    <button onclick="switchCourierTab('available')" id="tabAvailable" class="courier-tab-active px-3 py-3 rounded-lg text-sm font-bold transition-all">
-                        📦<br>זמינים
-                    </button>
-                    <button onclick="switchCourierTab('active')" id="tabActive" class="courier-tab-inactive px-3 py-3 rounded-lg text-sm font-bold transition-all">
-                        🔵<br>פעילים
-                    </button>
-                    <button onclick="switchCourierTab('stats')" id="tabStats" class="courier-tab-inactive px-3 py-3 rounded-lg text-sm font-bold transition-all">
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="switchCourierTab('stats')" id="tabStats" class="courier-tab-active px-3 py-3 rounded-lg text-sm font-bold transition-all">
                         📊<br>סטטיסטיקות
                     </button>
                     <button onclick="switchCourierTab('history')" id="tabHistory" class="courier-tab-inactive px-3 py-3 rounded-lg text-sm font-bold transition-all">
@@ -127,33 +188,9 @@
         <div class="container mx-auto px-4 py-4">
             
             <!-- ========================================== -->
-            <!-- Available Orders Tab -->
+            <!-- Stats Tab -->
             <!-- ========================================== -->
-            <div id="availableTab" class="courier-tab-content">
-                <div id="availableOrdersList" class="space-y-3">
-                    <div class="text-center py-12 text-slate-400">
-                        <div class="text-6xl mb-4">⏳</div>
-                        <p>טוען...</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ========================================== -->
-            <!-- Active Orders Tab -->
-            <!-- ========================================== -->
-            <div id="activeTab" class="courier-tab-content hidden">
-                <div id="activeOrdersList" class="space-y-3">
-                    <div class="text-center py-12 text-slate-400">
-                        <div class="text-6xl mb-4">⏳</div>
-                        <p>טוען...</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ========================================== -->
-            <!-- Stats Tab - כל הסטטיסטיקות המתקדמות כאן! -->
-            <!-- ========================================== -->
-            <div id="statsTab" class="courier-tab-content hidden">
+            <div id="statsTab" class="courier-tab-content">
                 
                 <!-- כרטיסי סטטיסטיקות -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -284,7 +321,7 @@
                         <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg p-3 text-center">
                             <div class="text-xs text-emerald-100 mb-1">צפי סוף חודש</div>
                             <div class="text-xl font-bold text-white" id="projectedEarnings">₪0</div>
-                            <div class="text-xs text-emerald-100" id="projectedTrend">📈</div>
+                            <div class="text-xs text-emerald-100">📈</div>
                         </div>
                     </div>
                     <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
@@ -382,10 +419,10 @@
                     clearInterval(checkAuth);
                     
                     if (action === 'pickup') {
-                        switchCourierTab('active');
+                        switchOrdersView('active');
                         setTimeout(() => markAsPickedUp(parseInt(orderId)), 1000);
                     } else if (action === 'deliver') {
-                        switchCourierTab('active');
+                        switchOrdersView('active');
                         setTimeout(() => markAsDelivered(parseInt(orderId)), 1000);
                     }
                     
