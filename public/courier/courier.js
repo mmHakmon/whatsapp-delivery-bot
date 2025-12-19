@@ -573,11 +573,12 @@ async function loadPerformanceMetrics() {
     }
 }
 
-setInterval(() => {
-    if (courierToken) {
-        loadAdvancedDashboard();
-    }
-}, 60000);
+// TEMPORARILY DISABLED - Debug infinite loop
+// setInterval(() => {
+//     if (courierToken) {
+//         loadAdvancedDashboard();
+//     }
+// }, 60000);
 
 // ==========================================
 // AVAILABLE ORDERS
