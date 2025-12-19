@@ -216,23 +216,27 @@
                     </div>
                 </div>
 
-                <!-- גרפים -->
-                <div class="grid md:grid-cols-2 gap-4 mb-4">
-                    <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
-                        <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
-                            <span>📈</span>
-                            <span>הכנסות שבועיות</span>
-                        </h3>
-                        <canvas id="earningsChart" height="150"></canvas>
-                    </div>
-                    <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
-                        <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
-                            <span>⏰</span>
-                            <span>משלוחים היום</span>
-                        </h3>
-                        <canvas id="hourlyChart" height="150"></canvas>
-                    </div>
-                </div>
+<!-- גרפים -->
+<div class="grid md:grid-cols-2 gap-4 mb-4">
+    <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
+            <span>📈</span>
+            <span>הכנסות שבועיות</span>
+        </h3>
+        <div style="height: 150px; max-height: 150px; position: relative;">
+            <canvas id="earningsChart"></canvas>
+        </div>
+    </div>
+    <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
+            <span>⏰</span>
+            <span>משלוחים היום</span>
+        </h3>
+        <div style="height: 150px; max-height: 150px; position: relative;">
+            <canvas id="hourlyChart"></canvas>
+        </div>
+    </div>
+</div>
 
                 <!-- יעדים -->
                 <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
@@ -436,3 +440,4 @@
     </script>
 </body>
 </html>
+
