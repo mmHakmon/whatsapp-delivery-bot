@@ -1,4 +1,3 @@
-// Copy first 97 lines as-is
 // ==========================================
 // M.M.H DELIVERY - COURIER APP
 // ==========================================
@@ -96,16 +95,14 @@ function showMainApp() {
 // INITIALIZATION
 // ==========================================
 
-
 function initCourierApp() {
     connectWebSocket();
     startLocationTracking();
     loadCourierStatistics();
-    // loadAdvancedDashboard(); // ❌ REMOVED - causes double load!
+    loadAdvancedDashboard();
     loadAvailableOrders();
     loadMyOrders();
 }
-
 
 // ==========================================
 // WEBSOCKET
