@@ -268,36 +268,46 @@ async function loadAdvancedStatistics() {
             headers: { 'Authorization': `Bearer ${courierToken}` }
         });
         
-        if (!response.ok) return;
+        if (!response.ok) {
+            console.log('Failed to load advanced statistics');
+            return;
+        }
+        
         const data = await response.json();
-        const stats = data.statistics;
+        const stats = data.statistics || {};
         
         // עדכן סטטיסטיקות בטאב סטטיסטיקות (עם 2)
         const statToday2 = document.getElementById('statToday2');
         const statWeek2 = document.getElementById('statWeek2');
         const statMonth2 = document.getElementById('statMonth2');
         
-        if (statToday2) statToday2.textContent = stats.today_deliveries;
-        if (statWeek2) statWeek2.textContent = stats.week_deliveries;
-        if (statMonth2) statMonth2.textContent = stats.month_deliveries;
+        if (statToday2) statToday2.textContent = stats.today_deliveries || 0;
+        if (statWeek2) statWeek2.textContent = stats.week_deliveries || 0;
+        if (statMonth2) statMonth2.textContent = stats.month_deliveries || 0;
         
         // עדכן הכנסות
         const todayEarningsElem = document.getElementById('todayEarnings');
         const weekEarningsElem = document.getElementById('weekEarnings');
         const monthEarningsElem = document.getElementById('monthEarnings');
         
-        if (todayEarningsElem) todayEarningsElem.textContent = `₪${stats.today_earnings.toFixed(0)}`;
-        if (weekEarningsElem) weekEarningsElem.textContent = `₪${stats.week_earnings.toFixed(0)}`;
-        if (monthEarningsElem) monthEarningsElem.textContent = `₪${stats.month_earnings.toFixed(0)}`;
+        if (todayEarningsElem) todayEarningsElem.textContent = `₪${(stats.today_earnings || 0).toFixed(0)}`;
+        if (weekEarningsElem) weekEarningsElem.textContent = `₪${(stats.week_earnings || 0).toFixed(0)}`;
+        if (monthEarningsElem) monthEarningsElem.textContent = `₪${(stats.month_earnings || 0).toFixed(0)}`;
         
         const avgElem = document.getElementById('avgPerDelivery');
-        if (avgElem) avgElem.textContent = `₪${stats.avg_earning_per_delivery.toFixed(0)}`;
+        if (avgElem) avgElem.textContent = `₪${(stats.avg_earning_per_delivery || 0).toFixed(0)}`;
         
         const completionElem = document.getElementById('completionRate');
-        if (completionElem) completionElem.textContent = `${stats.completion_percentage}%`;
+        if (completionElem) completionElem.textContent = `${stats.completion_percentage || 0}%`;
         
-        createEarningsChart(data.dailyEarnings);
-        createHourlyChart(data.hourlyDeliveries);
+        // צור גרפים רק אם יש נתונים תקינים
+        if (data.dailyEarnings && Array.isArray(data.dailyEarnings)) {
+            createEarningsChart(data.dailyEarnings);
+        }
+        
+        if (data.hourlyDeliveries && Array.isArray(data.hourlyDeliveries)) {
+            createHourlyChart(data.hourlyDeliveries);
+        }
         
     } catch (error) {
         console.error('Advanced statistics error:', error);
@@ -308,14 +318,26 @@ function createEarningsChart(data) {
     const ctx = document.getElementById('earningsChart');
     if (!ctx || typeof Chart === 'undefined') return;
     
-    if (earningsChart) earningsChart.destroy();
+    // הרוס גרף קודם אם קיים
+    if (earningsChart) {
+        earningsChart.destroy();
+        earningsChart = null;
+    }
+    
+    // בדיקת תקינות נתונים
+    if (!data || !Array.isArray(data)) {
+        console.log('No valid earnings data');
+        return;
+    }
     
     const days = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ש'];
     const earnings = new Array(7).fill(0);
     
     data.forEach(day => {
-        const date = new Date(day.date);
-        earnings[date.getDay()] = parseFloat(day.earnings);
+        if (day && day.date && day.earnings) {
+            const date = new Date(day.date);
+            earnings[date.getDay()] = parseFloat(day.earnings) || 0;
+        }
     });
     
     earningsChart = new Chart(ctx, {
@@ -353,16 +375,29 @@ function createHourlyChart(data) {
     const ctx = document.getElementById('hourlyChart');
     if (!ctx || typeof Chart === 'undefined') return;
     
-    if (hourlyChart) hourlyChart.destroy();
+    // הרוס גרף קודם אם קיים
+    if (hourlyChart) {
+        hourlyChart.destroy();
+        hourlyChart = null;
+    }
+    
+    // בדיקת תקינות נתונים
+    if (!data || !Array.isArray(data)) {
+        console.log('No valid hourly data');
+        return;
+    }
     
     const hours = [];
     const deliveries = [];
     
     data.forEach(item => {
-        hours.push(`${item.hour}:00`);
-        deliveries.push(parseInt(item.deliveries));
+        if (item && item.hour !== undefined && item.deliveries !== undefined) {
+            hours.push(`${item.hour}:00`);
+            deliveries.push(parseInt(item.deliveries) || 0);
+        }
     });
     
+    // אם אין נתונים, צור דוגמה ריקה
     if (hours.length === 0) {
         hours.push('8:00', '12:00', '16:00', '20:00');
         deliveries.push(0, 0, 0, 0);
@@ -1004,3 +1039,4 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
