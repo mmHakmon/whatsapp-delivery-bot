@@ -312,7 +312,7 @@ class CouriersController {
       next(error);
     }
   }
-}
+
   // ==========================================
   // ADVANCED STATISTICS & ANALYTICS
   // ==========================================
@@ -427,14 +427,12 @@ class CouriersController {
     try {
       const courierId = req.user.id;
 
-      // יעדים קבועים (אפשר לשמור בטבלה או להגדיר כאן)
       const DAILY_GOAL = 15;
       const WEEKLY_GOAL = 80;
       const MONTHLY_GOAL = 300;
       const DAILY_EARNINGS_GOAL = 800;
       const WEEKLY_EARNINGS_GOAL = 4500;
 
-      // משלוחים היום
       const todayProgress = await pool.query(`
         SELECT 
           COUNT(*) as completed,
@@ -445,7 +443,6 @@ class CouriersController {
         AND DATE(completed_at) = CURRENT_DATE
       `, [courierId]);
 
-      // משלוחים השבוע
       const weekProgress = await pool.query(`
         SELECT 
           COUNT(*) as completed,
@@ -456,7 +453,6 @@ class CouriersController {
         AND completed_at >= date_trunc('week', CURRENT_DATE)
       `, [courierId]);
 
-      // משלוחים החודש
       const monthProgress = await pool.query(`
         SELECT 
           COUNT(*) as completed
@@ -516,7 +512,6 @@ class CouriersController {
     try {
       const courierId = req.user.id;
 
-      // דירוג לפי משלוחים החודש
       const ranking = await pool.query(`
         WITH courier_stats AS (
           SELECT 
@@ -556,7 +551,6 @@ class CouriersController {
 
       const myRank = ranking.rows[0];
 
-      // Top 5 שליחים
       const topCouriers = await pool.query(`
         SELECT 
           c.id,
@@ -605,7 +599,6 @@ class CouriersController {
     try {
       const courierId = req.user.id;
 
-      // הכנסות עד עכשיו החודש
       const monthEarnings = await pool.query(`
         SELECT 
           COALESCE(SUM(courier_payout), 0) as total,
@@ -620,7 +613,6 @@ class CouriersController {
       const currentTotal = parseFloat(current.total);
       const currentDeliveries = parseInt(current.deliveries);
 
-      // כמה ימים עברו בחודש
       const daysInMonth = await pool.query(`
         SELECT 
           EXTRACT(DAY FROM date_trunc('month', CURRENT_DATE) + INTERVAL '1 month' - INTERVAL '1 day') as days_in_month,
@@ -632,13 +624,9 @@ class CouriersController {
       const currentDay = parseInt(daysData.current_day);
       const remainingDays = totalDays - currentDay;
 
-      // חישוב קצב יומי
       const dailyRate = currentDay > 0 ? currentTotal / currentDay : 0;
-      
-      // חישוב צפי לסוף החודש
       const projection = currentTotal + (dailyRate * remainingDays);
 
-      // יום הכי טוב
       const bestDay = await pool.query(`
         SELECT 
           DATE(completed_at) as date,
@@ -686,7 +674,6 @@ class CouriersController {
     try {
       const courierId = req.user.id;
 
-      // זמנים וביצועים
       const performance = await pool.query(`
         SELECT 
           COALESCE(AVG(EXTRACT(EPOCH FROM (completed_at - accepted_at))/60), 0) as avg_time,
@@ -699,7 +686,6 @@ class CouriersController {
         AND completed_at >= date_trunc('month', CURRENT_DATE)
       `, [courierId]);
 
-      // פיצול לפי שעות
       const timeDistribution = await pool.query(`
         SELECT 
           CASE 
