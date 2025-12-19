@@ -195,6 +195,35 @@ async function sendLocation(coords) {
 }
 
 // ==========================================
+// ORDERS VIEW SWITCHER
+// ==========================================
+
+function switchOrdersView(view) {
+    const availableList = document.getElementById('availableOrdersList');
+    const activeList = document.getElementById('activeOrdersList');
+    const btnAvailable = document.getElementById('btnAvailable');
+    const btnActive = document.getElementById('btnActive');
+    const ordersTitle = document.getElementById('ordersTitle');
+    const ordersCount = document.getElementById('ordersCount');
+    
+    if (view === 'available') {
+        availableList.classList.remove('hidden');
+        activeList.classList.add('hidden');
+        btnAvailable.className = 'px-4 py-2 rounded-lg text-sm font-bold bg-emerald-500 text-white';
+        btnActive.className = 'px-4 py-2 rounded-lg text-sm font-bold bg-slate-700 text-slate-300';
+        ordersTitle.textContent = '📦 משלוחים זמינים';
+        loadAvailableOrders();
+    } else {
+        availableList.classList.add('hidden');
+        activeList.classList.remove('hidden');
+        btnAvailable.className = 'px-4 py-2 rounded-lg text-sm font-bold bg-slate-700 text-slate-300';
+        btnActive.className = 'px-4 py-2 rounded-lg text-sm font-bold bg-blue-500 text-white';
+        ordersTitle.textContent = '🔵 משלוחים פעילים';
+        loadMyOrders();
+    }
+}
+
+// ==========================================
 // STATISTICS
 // ==========================================
 
@@ -628,7 +657,7 @@ async function takeOrder(orderId) {
             loadAvailableOrders();
             loadMyOrders();
             loadAdvancedDashboard();
-            switchCourierTab('active');
+            switchOrdersView('active');
         } else {
             const data = await response.json();
             showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
@@ -917,9 +946,7 @@ function switchCourierTab(tab) {
     document.querySelectorAll('.courier-tab-content').forEach(t => t.classList.add('hidden'));
     
     const tabMap = {
-        'available': 'tabAvailable',
-        'active': 'tabActive',
-        'stats': 'tabStats',          // ✅ חדש!
+        'stats': 'tabStats',
         'history': 'tabHistory',
         'earnings': 'tabEarnings'
     };
@@ -927,9 +954,7 @@ function switchCourierTab(tab) {
     document.getElementById(tabMap[tab]).className = 'courier-tab-active px-3 py-3 rounded-lg text-sm font-bold transition-all';
     document.getElementById(`${tab}Tab`).classList.remove('hidden');
     
-    if (tab === 'available') loadAvailableOrders();
-    if (tab === 'active') loadMyOrders();
-    if (tab === 'stats') loadAdvancedDashboard();  // ✅ חדש!
+    if (tab === 'stats') loadAdvancedDashboard();
     if (tab === 'history') loadOrderHistory();
     if (tab === 'earnings') loadPayoutRequests();
 }
