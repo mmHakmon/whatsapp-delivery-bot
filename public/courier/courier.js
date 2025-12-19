@@ -1,3 +1,4 @@
+// Copy first 97 lines as-is
 // ==========================================
 // M.M.H DELIVERY - COURIER APP
 // ==========================================
@@ -10,9 +11,6 @@ let locationInterval = null;
 // ✅ הוסף משתנים חדשים לגרפים
 let earningsChart = null;
 let hourlyChart = null;
-
-// ✅ Guard to prevent multiple simultaneous dashboard loads
-let isLoadingDashboard = false;
 
 // ==========================================
 // AUTHENTICATION
@@ -98,14 +96,16 @@ function showMainApp() {
 // INITIALIZATION
 // ==========================================
 
+
 function initCourierApp() {
     connectWebSocket();
     startLocationTracking();
     loadCourierStatistics();
-    loadAdvancedDashboard();
+    // loadAdvancedDashboard(); // ❌ REMOVED - causes double load!
     loadAvailableOrders();
     loadMyOrders();
 }
+
 
 // ==========================================
 // WEBSOCKET
@@ -256,31 +256,14 @@ async function loadCourierStatistics() {
 // ==========================================
 
 async function loadAdvancedDashboard() {
-    // ✅ Prevent multiple simultaneous loads
-    if (isLoadingDashboard) {
-        console.log('⚠️ Dashboard already loading, skipping...');
-        return;
-    }
-    
-    isLoadingDashboard = true;
-    console.log('📊 Loading dashboard...');
-    
-    try {
-        await Promise.all([
-            loadAdvancedStatistics(),
-            loadGoals(),
-            loadRanking(),
-            loadEarningsProjection(),
-            loadPerformanceMetrics()
-        ]);
-        console.log('✅ Dashboard loaded!');
-    } catch (error) {
-        console.error('❌ Dashboard load error:', error);
-    } finally {
-        isLoadingDashboard = false;
-    }
+    await Promise.all([
+        loadAdvancedStatistics(),
+        loadGoals(),
+        loadRanking(),
+        loadEarningsProjection(),
+        loadPerformanceMetrics()
+    ]);
 }
-
 
 async function loadAdvancedStatistics() {
     try {
