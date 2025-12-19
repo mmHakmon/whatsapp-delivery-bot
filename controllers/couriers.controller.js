@@ -20,12 +20,10 @@ class CouriersController {
         vehiclePlate
       } = req.body;
 
-      // Validate required fields
       if (!firstName || !lastName || !idNumber || !phone || !vehicleType) {
         return res.status(400).json({ error: 'חסרים שדות חובה' });
       }
 
-      // Check if courier already exists
       const existingCourier = await pool.query(
         'SELECT id FROM couriers WHERE id_number = $1 OR phone = $2',
         [idNumber, phone]
@@ -35,7 +33,6 @@ class CouriersController {
         return res.status(409).json({ error: 'שליח כבר קיים במערכת' });
       }
 
-      // Insert new courier
       const result = await pool.query(`
         INSERT INTO couriers (
           first_name, last_name, id_number, phone, email, address,
@@ -64,9 +61,6 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // GET COURIER PROFILE
-  // ==========================================
   async getCourierProfile(req, res, next) {
     try {
       const courierId = req.user.id;
@@ -109,9 +103,6 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // GET AVAILABLE ORDERS
-  // ==========================================
   async getAvailableOrders(req, res, next) {
     try {
       const result = await pool.query(`
@@ -127,9 +118,6 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // GET MY ORDERS
-  // ==========================================
   async getMyOrders(req, res, next) {
     try {
       const courierId = req.user.id;
@@ -155,9 +143,6 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // GET MY STATISTICS
-  // ==========================================
   async getMyStatistics(req, res, next) {
     try {
       const courierId = req.user.id;
@@ -180,22 +165,17 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // UPDATE LOCATION (תיקון!)
-  // ==========================================
   async updateLocation(req, res, next) {
     try {
       const courierId = req.user.id;
       const { latitude, longitude, accuracy, heading, speed } = req.body;
 
-      // Update courier current location
       await pool.query(`
         UPDATE couriers 
         SET current_lat = $1, current_lng = $2, last_location_update = NOW(), is_online = true
         WHERE id = $3
       `, [latitude, longitude, courierId]);
 
-      // Insert location history (ללא UNIQUE constraint)
       await pool.query(`
         INSERT INTO courier_locations (courier_id, latitude, longitude, accuracy, heading, speed)
         VALUES ($1, $2, $3, $4, $5, $6)
@@ -204,14 +184,10 @@ class CouriersController {
       res.json({ message: 'מיקום עודכן' });
     } catch (error) {
       console.error('Update location error:', error);
-      // Don't fail the request if location update fails
       res.json({ message: 'מיקום עודכן' });
     }
   }
 
-  // ==========================================
-  // GET ALL COURIERS (ADMIN)
-  // ==========================================
   async getCouriers(req, res, next) {
     try {
       const { status, vehicleType } = req.query;
@@ -240,9 +216,6 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // GET COURIER BY ID (ADMIN)
-  // ==========================================
   async getCourierById(req, res, next) {
     try {
       const { id } = req.params;
@@ -263,9 +236,6 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // UPDATE COURIER STATUS (ADMIN)
-  // ==========================================
   async updateCourierStatus(req, res, next) {
     try {
       const { id } = req.params;
@@ -287,14 +257,10 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // DELETE COURIER (ADMIN)
-  // ==========================================
   async deleteCourier(req, res, next) {
     try {
       const { id } = req.params;
 
-      // Check if courier has active orders
       const activeOrders = await pool.query(
         'SELECT id FROM orders WHERE courier_id = $1 AND status IN ($2, $3)',
         [id, 'taken', 'picked']
@@ -315,57 +281,54 @@ class CouriersController {
 
   // ==========================================
   // ADVANCED STATISTICS & ANALYTICS
+  // ✅ כל completed_at שונה ל-delivered_at!
   // ==========================================
 
   async getAdvancedStatistics(req, res, next) {
     try {
       const courierId = req.user.id;
 
-      // 1. הכנסות לפי יום (7 ימים אחרונים)
       const dailyEarnings = await pool.query(`
         SELECT 
-          DATE(completed_at) as date,
+          DATE(delivered_at) as date,
           COUNT(*) as deliveries,
           COALESCE(SUM(courier_payout), 0) as earnings
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
-        AND completed_at >= CURRENT_DATE - INTERVAL '7 days'
-        GROUP BY DATE(completed_at)
+        AND delivered_at >= CURRENT_DATE - INTERVAL '7 days'
+        GROUP BY DATE(delivered_at)
         ORDER BY date ASC
       `, [courierId]);
 
-      // 2. משלוחים לפי שעה (היום)
       const hourlyDeliveries = await pool.query(`
         SELECT 
-          EXTRACT(HOUR FROM completed_at) as hour,
+          EXTRACT(HOUR FROM delivered_at) as hour,
           COUNT(*) as deliveries
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
-        AND DATE(completed_at) = CURRENT_DATE
-        GROUP BY EXTRACT(HOUR FROM completed_at)
+        AND DATE(delivered_at) = CURRENT_DATE
+        GROUP BY EXTRACT(HOUR FROM delivered_at)
         ORDER BY hour ASC
       `, [courierId]);
 
-      // 3. סטטיסטיקות כלליות
       const generalStats = await pool.query(`
         SELECT 
-          COUNT(*) FILTER (WHERE DATE(completed_at) = CURRENT_DATE) as today_deliveries,
-          COUNT(*) FILTER (WHERE completed_at >= date_trunc('week', CURRENT_DATE)) as week_deliveries,
-          COUNT(*) FILTER (WHERE completed_at >= date_trunc('month', CURRENT_DATE)) as month_deliveries,
+          COUNT(CASE WHEN DATE(delivered_at) = CURRENT_DATE THEN 1 END) as today_deliveries,
+          COUNT(CASE WHEN delivered_at >= date_trunc('week', CURRENT_DATE) THEN 1 END) as week_deliveries,
+          COUNT(CASE WHEN delivered_at >= date_trunc('month', CURRENT_DATE) THEN 1 END) as month_deliveries,
           COUNT(*) as total_deliveries,
-          COALESCE(SUM(courier_payout) FILTER (WHERE DATE(completed_at) = CURRENT_DATE), 0) as today_earnings,
-          COALESCE(SUM(courier_payout) FILTER (WHERE completed_at >= date_trunc('week', CURRENT_DATE)), 0) as week_earnings,
-          COALESCE(SUM(courier_payout) FILTER (WHERE completed_at >= date_trunc('month', CURRENT_DATE)), 0) as month_earnings,
+          COALESCE(SUM(CASE WHEN DATE(delivered_at) = CURRENT_DATE THEN courier_payout END), 0) as today_earnings,
+          COALESCE(SUM(CASE WHEN delivered_at >= date_trunc('week', CURRENT_DATE) THEN courier_payout END), 0) as week_earnings,
+          COALESCE(SUM(CASE WHEN delivered_at >= date_trunc('month', CURRENT_DATE) THEN courier_payout END), 0) as month_earnings,
           COALESCE(AVG(courier_payout), 0) as avg_earning_per_delivery,
-          COALESCE(AVG(EXTRACT(EPOCH FROM (completed_at - accepted_at))/60), 0) as avg_delivery_time_minutes
+          COALESCE(AVG(EXTRACT(EPOCH FROM (delivered_at - accepted_at))/60), 0) as avg_delivery_time_minutes
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
       `, [courierId]);
 
-      // 4. יתרה ותשלומים ממתינים
       const balance = await pool.query(`
         SELECT 
           COALESCE(pending_payout, 0) as pending_payout,
@@ -374,11 +337,10 @@ class CouriersController {
         WHERE id = $1
       `, [courierId]);
 
-      // 5. אחוז השלמה
       const completionRate = await pool.query(`
         SELECT 
-          COUNT(*) FILTER (WHERE status = 'delivered') as completed,
-          COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled,
+          COUNT(CASE WHEN status = 'delivered' THEN 1 END) as completed,
+          COUNT(CASE WHEN status = 'cancelled' THEN 1 END) as cancelled,
           COUNT(*) as total_accepted
         FROM orders
         WHERE courier_id = $1 
@@ -419,10 +381,6 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // GOALS & TARGETS
-  // ==========================================
-
   async getGoals(req, res, next) {
     try {
       const courierId = req.user.id;
@@ -440,7 +398,7 @@ class CouriersController {
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
-        AND DATE(completed_at) = CURRENT_DATE
+        AND DATE(delivered_at) = CURRENT_DATE
       `, [courierId]);
 
       const weekProgress = await pool.query(`
@@ -450,7 +408,7 @@ class CouriersController {
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
-        AND completed_at >= date_trunc('week', CURRENT_DATE)
+        AND delivered_at >= date_trunc('week', CURRENT_DATE)
       `, [courierId]);
 
       const monthProgress = await pool.query(`
@@ -459,7 +417,7 @@ class CouriersController {
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
-        AND completed_at >= date_trunc('month', CURRENT_DATE)
+        AND delivered_at >= date_trunc('month', CURRENT_DATE)
       `, [courierId]);
 
       const today = todayProgress.rows[0];
@@ -504,10 +462,6 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // RANKING & LEADERBOARD
-  // ==========================================
-
   async getRanking(req, res, next) {
     try {
       const courierId = req.user.id;
@@ -523,7 +477,7 @@ class CouriersController {
           FROM couriers c
           LEFT JOIN orders o ON o.courier_id = c.id 
             AND o.status = 'delivered'
-            AND o.completed_at >= date_trunc('month', CURRENT_DATE)
+            AND o.delivered_at >= date_trunc('month', CURRENT_DATE)
           WHERE c.status = 'active'
           GROUP BY c.id, c.first_name, c.last_name, c.rating
         ),
@@ -562,7 +516,7 @@ class CouriersController {
         FROM couriers c
         LEFT JOIN orders o ON o.courier_id = c.id 
           AND o.status = 'delivered'
-          AND o.completed_at >= date_trunc('month', CURRENT_DATE)
+          AND o.delivered_at >= date_trunc('month', CURRENT_DATE)
         WHERE c.status = 'active'
         GROUP BY c.id, c.first_name, c.last_name, c.rating
         ORDER BY month_deliveries DESC, rating DESC
@@ -591,10 +545,6 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // EARNINGS PROJECTION
-  // ==========================================
-
   async getEarningsProjection(req, res, next) {
     try {
       const courierId = req.user.id;
@@ -606,7 +556,7 @@ class CouriersController {
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
-        AND completed_at >= date_trunc('month', CURRENT_DATE)
+        AND delivered_at >= date_trunc('month', CURRENT_DATE)
       `, [courierId]);
 
       const current = monthEarnings.rows[0];
@@ -629,14 +579,14 @@ class CouriersController {
 
       const bestDay = await pool.query(`
         SELECT 
-          DATE(completed_at) as date,
+          DATE(delivered_at) as date,
           COALESCE(SUM(courier_payout), 0) as earnings,
           COUNT(*) as deliveries
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
-        AND completed_at >= date_trunc('month', CURRENT_DATE)
-        GROUP BY DATE(completed_at)
+        AND delivered_at >= date_trunc('month', CURRENT_DATE)
+        GROUP BY DATE(delivered_at)
         ORDER BY earnings DESC
         LIMIT 1
       `, [courierId]);
@@ -666,32 +616,28 @@ class CouriersController {
     }
   }
 
-  // ==========================================
-  // PERFORMANCE METRICS
-  // ==========================================
-
   async getPerformanceMetrics(req, res, next) {
     try {
       const courierId = req.user.id;
 
       const performance = await pool.query(`
         SELECT 
-          COALESCE(AVG(EXTRACT(EPOCH FROM (completed_at - accepted_at))/60), 0) as avg_time,
-          COALESCE(MIN(EXTRACT(EPOCH FROM (completed_at - accepted_at))/60), 0) as fastest_time,
-          COALESCE(MAX(EXTRACT(EPOCH FROM (completed_at - accepted_at))/60), 0) as slowest_time,
+          COALESCE(AVG(EXTRACT(EPOCH FROM (delivered_at - accepted_at))/60), 0) as avg_time,
+          COALESCE(MIN(EXTRACT(EPOCH FROM (delivered_at - accepted_at))/60), 0) as fastest_time,
+          COALESCE(MAX(EXTRACT(EPOCH FROM (delivered_at - accepted_at))/60), 0) as slowest_time,
           COUNT(*) as total_delivered
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
-        AND completed_at >= date_trunc('month', CURRENT_DATE)
+        AND delivered_at >= date_trunc('month', CURRENT_DATE)
       `, [courierId]);
 
       const timeDistribution = await pool.query(`
         SELECT 
           CASE 
-            WHEN EXTRACT(HOUR FROM completed_at) BETWEEN 6 AND 11 THEN 'morning'
-            WHEN EXTRACT(HOUR FROM completed_at) BETWEEN 12 AND 15 THEN 'noon'
-            WHEN EXTRACT(HOUR FROM completed_at) BETWEEN 16 AND 21 THEN 'evening'
+            WHEN EXTRACT(HOUR FROM delivered_at) BETWEEN 6 AND 11 THEN 'morning'
+            WHEN EXTRACT(HOUR FROM delivered_at) BETWEEN 12 AND 15 THEN 'noon'
+            WHEN EXTRACT(HOUR FROM delivered_at) BETWEEN 16 AND 21 THEN 'evening'
             ELSE 'night'
           END as period,
           COUNT(*) as deliveries,
@@ -699,7 +645,7 @@ class CouriersController {
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
-        AND completed_at >= date_trunc('month', CURRENT_DATE)
+        AND delivered_at >= date_trunc('month', CURRENT_DATE)
         GROUP BY period
       `, [courierId]);
 
