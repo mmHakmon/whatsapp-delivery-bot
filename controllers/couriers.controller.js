@@ -322,8 +322,7 @@ class CouriersController {
           COALESCE(SUM(CASE WHEN DATE(delivered_at) = CURRENT_DATE THEN courier_payout END), 0) as today_earnings,
           COALESCE(SUM(CASE WHEN delivered_at >= date_trunc('week', CURRENT_DATE) THEN courier_payout END), 0) as week_earnings,
           COALESCE(SUM(CASE WHEN delivered_at >= date_trunc('month', CURRENT_DATE) THEN courier_payout END), 0) as month_earnings,
-          COALESCE(AVG(courier_payout), 0) as avg_earning_per_delivery,
-          COALESCE(AVG(EXTRACT(EPOCH FROM (delivered_at - accepted_at))/60), 0) as avg_delivery_time_minutes
+          COALESCE(AVG(courier_payout), 0) as avg_earning_per_delivery
         FROM orders
         WHERE courier_id = $1 
         AND status = 'delivered'
@@ -367,7 +366,6 @@ class CouriersController {
           week_earnings: parseFloat(stats.week_earnings),
           month_earnings: parseFloat(stats.month_earnings),
           avg_earning_per_delivery: parseFloat(stats.avg_earning_per_delivery),
-          avg_delivery_time_minutes: parseFloat(stats.avg_delivery_time_minutes),
           completion_percentage: parseFloat(completionPercentage),
           cancelled_count: parseInt(completion.cancelled)
         },
@@ -622,9 +620,9 @@ class CouriersController {
 
       const performance = await pool.query(`
         SELECT 
-          COALESCE(AVG(EXTRACT(EPOCH FROM (delivered_at - accepted_at))/60), 0) as avg_time,
-          COALESCE(MIN(EXTRACT(EPOCH FROM (delivered_at - accepted_at))/60), 0) as fastest_time,
-          COALESCE(MAX(EXTRACT(EPOCH FROM (delivered_at - accepted_at))/60), 0) as slowest_time,
+          COALESCE(AVG(EXTRACT(EPOCH FROM (delivered_at - created_at))/60), 0) as avg_time,
+          COALESCE(MIN(EXTRACT(EPOCH FROM (delivered_at - created_at))/60), 0) as fastest_time,
+          COALESCE(MAX(EXTRACT(EPOCH FROM (delivered_at - created_at))/60), 0) as slowest_time,
           COUNT(*) as total_delivered
         FROM orders
         WHERE courier_id = $1 
