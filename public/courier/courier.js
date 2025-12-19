@@ -1,3 +1,4 @@
+// Copy first 97 lines as-is
 // ==========================================
 // M.M.H DELIVERY - COURIER APP
 // ==========================================
@@ -95,14 +96,16 @@ function showMainApp() {
 // INITIALIZATION
 // ==========================================
 
+
 function initCourierApp() {
     connectWebSocket();
     startLocationTracking();
     loadCourierStatistics();
-    loadAdvancedDashboard();
+    // loadAdvancedDashboard(); // ❌ REMOVED - causes double load!
     loadAvailableOrders();
     loadMyOrders();
 }
+
 
 // ==========================================
 // WEBSOCKET
@@ -573,12 +576,11 @@ async function loadPerformanceMetrics() {
     }
 }
 
-// TEMPORARILY DISABLED - Debug infinite loop
-// setInterval(() => {
-//     if (courierToken) {
-//         loadAdvancedDashboard();
-//     }
-// }, 60000);
+setInterval(() => {
+    if (courierToken) {
+        loadAdvancedDashboard();
+    }
+}, 60000);
 
 // ==========================================
 // AVAILABLE ORDERS
