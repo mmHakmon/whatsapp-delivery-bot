@@ -74,6 +74,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Price Calculator
+app.get('/calculator', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'calculator.html'));
+});
+
 // Admin
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin', 'index.html'));
@@ -134,6 +139,7 @@ server.listen(PORT, () => {
   console.log('📍 Courier App:', `${PUBLIC_URL}/courier`);
   console.log('📍 Customer Order:', `${PUBLIC_URL}/customer/order.html`);
   console.log('📍 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
+  console.log('📍 Price Calculator:', `${PUBLIC_URL}/calculator`);
   console.log('');
 });
 
