@@ -11,6 +11,58 @@
         .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .step-active { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
         .step-inactive { background: #475569; }
+        
+        /* Google Places Autocomplete Custom Styling */
+        .pac-container {
+            background-color: #1e293b !important;
+            border: 1px solid #475569 !important;
+            border-radius: 0.5rem;
+            margin-top: 0.25rem;
+            font-family: 'Heebo', sans-serif !important;
+            z-index: 9999 !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        
+        .pac-item {
+            color: #e2e8f0 !important;
+            padding: 0.75rem !important;
+            border-top: 1px solid #475569 !important;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .pac-item:hover {
+            background-color: #334155 !important;
+        }
+        
+        .pac-item:first-child {
+            border-top: none !important;
+        }
+        
+        .pac-item-query {
+            color: #10b981 !important;
+            font-weight: 600 !important;
+            font-size: 15px;
+        }
+        
+        .pac-icon {
+            display: none !important;
+        }
+        
+        .pac-matched {
+            color: #10b981 !important;
+            font-weight: bold !important;
+        }
+        
+        .pac-item-selected,
+        .pac-item-selected:hover {
+            background-color: #10b981 !important;
+            color: white !important;
+        }
+        
+        .pac-item-selected .pac-item-query {
+            color: white !important;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-white min-h-screen">
@@ -84,8 +136,10 @@
                     <div>
                         <label class="block text-sm font-medium mb-2">כתובת איסוף *</label>
                         <input type="text" id="pickupAddress" required
-                               placeholder="רחוב, מספר, עיר"
+                               placeholder="התחל להקליד כתובת..."
+                               autocomplete="off"
                                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                        <p class="text-xs text-emerald-400 mt-1">💡 התחל להקליד וקבל הצעות כתובות אוטומטיות</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2">הערות לאיסוף</label>
@@ -120,8 +174,10 @@
                     <div>
                         <label class="block text-sm font-medium mb-2">כתובת מסירה *</label>
                         <input type="text" id="deliveryAddress" required
-                               placeholder="רחוב, מספר, עיר"
+                               placeholder="התחל להקליד כתובת..."
+                               autocomplete="off"
                                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                        <p class="text-xs text-emerald-400 mt-1">💡 התחל להקליד וקבל הצעות כתובות אוטומטיות</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2">הערות למסירה</label>
@@ -279,6 +335,75 @@
             </div>
         </div>
     </div>
+
+    <!-- Google Maps Autocomplete Script -->
+    <script id="google-maps-loader">
+        // Global callback for Google Maps API
+        window.initAutocomplete = function() {
+            const pickupInput = document.getElementById('pickupAddress');
+            const deliveryInput = document.getElementById('deliveryAddress');
+
+            if (!window.google || !window.google.maps || !window.google.maps.places) {
+                console.warn('⚠️ Google Maps Places API not available');
+                return;
+            }
+
+            // Configure autocomplete options for Israel
+            const options = {
+                componentRestrictions: { country: 'il' },
+                fields: ['formatted_address', 'geometry', 'name'],
+                types: ['address']
+            };
+
+            try {
+                // Create autocomplete for pickup address
+                const pickupAutocomplete = new google.maps.places.Autocomplete(pickupInput, options);
+                pickupAutocomplete.addListener('place_changed', function() {
+                    const place = pickupAutocomplete.getPlace();
+                    if (place.formatted_address) {
+                        pickupInput.value = place.formatted_address;
+                        console.log('✅ Pickup address selected:', place.formatted_address);
+                    }
+                });
+
+                // Create autocomplete for delivery address
+                const deliveryAutocomplete = new google.maps.places.Autocomplete(deliveryInput, options);
+                deliveryAutocomplete.addListener('place_changed', function() {
+                    const place = deliveryAutocomplete.getPlace();
+                    if (place.formatted_address) {
+                        deliveryInput.value = place.formatted_address;
+                        console.log('✅ Delivery address selected:', place.formatted_address);
+                    }
+                });
+
+                console.log('✅ Google Places Autocomplete initialized successfully');
+            } catch (error) {
+                console.error('❌ Error initializing autocomplete:', error);
+            }
+        };
+
+        // Load Google Maps API dynamically
+        (function() {
+            // Use the GOOGLE_API_KEY from your .env file
+            // In production, this should be injected by your server or fetched from an endpoint
+            const apiKey = '%%GOOGLE_API_KEY%%'; // This will be replaced by server
+            
+            if (!apiKey || apiKey === '%%GOOGLE_API_KEY%%') {
+                console.warn('⚠️ Google API key not configured - address autocomplete disabled');
+                console.info('ℹ️ To enable address autocomplete, add GOOGLE_API_KEY to your .env file');
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=iw&callback=initAutocomplete`;
+            script.async = true;
+            script.defer = true;
+            script.onerror = function() {
+                console.error('❌ Failed to load Google Maps API');
+            };
+            document.head.appendChild(script);
+        })();
+    </script>
 
     <script src="/customer/customer.js"></script>
 </body>
