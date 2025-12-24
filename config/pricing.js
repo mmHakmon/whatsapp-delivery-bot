@@ -5,21 +5,21 @@ function calculatePricing(distanceKm, vehicleType = 'motorcycle') {
       perKm: parseFloat(process.env.MOTORCYCLE_PRICE_PER_KM || 2.5)
     },
     car: {
-      base: parseFloat(process.env.CAR_BASE_PRICE || 75),
+      base: parseFloat(process.env.CAR_BASE_PRICE || 100),
       perKm: parseFloat(process.env.CAR_PRICE_PER_KM || 2.5)
     },
     van: {
-      base: parseFloat(process.env.VAN_BASE_PRICE || 120),
-      perKm: parseFloat(process.env.VAN_PRICE_PER_KM || 3.0)
+      base: parseFloat(process.env.VAN_BASE_PRICE || 320),
+      perKm: parseFloat(process.env.VAN_PRICE_PER_KM || 2.7)
     },
     truck: {
-      base: parseFloat(process.env.TRUCK_BASE_PRICE || 200),
-      perKm: parseFloat(process.env.TRUCK_PRICE_PER_KM || 4.0)
+      base: parseFloat(process.env.TRUCK_BASE_PRICE || 900),
+      perKm: parseFloat(process.env.TRUCK_PRICE_PER_KM || 3.0)
     }
   };
 
   const vehicle = pricing[vehicleType] || pricing.motorcycle;
-  const freeKm = parseFloat(process.env.FREE_KM || 1);
+  const freeKm = parseFloat(process.env.FREE_KM || 0);
   const vatRate = parseFloat(process.env.VAT_RATE || 0.18);
   const commissionRate = parseFloat(process.env.COMMISSION_RATE || 0.25);
 
@@ -50,3 +50,4 @@ function calculatePricing(distanceKm, vehicleType = 'motorcycle') {
 }
 
 module.exports = { calculatePricing };
+
