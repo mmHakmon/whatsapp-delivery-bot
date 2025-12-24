@@ -94,6 +94,11 @@ app.get('/courier/register.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'courier', 'register.html'));
 });
 
+// Customer - Login page
+app.get('/customer/login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer', 'login.html'));
+});
+
 // Customer - Order page with Google API key injection
 app.get('/customer/order.html', (req, res) => {
   try {
