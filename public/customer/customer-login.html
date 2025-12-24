@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M.M.H Delivery - כניסה ללקוחות</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+        <!-- Logo & Header -->
+        <div class="text-center mb-8">
+            <img src="/assets/logo.png" alt="M.M.H Logo" class="h-32 w-auto mx-auto mb-4 object-contain">
+            <h1 class="text-3xl font-bold mb-2">M.M.H Delivery</h1>
+            <p class="text-slate-400">כניסה ללקוחות</p>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-2 mb-6">
+            <button onclick="showLogin()" id="btnLogin" 
+                    class="flex-1 py-3 rounded-lg font-bold bg-emerald-500">
+                התחברות
+            </button>
+            <button onclick="showRegister()" id="btnRegister" 
+                    class="flex-1 py-3 rounded-lg font-bold bg-slate-700 hover:bg-slate-600">
+                הרשמה
+            </button>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="bg-slate-800 rounded-2xl p-8 border border-slate-700">
+            <h2 class="text-2xl font-bold mb-6">התחברות</h2>
+            <form onsubmit="handleLogin(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">טלפון *</label>
+                        <input type="tel" id="loginPhone" required pattern="[0-9]{10}"
+                               placeholder="0501234567"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">סיסמה *</label>
+                        <input type="password" id="loginPassword" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        🔐 התחבר
+                    </button>
+                </div>
+            </form>
+            <div class="mt-4 text-center">
+                <a href="/" class="text-slate-400 hover:text-white text-sm">
+                    ⬅️ חזרה לדף הבית
+                </a>
+            </div>
+        </div>
+
+        <!-- Register Form -->
+        <div id="registerForm" class="hidden bg-slate-800 rounded-2xl p-8 border border-slate-700">
+            <h2 class="text-2xl font-bold mb-6">הרשמה</h2>
+            <form onsubmit="handleRegister(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">שם מלא *</label>
+                        <input type="text" id="regName" required
+                               placeholder="שם פרטי ומשפחה"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">טלפון *</label>
+                        <input type="tel" id="regPhone" required pattern="[0-9]{10}"
+                               placeholder="0501234567"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">אימייל (אופציונלי)</label>
+                        <input type="email" id="regEmail"
+                               placeholder="example@gmail.com"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">סיסמה *</label>
+                        <input type="password" id="regPassword" required minlength="6"
+                               placeholder="לפחות 6 תווים"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">אישור סיסמה *</label>
+                        <input type="password" id="regPasswordConfirm" required minlength="6"
+                               placeholder="הקלד את הסיסמה שוב"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-emerald-500">
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        ✅ הירשם
+                    </button>
+                </div>
+            </form>
+            <div class="mt-4 text-center">
+                <a href="/" class="text-slate-400 hover:text-white text-sm">
+                    ⬅️ חזרה לדף הבית
+                </a>
+            </div>
+        </div>
+
+        <!-- Error/Success Messages -->
+        <div id="message" class="hidden mt-4 p-4 rounded-lg text-center font-bold"></div>
+    </div>
+
+    <script>
+        // Check if user came from order page
+        const returnUrl = new URLSearchParams(window.location.search).get('return') || '/customer/order.html';
+
+        // Check if already logged in
+        const customerToken = localStorage.getItem('customerToken');
+        if (customerToken) {
+            // Already logged in, redirect to order page
+            window.location.href = returnUrl;
+        }
+
+        // Toggle between login and register
+        function showLogin() {
+            document.getElementById('loginForm').classList.remove('hidden');
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('btnLogin').className = 'flex-1 py-3 rounded-lg font-bold bg-emerald-500';
+            document.getElementById('btnRegister').className = 'flex-1 py-3 rounded-lg font-bold bg-slate-700 hover:bg-slate-600';
+        }
+
+        function showRegister() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+            document.getElementById('btnLogin').className = 'flex-1 py-3 rounded-lg font-bold bg-slate-700 hover:bg-slate-600';
+            document.getElementById('btnRegister').className = 'flex-1 py-3 rounded-lg font-bold bg-emerald-500';
+        }
+
+        // Handle Login
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const phone = document.getElementById('loginPhone').value;
+            const password = document.getElementById('loginPassword').value;
+
+            showMessage('מתחבר...', 'info');
+
+            try {
+                const response = await fetch('/api/customers/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Save token and customer data
+                    localStorage.setItem('customerToken', data.token);
+                    localStorage.setItem('customerData', JSON.stringify(data.customer));
+                    
+                    showMessage('✅ התחברת בהצלחה! מעביר להזמנה...', 'success');
+                    
+                    // Redirect to order page after 1 second
+                    setTimeout(() => {
+                        window.location.href = returnUrl;
+                    }, 1000);
+                } else {
+                    showMessage('❌ ' + (data.error || 'שגיאה בהתחברות'), 'error');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showMessage('❌ שגיאת תקשורת', 'error');
+            }
+        }
+
+        // Handle Register
+        async function handleRegister(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('regName').value;
+            const phone = document.getElementById('regPhone').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const passwordConfirm = document.getElementById('regPasswordConfirm').value;
+
+            // Validate passwords match
+            if (password !== passwordConfirm) {
+                showMessage('❌ הסיסמאות לא תואמות', 'error');
+                return;
+            }
+
+            showMessage('נרשם...', 'info');
+
+            try {
+                const response = await fetch('/api/customers/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        name, 
+                        phone, 
+                        email: email || undefined,
+                        password 
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Save token and customer data
+                    localStorage.setItem('customerToken', data.token);
+                    localStorage.setItem('customerData', JSON.stringify(data.customer));
+                    
+                    showMessage('✅ נרשמת בהצלחה! מעביר להזמנה...', 'success');
+                    
+                    // Redirect to order page after 1 second
+                    setTimeout(() => {
+                        window.location.href = returnUrl;
+                    }, 1000);
+                } else {
+                    showMessage('❌ ' + (data.error || 'שגיאה בהרשמה'), 'error');
+                }
+            } catch (error) {
+                console.error('Register error:', error);
+                showMessage('❌ שגיאת תקשורת', 'error');
+            }
+        }
+
+        // Show message
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = 'mt-4 p-4 rounded-lg text-center font-bold';
+            
+            if (type === 'success') {
+                messageEl.className += ' bg-emerald-500/20 border border-emerald-500 text-emerald-400';
+            } else if (type === 'error') {
+                messageEl.className += ' bg-red-500/20 border border-red-500 text-red-400';
+            } else {
+                messageEl.className += ' bg-blue-500/20 border border-blue-500 text-blue-400';
+            }
+            
+            messageEl.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
