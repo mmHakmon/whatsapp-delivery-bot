@@ -6,6 +6,73 @@ let currentStep = 1;
 let currentPricing = null;
 let createdOrderNumber = null;
 
+// Google Places Autocomplete instances
+let pickupAutocomplete = null;
+let deliveryAutocomplete = null;
+
+// ==========================================
+// GOOGLE PLACES AUTOCOMPLETE
+// ==========================================
+
+function initAutocomplete() {
+    // Check if Google Maps API is loaded
+    if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
+        console.warn('Google Maps API not loaded yet, retrying...');
+        setTimeout(initAutocomplete, 500);
+        return;
+    }
+
+    // Options for autocomplete - Israel focused
+    const options = {
+        componentRestrictions: { country: 'il' }, // Israel only
+        fields: ['formatted_address', 'geometry', 'name'],
+        types: ['address'] // Only addresses, not establishments
+    };
+
+    // Initialize autocomplete for pickup address
+    const pickupInput = document.getElementById('pickupAddress');
+    if (pickupInput) {
+        pickupAutocomplete = new google.maps.places.Autocomplete(pickupInput, options);
+        
+        // Add visual feedback when loading
+        pickupAutocomplete.addListener('place_changed', () => {
+            const place = pickupAutocomplete.getPlace();
+            if (place.formatted_address) {
+                pickupInput.value = place.formatted_address;
+                // Remove any loading class
+                pickupInput.classList.remove('address-loading');
+            }
+        });
+    }
+
+    // Initialize autocomplete for delivery address
+    const deliveryInput = document.getElementById('deliveryAddress');
+    if (deliveryInput) {
+        deliveryAutocomplete = new google.maps.places.Autocomplete(deliveryInput, options);
+        
+        deliveryAutocomplete.addListener('place_changed', () => {
+            const place = deliveryAutocomplete.getPlace();
+            if (place.formatted_address) {
+                deliveryInput.value = place.formatted_address;
+                deliveryInput.classList.remove('address-loading');
+            }
+        });
+    }
+
+    console.log('✅ Google Places Autocomplete initialized');
+}
+
+// Initialize autocomplete when page loads
+window.addEventListener('load', () => {
+    // Wait a bit for Google Maps API to load
+    setTimeout(initAutocomplete, 1000);
+});
+
+// Also try to initialize when Google Maps API loads
+if (typeof google !== 'undefined' && google.maps) {
+    google.maps.event.addDomListener(window, 'load', initAutocomplete);
+}
+
 // ==========================================
 // STEP NAVIGATION
 // ==========================================
