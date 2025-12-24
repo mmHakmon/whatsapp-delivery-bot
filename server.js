@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 
 // Import services
 const websocketService = require('./services/websocket.service');
@@ -93,9 +94,23 @@ app.get('/courier/register.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'courier', 'register.html'));
 });
 
-// Customer
+// Customer - Order page with Google API key injection
 app.get('/customer/order.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'customer', 'order.html'));
+  try {
+    // Read the HTML file
+    let html = fs.readFileSync(path.join(__dirname, 'public', 'customer', 'order.html'), 'utf8');
+    
+    // Inject Google API key from environment
+    const googleApiKey = process.env.GOOGLE_API_KEY || '';
+    html = html.replace('%%GOOGLE_API_KEY%%', googleApiKey);
+    
+    // Send the modified HTML
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch (error) {
+    logger.error('Error serving order.html:', error);
+    res.sendFile(path.join(__dirname, 'public', 'customer', 'order.html'));
+  }
 });
 
 app.get('/customer/track.html', (req, res) => {
@@ -140,6 +155,14 @@ server.listen(PORT, () => {
   console.log('📍 Customer Order:', `${PUBLIC_URL}/customer/order.html`);
   console.log('📍 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
   console.log('📍 Price Calculator:', `${PUBLIC_URL}/calculator`);
+  
+  // Check if Google API key is configured
+  if (process.env.GOOGLE_API_KEY) {
+    console.log('✅ Google Maps API key configured - address autocomplete enabled');
+  } else {
+    console.log('⚠️  Google Maps API key not found - address autocomplete disabled');
+    console.log('   Add GOOGLE_API_KEY to your .env file to enable autocomplete');
+  }
   console.log('');
 });
 
