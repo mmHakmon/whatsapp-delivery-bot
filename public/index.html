@@ -65,12 +65,13 @@
                 </a>
             </div>
             
-            <!-- Quick Order -->
+            <!-- Quick Order Button -->
             <div class="mb-12">
-                <a href="/customer/order.html" 
+                <button onclick="goToOrder()" 
                    class="inline-block bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xl px-12 py-4 rounded-full shadow-xl hover:scale-105 transition">
                     📦 הזמן משלוח עכשיו
-                </a>
+                </button>
+                <p class="text-sm text-slate-400 mt-2">נדרשת כניסה או הרשמה</p>
             </div>
             
             <!-- Features -->
@@ -100,7 +101,20 @@
             <p class="mt-2">📞 054-502-5254 | 📧 m.m.hakmon@gmail.com</p>
         </footer>
     </div>
+
+    <script>
+        // Handle order button - check if customer is logged in
+        function goToOrder() {
+            const customerToken = localStorage.getItem('customerToken');
+            
+            if (customerToken) {
+                // Customer is logged in - go directly to order page
+                window.location.href = '/customer/order.html';
+            } else {
+                // Customer not logged in - redirect to login page
+                window.location.href = '/customer/login.html?return=/customer/order.html';
+            }
+        }
+    </script>
 </body>
 </html>
-
-
