@@ -5,7 +5,6 @@ const helmet = require('helmet');
 const compression = require('compression');
 const http = require('http');
 const path = require('path');
-const fs = require('fs'); // ← הוספנו את fs
 
 // Import services
 const websocketService = require('./services/websocket.service');
@@ -94,30 +93,11 @@ app.get('/courier/register.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'courier', 'register.html'));
 });
 
-// ==========================================
-// Customer Order Page - WITH GOOGLE MAPS API KEY INJECTION
-// ==========================================
+// Customer
 app.get('/customer/order.html', (req, res) => {
-  try {
-    // קרא את קובץ ה-HTML
-    const htmlPath = path.join(__dirname, 'public', 'customer', 'order.html');
-    let html = fs.readFileSync(htmlPath, 'utf8');
-    
-    // החלף את ה-placeholder ב-API Key האמיתי
-    html = html.replace(
-      'GOOGLE_MAPS_API_KEY_PLACEHOLDER', 
-      process.env.GOOGLE_MAPS_KEY
-    );
-    
-    // שלח את ה-HTML המעודכן
-    res.send(html);
-  } catch (error) {
-    logger.error('Error serving order page:', error);
-    res.status(500).send('Server error');
-  }
+  res.sendFile(path.join(__dirname, 'public', 'customer', 'order.html'));
 });
 
-// Customer - Track & Dashboard (static files)
 app.get('/customer/track.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'customer', 'track.html'));
 });
