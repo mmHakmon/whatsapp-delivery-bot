@@ -5,12 +5,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>M.M.H Delivery - הזמנת משלוח</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Maps Places API - יוזרק מהשרת -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=GOOGLE_MAPS_API_KEY_PLACEHOLDER&libraries=places&language=iw&region=IL" async defer></script>
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700;900&display=swap');
         * { font-family: 'Heebo', sans-serif; }
         .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .step-active { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
         .step-inactive { background: #475569; }
+        
+        /* Google Places Autocomplete Styling */
+        .pac-container {
+            background-color: #1e293b !important;
+            border: 1px solid #475569 !important;
+            border-radius: 0.5rem !important;
+            margin-top: 4px !important;
+            font-family: 'Heebo', sans-serif !important;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3) !important;
+        }
+        
+        .pac-item {
+            background-color: #1e293b !important;
+            color: #e2e8f0 !important;
+            border-top: 1px solid #334155 !important;
+            padding: 12px 16px !important;
+            cursor: pointer !important;
+            direction: rtl !important;
+            text-align: right !important;
+        }
+        
+        .pac-item:hover {
+            background-color: #334155 !important;
+        }
+        
+        .pac-item-selected {
+            background-color: #667eea !important;
+        }
+        
+        .pac-icon {
+            margin-left: 8px !important;
+            margin-right: 0 !important;
+        }
+        
+        .pac-item-query {
+            color: #f1f5f9 !important;
+            font-size: 15px !important;
+        }
+        
+        .pac-matched {
+            color: #a78bfa !important;
+            font-weight: 600 !important;
+        }
+        
+        .hdpi.pac-logo:after {
+            background-image: none !important;
+        }
+        
+        /* Loading indicator for autocomplete */
+        .address-loading {
+            position: relative;
+        }
+        
+        .address-loading::after {
+            content: '';
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            border: 2px solid #a78bfa;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: translateY(-50%) rotate(360deg); }
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-white min-h-screen">
@@ -82,10 +156,14 @@
                                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-2">כתובת איסוף *</label>
+                        <label class="block text-sm font-medium mb-2 flex items-center gap-2">
+                            כתובת איסוף *
+                            <span class="text-xs text-slate-400">(התחל להקליד והמערכת תשלים)</span>
+                        </label>
                         <input type="text" id="pickupAddress" required
-                               placeholder="רחוב, מספר, עיר"
-                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                               placeholder="התחל להקליד כתובת..."
+                               autocomplete="off"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 transition-all">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2">הערות לאיסוף</label>
@@ -118,10 +196,14 @@
                                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
                     </div>
                     <div>
-                        <label class="block text-sm font-medium mb-2">כתובת מסירה *</label>
+                        <label class="block text-sm font-medium mb-2 flex items-center gap-2">
+                            כתובת מסירה *
+                            <span class="text-xs text-slate-400">(התחל להקליד והמערכת תשלים)</span>
+                        </label>
                         <input type="text" id="deliveryAddress" required
-                               placeholder="רחוב, מספר, עיר"
-                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500">
+                               placeholder="התחל להקליד כתובת..."
+                               autocomplete="off"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 transition-all">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2">הערות למסירה</label>
