@@ -119,10 +119,17 @@
     
     // Request permission
     try {
+      // Wait for pushManager to load (max 5 seconds)
+      let attempts = 0;
+      while (!window.pushManager && attempts < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+      
       // Check if pushManager exists
-      if (!window.pushManager) {
-        console.error('pushManager not loaded');
-        alert('⚠️ מערכת ההתראות לא נטענה. רענן את הדף ונסה שוב.');
+      if (!window.pushManager || typeof window.pushManager.init !== 'function') {
+        console.error('pushManager not loaded after waiting');
+        alert('⚠️ מערכת ההתראות לא נטענה.\n\nפתרון:\n1. רענן את האפליקציה\n2. אם זה לא עוזר, מחק את האפליקציה\n3. התקן מחדש מ-Safari');
         return;
       }
       
@@ -285,8 +292,14 @@
 
   // Initialize when DOM is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', createPushButton);
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('🔔 Push button: DOM loaded, creating button...');
+      console.log('🔔 pushManager exists?', typeof window.pushManager !== 'undefined');
+      createPushButton();
+    });
   } else {
+    console.log('🔔 Push button: DOM already loaded, creating button...');
+    console.log('🔔 pushManager exists?', typeof window.pushManager !== 'undefined');
     createPushButton();
   }
 
