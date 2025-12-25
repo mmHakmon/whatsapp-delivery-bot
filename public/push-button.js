@@ -23,7 +23,8 @@
 
   // Create floating button
   function createPushButton() {
-    if (!isLoggedIn()) return; // Only show for logged-in users
+    // Show button always (will check login on click)
+    // if (!isLoggedIn()) return; // Commented out - show always
     
     const permission = getPermissionStatus();
     
@@ -103,6 +104,13 @@
 
   // Handle button click
   async function handlePushClick() {
+    // Check if logged in first
+    if (!isLoggedIn()) {
+      alert('⚠️ התחבר קודם כדי להפעיל התראות!');
+      window.location.href = '/customer/login.html';
+      return;
+    }
+    
     const permission = getPermissionStatus();
     
     if (permission === 'denied') {
