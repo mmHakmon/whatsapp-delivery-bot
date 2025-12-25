@@ -1,7 +1,7 @@
 {
   "name": "mmh-delivery",
   "version": "1.0.0",
-  "description": "M.M.H Delivery Management System - מערכת ניהול משלוחים מתקדמת",
+  "description": "M.M.H Delivery System - מערכת משלוחים מתקדמת",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -29,7 +29,8 @@
     "axios": "^1.6.5",
     "express-validator": "^7.0.1",
     "helmet": "^7.1.0",
-    "compression": "^1.7.4"
+    "compression": "^1.7.4",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"
