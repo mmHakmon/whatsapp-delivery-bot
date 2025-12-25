@@ -122,6 +122,16 @@
                 return;
             }
 
+            // Check if user is logged in
+            const customerToken = localStorage.getItem('customerToken');
+            const courierToken = localStorage.getItem('courierToken');
+            
+            if (!customerToken && !courierToken) {
+                alert('⚠️ אתה לא מחובר!\nקודם התחבר: https://mmh-delivery.onrender.com/customer/login.html');
+                console.log('User not logged in - redirecting to login');
+                return;
+            }
+
             try {
                 const permission = await Notification.requestPermission();
                 console.log('Permission result:', permission);
@@ -130,10 +140,19 @@
                     alert('✅ הרשאה ניתנה!');
                     
                     // Initialize if pushManager exists
-                    if (window.pushManager) {
-                        const userType = localStorage.getItem('customerToken') ? 'customer' : 'courier';
+                    if (window.pushManager && typeof window.pushManager.init === 'function') {
+                        const userType = customerToken ? 'customer' : 'courier';
                         const userData = JSON.parse(localStorage.getItem(`${userType}Data`) || '{"id":1}');
-                        await window.pushManager.init(userType, userData.id);
+                        
+                        if (userData.id) {
+                            await window.pushManager.init(userType, userData.id);
+                        } else {
+                            console.error('User ID not found in localStorage');
+                            alert('⚠️ לא נמצא ID משתמש. התחבר מחדש.');
+                        }
+                    } else {
+                        console.error('pushManager.init is not a function');
+                        alert('❌ שגיאה: pushManager לא פעיל');
                     }
                 } else if (permission === 'denied') {
                     alert('❌ ההרשאה נדחתה. צריך לאפשר בהגדרות');
