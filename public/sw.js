@@ -3,7 +3,7 @@
 // Push Notifications + Offline Support
 // ==========================================
 
-const CACHE_NAME = 'mmh-delivery-v1';
+const CACHE_NAME = 'mmh-delivery-v2'; // Changed from v1 to v2
 const urlsToCache = [
   '/',
   '/customer/order.html',
