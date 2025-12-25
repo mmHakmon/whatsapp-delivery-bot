@@ -18,6 +18,7 @@ const couriersRoutes = require('./routes/couriers.routes');
 const paymentsRoutes = require('./routes/payments.routes');
 const adminRoutes = require('./routes/admin.routes');
 const customersRoutes = require('./routes/customers.routes');
+const pushRoutes = require('./routes/push.routes');
 
 // Import middleware
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
@@ -65,6 +66,7 @@ app.use('/api/couriers', couriersRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/push', pushRoutes.router);
 
 // ==========================================
 // FRONTEND ROUTES
@@ -189,3 +191,4 @@ process.on('SIGINT', () => {
 });
 
 module.exports = app;
+
