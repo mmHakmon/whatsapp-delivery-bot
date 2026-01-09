@@ -73,7 +73,6 @@ function checkAuth() {
     } else {
         document.getElementById('loginModal').classList.remove('hidden');
         document.getElementById('mainContent').classList.add('hidden');
-        return;
     }
 }
 
@@ -174,23 +173,18 @@ async function loadStatistics() {
             document.getElementById('statActiveOrders').textContent = stats.active_orders || 0;
             document.getElementById('statDelivered').textContent = stats.delivered_orders || 0;
             
-            // הכנסות ורווח נקי
             const totalRevenue = parseFloat(stats.total_revenue || 0);
-            
-            // חישוב עמלה (רווח) - 25% מההכנסות
             const commissionRate = 0.25;
             const netProfit = Math.floor(totalRevenue * commissionRate);
             const courierPayout = totalRevenue - netProfit;
             
             document.getElementById('statRevenue').textContent = `₪${totalRevenue.toLocaleString()}`;
             
-            // הוסף רווח נקי אם יש אלמנט
             const netProfitEl = document.getElementById('statNetProfit');
             if (netProfitEl) {
                 netProfitEl.textContent = `₪${netProfit.toLocaleString()}`;
             }
             
-            // הוסף תשלום לשליחים אם יש אלמנט
             const courierPayoutEl = document.getElementById('statCourierPayout');
             if (courierPayoutEl) {
                 courierPayoutEl.textContent = `₪${courierPayout.toLocaleString()}`;
@@ -279,9 +273,6 @@ function displayOrders(orders) {
                 ${order.status === 'new' ? `
                     <button onclick="publishOrder(${order.id})" class="flex-1 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg text-sm font-bold">
                         📢 פרסם
-                    </button>
-                    <button onclick="editOrder(${order.id})" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-sm">
-                        ✏️
                     </button>
                 ` : ''}
                 ${order.status !== 'delivered' && order.status !== 'cancelled' ? `
@@ -464,11 +455,6 @@ function viewOrderDetails(orderId) {
     });
 }
 
-function editOrder(orderId) {
-    showNotification('✏️ עריכת הזמנה - בקרוב!');
-    // TODO: Implement edit functionality
-}
-
 // ==========================================
 // CREATE ORDER MODAL
 // ==========================================
@@ -610,7 +596,6 @@ function showCreateOrderModal() {
     
     document.body.appendChild(modal);
     
-    // Initialize Google Places Autocomplete after modal is added to DOM
     setTimeout(() => {
         initGooglePlacesAutocomplete();
     }, 100);
@@ -620,7 +605,6 @@ function closeCreateOrderModal() {
     const modal = document.getElementById('createOrderModal');
     if (modal) modal.remove();
     
-    // Cleanup
     autocompletePickup = null;
     autocompleteDelivery = null;
     selectedPickupLocation = null;
@@ -642,14 +626,12 @@ function initGooglePlacesAutocomplete() {
         return;
     }
     
-    // Configure for Israel
     const options = {
         componentRestrictions: { country: 'il' },
         fields: ['formatted_address', 'geometry', 'name'],
         types: ['address']
     };
     
-    // Pickup Autocomplete
     autocompletePickup = new google.maps.places.Autocomplete(pickupInput, options);
     autocompletePickup.addListener('place_changed', () => {
         const place = autocompletePickup.getPlace();
@@ -664,7 +646,6 @@ function initGooglePlacesAutocomplete() {
         }
     });
     
-    // Delivery Autocomplete
     autocompleteDelivery = new google.maps.places.Autocomplete(deliveryInput, options);
     autocompleteDelivery.addListener('place_changed', () => {
         const place = autocompleteDelivery.getPlace();
@@ -760,7 +741,6 @@ async function handleCreateOrder(event) {
 
     const formData = new FormData(event.target);
     
-    // Validate locations
     if (!selectedPickupLocation || !selectedDeliveryLocation) {
         showNotification('❌ יש לבחור כתובות מהרשימה המוצעת', 'error');
         return;
@@ -793,7 +773,6 @@ async function handleCreateOrder(event) {
 
     console.log('📤 Sending order:', data);
     
-    // Disable submit button
     const submitBtn = document.getElementById('submitBtn');
     submitBtn.disabled = true;
     submitBtn.textContent = '⏳ שולח...';
@@ -835,7 +814,6 @@ async function handleCreateOrder(event) {
 function filterOrders(status) {
     currentFilter = status;
     
-    // Update buttons
     document.querySelectorAll('.filter-btn, .filter-btn-active').forEach(btn => {
         btn.className = 'filter-btn px-4 py-2 rounded-lg';
     });
@@ -854,14 +832,12 @@ function filterOrders(status) {
 // ==========================================
 
 function switchTab(tab) {
-    // Update tabs
     document.querySelectorAll('[id^="tab"]').forEach(t => t.className = 'tab-inactive px-6 py-3');
     document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
     
     document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).className = 'tab-active px-6 py-3 font-bold';
     document.getElementById(`${tab}Tab`).classList.remove('hidden');
     
-    // Load data
     if (tab === 'orders') loadOrders();
     if (tab === 'couriers') loadCouriers();
     if (tab === 'payments') loadPayments();
@@ -1072,43 +1048,7 @@ async function rejectPayoutRequest(requestId) {
 }
 
 // ==========================================
-// HELPERS
-// ==========================================
-
-function getVehicleNameHebrew(type) {
-    const names = {
-        'motorcycle': 'אופנוע',
-        'car': 'רכב פרטי',
-        'van': 'מסחרית',
-        'truck': 'משאית'
-    };
-    return names[type] || 'רכב';
-}
-
-function showNotification(message, type = 'success') {
-    const notification = document.createElement('div');
-    notification.className = `fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-50 ${
-        type === 'success' ? 'bg-emerald-500' : 'bg-red-500'
-    } text-white font-bold`;
-    notification.textContent = message;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
-}
-
-// ==========================================
-// INIT
-// ==========================================
-
-document.addEventListener('DOMContentLoaded', () => {
-    checkAuth();
-});
-
-// ==========================================
-// SETTINGS TAB
+// SETTINGS
 // ==========================================
 
 function showSettings() {
@@ -1126,69 +1066,17 @@ function showSettings() {
                 <div class="bg-slate-700 rounded-lg p-4">
                     <h3 class="font-bold text-lg mb-3">📊 ניהול סטטיסטיקות</h3>
                     <div class="space-y-3">
-                        <button onclick="resetStatistics('today')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-left">
+                        <button onclick="resetStatistics('today')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-right">
                             🔄 איפוס סטטיסטיקות יומיות
                         </button>
-                        <button onclick="resetStatistics('week')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-left">
+                        <button onclick="resetStatistics('week')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-right">
                             🔄 איפוס סטטיסטיקות שבועיות
                         </button>
-                        <button onclick="resetStatistics('month')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-left">
+                        <button onclick="resetStatistics('month')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-right">
                             🔄 איפוס סטטיסטיקות חודשיות
                         </button>
-                        <button onclick="resetStatistics('all')" class="w-full bg-red-500 hover:bg-red-600 px-4 py-3 rounded-lg text-left font-bold">
+                        <button onclick="resetStatistics('all')" class="w-full bg-red-500 hover:bg-red-600 px-4 py-3 rounded-lg text-right font-bold">
                             ⚠️ איפוס כל הסטטיסטיקות
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Orders Management -->
-                <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold text-lg mb-3">📦 ניהול הזמנות</h3>
-                    <div class="space-y-3">
-                        <button onclick="deleteOldOrders()" class="w-full bg-orange-500 hover:bg-orange-600 px-4 py-3 rounded-lg text-left">
-                            🗑️ מחק הזמנות ישנות
-                        </button>
-                        <button onclick="archiveDeliveredOrders()" class="w-full bg-orange-500 hover:bg-orange-600 px-4 py-3 rounded-lg text-left">
-                            📁 העבר הזמנות שהושלמו לארכיון
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Payments & Couriers Management -->
-                <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold text-lg mb-3">💰 ניהול תשלומים ושליחים</h3>
-                    <div class="space-y-3">
-                        <button onclick="resetCourierPayments()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
-                            💳 איפוס תשלומים ממתינים
-                        </button>
-                        <button onclick="resetCourierEarnings()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
-                            💵 איפוס רווחי שליחים
-                        </button>
-                        <button onclick="resetCourierRatings()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
-                            ⭐ איפוס דירוגי שליחים
-                        </button>
-                        <button onclick="payoutPendingPayments()" class="w-full bg-emerald-500 hover:bg-emerald-600 px-4 py-3 rounded-lg text-left">
-                            💸 ביצוע תשלומים לשליחים
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- System Settings -->
-                <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold text-lg mb-3">⚙️ הגדרות מערכת</h3>
-                    <div class="space-y-3">
-                        <div>
-                            <label class="block text-sm mb-2">אחוז עמלה (%)</label>
-                            <input type="number" id="commissionRate" value="25" min="0" max="100" step="1"
-                                   class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2">
-                        </div>
-                        <div>
-                            <label class="block text-sm mb-2">מע"מ (%)</label>
-                            <input type="number" id="vatRate" value="18" min="0" max="30" step="1"
-                                   class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2">
-                        </div>
-                        <button onclick="saveSystemSettings()" class="w-full bg-emerald-500 hover:bg-emerald-600 px-4 py-3 rounded-lg font-bold">
-                            💾 שמור הגדרות
                         </button>
                     </div>
                 </div>
@@ -1197,26 +1085,12 @@ function showSettings() {
                 <div class="bg-slate-700 rounded-lg p-4">
                     <h3 class="font-bold text-lg mb-3">👥 ניהול משתמשים</h3>
                     <div class="space-y-3">
-                        <button onclick="showAddAgent()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
+                        <button onclick="showAddAgent()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-right">
                             ➕ הוסף נציג חדש
                         </button>
-                        <button onclick="manageAgents()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
+                        <button onclick="manageAgents()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-right">
                             📋 ניהול נציגים
                         </button>
-                    </div>
-                </div>
-                
-                <!-- Danger Zone -->
-                <div class="bg-red-500/10 border border-red-500 rounded-lg p-4">
-                    <h3 class="font-bold text-lg mb-3 text-red-400">⚠️ אזור מסוכן</h3>
-                    <div class="space-y-3">
-                        <button onclick="resetAllCouriers()" class="w-full bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-bold">
-                            🗑️ מחק את כל השליחים
-                        </button>
-                        <button onclick="dangerResetAll()" class="w-full bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-bold">
-                            💀 איפוס מלא של המערכת
-                        </button>
-                        <p class="text-xs text-red-300">פעולה זו תמחק את כל הנתונים ללא אפשרות שחזור!</p>
                     </div>
                 </div>
             </div>
@@ -1240,7 +1114,6 @@ async function resetStatistics(period) {
     
     if (!confirm(messages[period])) return;
     
-    // Map frontend values to backend values
     const periodMap = {
         'today': 'daily',
         'week': 'weekly',
@@ -1272,87 +1145,6 @@ async function resetStatistics(period) {
         console.error('Reset statistics error:', error);
         showNotification('❌ שגיאת תקשורת', 'error');
     }
-}
-
-async function deleteOldOrders() {
-    const months = prompt('כמה חודשים לאחור למחוק? (ברירת מחדל: 6)', '6');
-    if (!months) return;
-    
-    if (!confirm(`האם למחוק הזמנות ישנות מעל ${months} חודשים?`)) return;
-    
-    try {
-        const response = await fetch('/api/admin/delete-old-orders', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ months: parseInt(months) })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || `נמחקו ${data.deleted} הזמנות ישנות`}`);
-            loadOrders();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה במחיקה'), 'error');
-        }
-    } catch (error) {
-        console.error('Delete old orders error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
-async function archiveDeliveredOrders() {
-    const days = prompt('כמה ימים לאחור לארכב? (ברירת מחדל: 30)', '30');
-    if (!days) return;
-    
-    if (!confirm(`האם להעביר הזמנות שהושלמו לפני ${days} ימים לארכיון?`)) return;
-    
-    showNotification('⏳ מעביר לארכיון...');
-    
-    try {
-        const response = await fetch('/api/admin/archive-delivered', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ days: parseInt(days) })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || `${data.archived} הזמנות הועברו לארכיון`}`);
-            loadOrders();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה בארכוב'), 'error');
-        }
-    } catch (error) {
-        console.error('Archive error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
-async function saveSystemSettings() {
-    const commission = document.getElementById('commissionRate').value;
-    const vat = document.getElementById('vatRate').value;
-    
-    showNotification('💾 שומר הגדרות...');
-    showNotification('ℹ️ הגדרות אלו דורשות שינוי ב-Environment Variables ב-Render', 'error');
-}
-
-function dangerResetAll() {
-    if (!confirm('⚠️ האם אתה בטוח שברצונך למחוק את כל הנתונים?')) return;
-    if (!confirm('⚠️⚠️ פעולה זו תמחק הכל ללא אפשרות שחזור! האם להמשיך?')) return;
-    
-    const password = prompt('הזן את סיסמת המנהל לאישור:');
-    if (!password) return;
-    
-    showNotification('🔥 מוחק את כל הנתונים...', 'error');
-    showNotification('⚠️ פונקציה זו מושבתת למניעת מחיקה בטעות', 'error');
 }
 
 // ==========================================
@@ -1480,7 +1272,6 @@ async function manageAgents() {
         
         const users = data.users || [];
         
-        // Get current user ID from token
         let currentUserId = null;
         try {
             const tokenData = JSON.parse(atob(adminToken.split('.')[1]));
@@ -1624,159 +1415,37 @@ async function deleteUserConfirm(userId, username) {
 }
 
 // ==========================================
-// PAYMENTS & COURIERS RESET FUNCTIONS
+// HELPERS
 // ==========================================
 
-async function resetCourierPayments() {
-    if (!confirm('⚠️ האם לאפס את כל התשלומים הממתינים לשליחים?')) return;
-    if (!confirm('⚠️⚠️ פעולה זו תמחק את כל רשומות התשלומים! האם להמשיך?')) return;
-    
-    showNotification('⏳ מאפס תשלומים...');
-    
-    try {
-        const response = await fetch('/api/admin/reset-payments', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'תשלומים אופסו בהצלחה'}`);
-            loadStatistics();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה באיפוס תשלומים'), 'error');
-        }
-    } catch (error) {
-        console.error('Reset payments error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
+function getVehicleNameHebrew(type) {
+    const names = {
+        'motorcycle': 'אופנוע',
+        'car': 'רכב פרטי',
+        'van': 'מסחרית',
+        'truck': 'משאית'
+    };
+    return names[type] || 'רכב';
 }
 
-async function resetCourierEarnings() {
-    if (!confirm('⚠️ האם לאפס את הרווחים של כל השליחים?')) return;
-    if (!confirm('⚠️⚠️ פעולה זו תאפס את עמודת הרווחים לכל השליחים! האם להמשיך?')) return;
+function showNotification(message, type = 'success') {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg z-50 ${
+        type === 'success' ? 'bg-emerald-500' : 'bg-red-500'
+    } text-white font-bold`;
+    notification.textContent = message;
     
-    showNotification('⏳ מאפס רווחי שליחים...');
+    document.body.appendChild(notification);
     
-    try {
-        const response = await fetch('/api/admin/reset-courier-earnings', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'רווחי שליחים אופסו בהצלחה'}`);
-            loadStatistics();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה באיפוס רווחים'), 'error');
-        }
-    } catch (error) {
-        console.error('Reset courier earnings error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
 }
 
-async function resetCourierRatings() {
-    if (!confirm('⚠️ האם לאפס את הדירוגים של כל השליחים?')) return;
-    
-    showNotification('⏳ מאפס דירוגים...');
-    
-    try {
-        const response = await fetch('/api/admin/reset-courier-ratings', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'דירוגי שליחים אופסו בהצלחה'}`);
-            loadStatistics();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה באיפוס דירוגים'), 'error');
-        }
-    } catch (error) {
-        console.error('Reset ratings error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
+// ==========================================
+// INIT
+// ==========================================
 
-async function resetAllCouriers() {
-    if (!confirm('⚠️ האם לאפס את כל נתוני השליחים?')) return;
-    if (!confirm('⚠️⚠️ פעולה זו תמחק את כל השליחים והרישומים שלהם! האם להמשיך?')) return;
-    if (!confirm('⚠️⚠️⚠️ פעולה אחרונה לאישור - האם באמת למחוק הכל?')) return;
-    
-    showNotification('⏳ מוחק את כל נתוני השליחים...');
-    
-    try {
-        const response = await fetch('/api/admin/reset-all-couriers', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'כל נתוני השליחים נמחקו'}`);
-            loadStatistics();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה במחיקת שליחים'), 'error');
-        }
-    } catch (error) {
-        console.error('Reset all couriers error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
-async function payoutPendingPayments() {
-    const courierId = prompt('הכנס מזהה שליח (או השאר ריק לכל השליחים):');
-    
-    const confirmMsg = courierId 
-        ? `האם לבצע תשלום לשליח ${courierId}?`
-        : 'האם לבצע תשלום לכל השליחים עם תשלומים ממתינים?';
-    
-    if (!confirm(confirmMsg)) return;
-    
-    showNotification('⏳ מעבד תשלומים...');
-    
-    try {
-        const body = courierId ? { courierId: parseInt(courierId) } : {};
-        
-        const response = await fetch('/api/admin/payout-payments', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'תשלומים בוצעו בהצלחה'}`);
-            loadStatistics();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה בביצוע תשלומים'), 'error');
-        }
-    } catch (error) {
-        console.error('Payout error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
+document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
+});
