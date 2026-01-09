@@ -7,6 +7,12 @@ let userData = null;
 let ws = null;
 let currentFilter = 'all';
 
+// Google Maps variables
+let autocompletePickup = null;
+let autocompleteDelivery = null;
+let selectedPickupLocation = null;
+let selectedDeliveryLocation = null;
+
 // ==========================================
 // AUTHENTICATION
 // ==========================================
@@ -469,12 +475,13 @@ function editOrder(orderId) {
 
 function showCreateOrderModal() {
     const modal = document.createElement('div');
+    modal.id = 'createOrderModal';
     modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto';
     modal.innerHTML = `
         <div class="bg-slate-800 rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-2xl font-bold">📦 הזמנה חדשה</h2>
-                <button onclick="this.closest('.fixed').remove()" class="text-4xl hover:text-red-500">&times;</button>
+                <button onclick="closeCreateOrderModal()" class="text-4xl hover:text-red-500">&times;</button>
             </div>
             
             <form id="createOrderForm" onsubmit="handleCreateOrder(event)" class="space-y-4">
@@ -483,24 +490,27 @@ function showCreateOrderModal() {
                     <h3 class="font-bold text-blue-400 mb-3">📤 פרטי שולח</h3>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-sm mb-1">שם מלא</label>
+                            <label class="block text-sm mb-1">שם מלא *</label>
                             <input type="text" name="senderName" required
                                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                         </div>
                         <div>
-                            <label class="block text-sm mb-1">טלפון</label>
-                            <input type="tel" name="senderPhone" required pattern="[0-9]{10}"
+                            <label class="block text-sm mb-1">טלפון *</label>
+                            <input type="tel" name="senderPhone" required 
+                                   pattern="[0-9]{10}" placeholder="0501234567"
                                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                         </div>
                     </div>
                     <div class="mt-3">
-                        <label class="block text-sm mb-1">כתובת איסוף</label>
-                        <input type="text" name="pickupAddress" required
+                        <label class="block text-sm mb-1">כתובת איסוף * <span class="text-xs text-slate-400">(התחל להקליד...)</span></label>
+                        <input type="text" id="pickupAddress" name="pickupAddress" required
+                               placeholder="התחל להקליד כתובת..."
                                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                     </div>
                     <div class="mt-3">
                         <label class="block text-sm mb-1">הערות לאיסוף</label>
                         <input type="text" name="pickupNotes"
+                               placeholder="קומה, דירה, הערות..."
                                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                     </div>
                 </div>
@@ -510,58 +520,86 @@ function showCreateOrderModal() {
                     <h3 class="font-bold text-emerald-400 mb-3">📥 פרטי מקבל</h3>
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-sm mb-1">שם מלא</label>
+                            <label class="block text-sm mb-1">שם מלא *</label>
                             <input type="text" name="receiverName" required
                                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                         </div>
                         <div>
-                            <label class="block text-sm mb-1">טלפון</label>
-                            <input type="tel" name="receiverPhone" required pattern="[0-9]{10}"
+                            <label class="block text-sm mb-1">טלפון *</label>
+                            <input type="tel" name="receiverPhone" required 
+                                   pattern="[0-9]{10}" placeholder="0501234567"
                                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                         </div>
                     </div>
                     <div class="mt-3">
-                        <label class="block text-sm mb-1">כתובת מסירה</label>
-                        <input type="text" name="deliveryAddress" required
+                        <label class="block text-sm mb-1">כתובת מסירה * <span class="text-xs text-slate-400">(התחל להקליד...)</span></label>
+                        <input type="text" id="deliveryAddress" name="deliveryAddress" required
+                               placeholder="התחל להקליד כתובת..."
                                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                     </div>
                     <div class="mt-3">
                         <label class="block text-sm mb-1">הערות למסירה</label>
                         <input type="text" name="deliveryNotes"
+                               placeholder="קומה, דירה, הערות..."
                                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                     </div>
                 </div>
                 
-                <!-- Package Details -->
+                <!-- Package Details + Price Calc -->
                 <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold mb-3">📦 פרטי חבילה</h3>
+                    <h3 class="font-bold mb-3">📦 פרטי חבילה ומחיר</h3>
                     <div class="mb-3">
                         <label class="block text-sm mb-1">תיאור חבילה</label>
                         <input type="text" name="packageDescription"
+                               placeholder="מסמכים, מזון, חבילה קטנה..."
                                class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
                     </div>
                     <div class="mb-3">
-                        <label class="block text-sm mb-1">סוג רכב</label>
-                        <select name="vehicleType" required
+                        <label class="block text-sm mb-1">סוג רכב *</label>
+                        <select name="vehicleType" id="vehicleType" required onchange="calculatePrice()"
                                 class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
-                            <option value="motorcycle">🏍️ אופנוע - ₪70</option>
-                            <option value="car">🚗 רכב פרטי - ₪75</option>
-                            <option value="van">🚐 מסחרית - ₪120</option>
-                            <option value="truck">🚚 משאית - ₪200</option>
+                            <option value="">בחר סוג רכב...</option>
+                            <option value="motorcycle">🏍️ אופנוע</option>
+                            <option value="car">🚗 רכב פרטי</option>
+                            <option value="van">🚐 מסחרית</option>
+                            <option value="truck">🚚 משאית</option>
                         </select>
                     </div>
-                    <div>
+                    
+                    <!-- Price Display -->
+                    <div id="priceDisplay" class="bg-slate-800 rounded-lg p-4 border border-slate-600 hidden">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-slate-400">מרחק משוער:</span>
+                            <span id="distanceDisplay" class="font-bold">-- ק"מ</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-slate-400">מחיר בסיס:</span>
+                            <span id="basePriceDisplay" class="font-bold">₪--</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-slate-400">מע"מ (18%):</span>
+                            <span id="vatDisplay" class="font-bold">₪--</span>
+                        </div>
+                        <div class="h-px bg-slate-600 my-2"></div>
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-lg">מחיר סופי:</span>
+                            <span id="totalPriceDisplay" class="font-bold text-2xl text-emerald-400">₪--</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
                         <label class="block text-sm mb-1">הערות כלליות</label>
                         <textarea name="notes" rows="2"
+                                  placeholder="הערות נוספות..."
                                   class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm"></textarea>
                     </div>
                 </div>
                 
                 <div class="flex gap-3 pt-4">
-                    <button type="submit" class="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                    <button type="submit" id="submitBtn" class="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
                         ✅ צור הזמנה
                     </button>
-                    <button type="button" onclick="this.closest('.fixed').remove()" 
+                    <button type="button" onclick="closeCreateOrderModal()" 
                             class="flex-1 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
                         ביטול
                     </button>
@@ -571,6 +609,144 @@ function showCreateOrderModal() {
     `;
     
     document.body.appendChild(modal);
+    
+    // Initialize Google Places Autocomplete after modal is added to DOM
+    setTimeout(() => {
+        initGooglePlacesAutocomplete();
+    }, 100);
+}
+
+function closeCreateOrderModal() {
+    const modal = document.getElementById('createOrderModal');
+    if (modal) modal.remove();
+    
+    // Cleanup
+    autocompletePickup = null;
+    autocompleteDelivery = null;
+    selectedPickupLocation = null;
+    selectedDeliveryLocation = null;
+}
+
+function initGooglePlacesAutocomplete() {
+    if (typeof google === 'undefined' || !google.maps) {
+        console.error('❌ Google Maps not loaded!');
+        showNotification('❌ Google Maps לא נטען - ודא API Key', 'error');
+        return;
+    }
+    
+    const pickupInput = document.getElementById('pickupAddress');
+    const deliveryInput = document.getElementById('deliveryAddress');
+    
+    if (!pickupInput || !deliveryInput) {
+        console.error('❌ Address inputs not found');
+        return;
+    }
+    
+    // Configure for Israel
+    const options = {
+        componentRestrictions: { country: 'il' },
+        fields: ['formatted_address', 'geometry', 'name'],
+        types: ['address']
+    };
+    
+    // Pickup Autocomplete
+    autocompletePickup = new google.maps.places.Autocomplete(pickupInput, options);
+    autocompletePickup.addListener('place_changed', () => {
+        const place = autocompletePickup.getPlace();
+        if (place.geometry) {
+            selectedPickupLocation = {
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng(),
+                address: place.formatted_address || place.name
+            };
+            console.log('✅ Pickup:', selectedPickupLocation);
+            calculatePrice();
+        }
+    });
+    
+    // Delivery Autocomplete
+    autocompleteDelivery = new google.maps.places.Autocomplete(deliveryInput, options);
+    autocompleteDelivery.addListener('place_changed', () => {
+        const place = autocompleteDelivery.getPlace();
+        if (place.geometry) {
+            selectedDeliveryLocation = {
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng(),
+                address: place.formatted_address || place.name
+            };
+            console.log('✅ Delivery:', selectedDeliveryLocation);
+            calculatePrice();
+        }
+    });
+    
+    console.log('✅ Google Places Autocomplete initialized');
+}
+
+async function calculatePrice() {
+    const vehicleType = document.getElementById('vehicleType')?.value;
+    
+    if (!selectedPickupLocation || !selectedDeliveryLocation) {
+        console.log('⏳ Waiting for both locations...');
+        return;
+    }
+    
+    if (!vehicleType) {
+        console.log('⏳ Waiting for vehicle type...');
+        return;
+    }
+    
+    console.log('🧮 Calculating price...', {
+        pickup: selectedPickupLocation,
+        delivery: selectedDeliveryLocation,
+        vehicle: vehicleType
+    });
+    
+    try {
+        const response = await fetch('/api/calculate-price', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                pickupLat: selectedPickupLocation.lat,
+                pickupLng: selectedPickupLocation.lng,
+                deliveryLat: selectedDeliveryLocation.lat,
+                deliveryLng: selectedDeliveryLocation.lng,
+                vehicleType: vehicleType
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayPrice(data);
+        } else {
+            const error = await response.json();
+            console.error('❌ Price calc error:', error);
+            showNotification('❌ שגיאה בחישוב מחיר', 'error');
+        }
+    } catch (error) {
+        console.error('❌ Price calc exception:', error);
+        showNotification('❌ שגיאה בחישוב מחיר', 'error');
+    }
+}
+
+function displayPrice(data) {
+    const priceDisplay = document.getElementById('priceDisplay');
+    const distanceDisplay = document.getElementById('distanceDisplay');
+    const basePriceDisplay = document.getElementById('basePriceDisplay');
+    const vatDisplay = document.getElementById('vatDisplay');
+    const totalPriceDisplay = document.getElementById('totalPriceDisplay');
+    
+    if (priceDisplay) {
+        priceDisplay.classList.remove('hidden');
+        distanceDisplay.textContent = `${data.distanceKm} ק"מ`;
+        basePriceDisplay.textContent = `₪${data.basePrice}`;
+        vatDisplay.textContent = `₪${data.vat}`;
+        totalPriceDisplay.textContent = `₪${data.totalPrice}`;
+        
+        console.log('✅ Price displayed:', data);
+    }
 }
 
 async function handleCreateOrder(event) {
@@ -583,31 +759,44 @@ async function handleCreateOrder(event) {
     }
 
     const formData = new FormData(event.target);
+    
+    // Validate locations
+    if (!selectedPickupLocation || !selectedDeliveryLocation) {
+        showNotification('❌ יש לבחור כתובות מהרשימה המוצעת', 'error');
+        return;
+    }
+    
+    const vehicleType = formData.get('vehicleType');
+    if (!vehicleType) {
+        showNotification('❌ יש לבחור סוג רכב', 'error');
+        return;
+    }
+    
     const data = {
         senderName: formData.get('senderName'),
         senderPhone: formData.get('senderPhone'),
-        pickupAddress: formData.get('pickupAddress'),
+        pickupAddress: selectedPickupLocation.address,
+        pickupLat: selectedPickupLocation.lat,
+        pickupLng: selectedPickupLocation.lng,
         pickupNotes: formData.get('pickupNotes') || '',
         receiverName: formData.get('receiverName'),
         receiverPhone: formData.get('receiverPhone'),
-        deliveryAddress: formData.get('deliveryAddress'),
+        deliveryAddress: selectedDeliveryLocation.address,
+        deliveryLat: selectedDeliveryLocation.lat,
+        deliveryLng: selectedDeliveryLocation.lng,
         deliveryNotes: formData.get('deliveryNotes') || '',
         packageDescription: formData.get('packageDescription') || '',
-        vehicleType: formData.get('vehicleType'),
+        vehicleType: vehicleType,
         notes: formData.get('notes') || '',
         priority: 'normal'
     };
 
-    // בדיקת שדות ריקים
-    if (!data.pickupAddress || data.pickupAddress.trim() === '') {
-        showNotification('❌ חסרה כתובת איסוף', 'error');
-        return;
-    }
+    console.log('📤 Sending order:', data);
     
-    if (!data.deliveryAddress || data.deliveryAddress.trim() === '') {
-        showNotification('❌ חסרה כתובת מסירה', 'error');
-        return;
-    }
+    // Disable submit button
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ שולח...';
     
     try {
         const response = await fetch('/api/orders', {
@@ -623,15 +812,19 @@ async function handleCreateOrder(event) {
         
         if (response.ok) {
             showNotification(`✅ הזמנה ${result.order.order_number} נוצרה!`);
-            event.target.closest('.fixed').remove();
+            closeCreateOrderModal();
             loadOrders();
             loadStatistics();
         } else {
             showNotification('❌ ' + (result.error || 'שגיאה ביצירת הזמנה'), 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '✅ צור הזמנה';
         }
     } catch (error) {
         console.error('Create order error:', error);
         showNotification('❌ שגיאת תקשורת: ' + error.message, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '✅ צור הזמנה';
     }
 }
 
@@ -1586,3 +1779,4 @@ async function payoutPendingPayments() {
         showNotification('❌ שגיאת תקשורת', 'error');
     }
 }
+
