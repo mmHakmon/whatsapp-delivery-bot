@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#10b981">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/assets/logo.png">
+    <link rel="apple-touch-icon" href="/assets/logo.png">
+    <title>M.M.H Delivery - אפליקציית שליחים</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+        
+        .courier-tab-active {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .courier-tab-inactive {
+            background: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+        }
+        
+        /* חלון קבוע למשלוחים */
+        .orders-container {
+            height: 45vh;
+            overflow-y: auto;
+        }
+        
+        /* סגנון סקרול */
+        .orders-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .orders-container::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .orders-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .orders-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white">
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-20">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <img src="/assets/logo.png" alt="M.M.H Logo" class="h-10">
+                <div>
+                    <h1 class="text-lg font-bold" id="courierName">שליח</h1>
+                    <p class="text-xs text-slate-400" id="courierPhone"></p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-left">
+                    <p class="text-2xl font-bold text-emerald-400" id="courierBalance">₪0</p>
+                    <p class="text-xs text-slate-400">יתרה</p>
+                </div>
+                <button onclick="logoutCourier()" class="bg-red-500 hover:bg-red-600 px-3 py-2 rounded-lg text-sm">
+                    🚪
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="container mx-auto px-4 py-8">
+        <div class="max-w-md mx-auto">
+            <div class="text-center mb-8">
+                <img src="/assets/logo.png" alt="M.M.H Logo" class="w-32 h-32 mx-auto mb-4">
+                <h1 class="text-3xl font-bold mb-2">M.M.H Delivery</h1>
+                <p class="text-slate-400">אפליקציית שליחים</p>
+            </div>
+            
+            <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                <form id="idLoginForm" onsubmit="courierLoginById(event)">
+                    <label class="block text-sm font-medium mb-2">תעודת זהות</label>
+                    <input type="text" id="loginId" required pattern="[0-9]{9}"
+                           placeholder="123456789"
+                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-purple-500">
+                    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        🔐 התחבר
+                    </button>
+                </form>
+                <a href="/courier/register.html" class="block text-center mt-4 text-blue-400 hover:text-blue-300">
+                    אין לך חשבון? הירשם כאן
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <main id="mainApp" class="hidden">
+        <!-- ========================================== -->
+        <!-- סטטיסטיקות מהירות -->
+        <!-- ========================================== -->
+        <div class="bg-slate-800 border-b border-slate-700 px-4 py-3">
+            <div class="container mx-auto">
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-blue-400" id="statToday">0</p>
+                        <p class="text-xs text-slate-400">היום</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-emerald-400" id="statWeek">0</p>
+                        <p class="text-xs text-slate-400">שבוע</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-2xl font-bold text-purple-400" id="statMonth">0</p>
+                        <p class="text-xs text-slate-400">חודש</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- חלון המשלוחים הקבוע - תמיד נראה! -->
+        <!-- ========================================== -->
+        <div class="bg-slate-800 border-b-4 border-emerald-500">
+            <div class="container mx-auto px-4 py-3">
+                <!-- כותרת + מתג -->
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-xl font-bold flex items-center gap-2">
+                        <span id="ordersTitle">📦 משלוחים זמינים</span>
+                        <span id="ordersCount" class="px-2 py-1 bg-emerald-500 rounded-full text-xs">0</span>
+                    </h2>
+                    
+                    <!-- מתג בין זמינים לפעילים -->
+                    <div class="flex gap-2">
+                        <button onclick="switchOrdersView('available')" id="btnAvailable" 
+                                class="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-500 text-white">
+                            📦 זמינים
+                        </button>
+                        <button onclick="switchOrdersView('active')" id="btnActive"
+                                class="px-4 py-2 rounded-lg text-sm font-bold bg-slate-700 text-slate-300">
+                            🔵 פעילים
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- רשימת משלוחים - חלון גלילה קבוע -->
+                <div id="ordersContainer" class="orders-container space-y-3">
+                    <!-- זמינים -->
+                    <div id="availableOrdersList">
+                        <div class="text-center py-12 text-slate-400">
+                            <div class="text-6xl mb-4">⏳</div>
+                            <p>טוען משלוחים זמינים...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- פעילים (מוסתר בהתחלה) -->
+                    <div id="activeOrdersList" class="hidden">
+                        <div class="text-center py-12 text-slate-400">
+                            <div class="text-6xl mb-4">⏳</div>
+                            <p>טוען משלוחים פעילים...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- טאבים למטה - ללא משלוחים! -->
+        <!-- ========================================== -->
+        <div class="bg-slate-800 border-b border-slate-700 px-4 py-2 sticky top-[73px] z-10">
+            <div class="container mx-auto">
+                <div class="grid grid-cols-3 gap-2">
+                    <button onclick="switchCourierTab('stats')" id="tabStats" class="courier-tab-active px-3 py-3 rounded-lg text-sm font-bold transition-all">
+                        📊<br>סטטיסטיקות
+                    </button>
+                    <button onclick="switchCourierTab('history')" id="tabHistory" class="courier-tab-inactive px-3 py-3 rounded-lg text-sm font-bold transition-all">
+                        📋<br>היסטוריה
+                    </button>
+                    <button onclick="switchCourierTab('earnings')" id="tabEarnings" class="courier-tab-inactive px-3 py-3 rounded-lg text-sm font-bold transition-all">
+                        💰<br>רווחים
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="container mx-auto px-4 py-4">
+            
+            <!-- ========================================== -->
+            <!-- Stats Tab -->
+            <!-- ========================================== -->
+            <div id="statsTab" class="courier-tab-content">
+                
+                <!-- כרטיסי סטטיסטיקות -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-lg">
+                        <p class="text-blue-100 text-xs mb-1">📦 היום</p>
+                        <p class="text-3xl font-bold text-white" id="statToday2">0</p>
+                        <p class="text-blue-100 text-xs mt-1" id="todayEarnings">₪0</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 shadow-lg">
+                        <p class="text-emerald-100 text-xs mb-1">📅 שבוע</p>
+                        <p class="text-3xl font-bold text-white" id="statWeek2">0</p>
+                        <p class="text-emerald-100 text-xs mt-1" id="weekEarnings">₪0</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 shadow-lg">
+                        <p class="text-purple-100 text-xs mb-1">📊 חודש</p>
+                        <p class="text-3xl font-bold text-white" id="statMonth2">0</p>
+                        <p class="text-purple-100 text-xs mt-1" id="monthEarnings">₪0</p>
+                    </div>
+                    <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 shadow-lg">
+                        <p class="text-amber-100 text-xs mb-1">💵 ממוצע</p>
+                        <p class="text-2xl font-bold text-white" id="avgPerDelivery">₪-</p>
+                        <p class="text-amber-100 text-xs mt-1">למשלוח</p>
+                    </div>
+                </div>
+
+<!-- גרפים -->
+<div class="grid md:grid-cols-2 gap-4 mb-4">
+    <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
+            <span>📈</span>
+            <span>הכנסות שבועיות</span>
+        </h3>
+        <div style="height: 150px; max-height: 150px; position: relative;">
+            <canvas id="earningsChart"></canvas>
+        </div>
+    </div>
+    <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
+            <span>⏰</span>
+            <span>משלוחים היום</span>
+        </h3>
+        <div style="height: 150px; max-height: 150px; position: relative;">
+            <canvas id="hourlyChart"></canvas>
+        </div>
+    </div>
+</div>
+
+                <!-- יעדים -->
+                <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
+                    <h3 class="text-lg font-bold mb-4">🎯 יעדים</h3>
+                    
+                    <div class="mb-4">
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-slate-300">יעד יומי</span>
+                            <span class="font-bold" id="dailyGoalText">0 / 15</span>
+                        </div>
+                        <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
+                            <div id="dailyGoalBar" class="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1" id="dailyGoalRemaining">עוד 15 משלוחים!</p>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-slate-300">יעד הכנסות</span>
+                            <span class="font-bold" id="dailyEarningsGoalText">₪0 / ₪800</span>
+                        </div>
+                        <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
+                            <div id="dailyEarningsGoalBar" class="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-slate-300">יעד שבועי</span>
+                            <span class="font-bold" id="weeklyGoalText">0 / 80</span>
+                        </div>
+                        <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
+                            <div id="weeklyGoalBar" class="h-full bg-gradient-to-r from-purple-500 to-purple-600 transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- דירוג וביצועים -->
+                <div class="grid md:grid-cols-2 gap-4 mb-4">
+                    <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                        <h3 class="text-lg font-bold mb-3">🏆 דירוג</h3>
+                        <div class="text-center mb-4">
+                            <div class="text-5xl mb-2" id="rankMedal">🏅</div>
+                            <div class="text-3xl font-bold">מקום <span id="myRank">-</span></div>
+                            <div class="text-xs text-slate-400">מתוך <span id="totalCouriers">-</span> שליחים</div>
+                        </div>
+                        <div class="bg-slate-700/50 rounded-lg p-3">
+                            <div class="text-xs text-slate-300 mb-2">Top 5:</div>
+                            <div id="topCouriersList" class="space-y-1 text-xs"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                        <h3 class="text-lg font-bold mb-3">⚡ ביצועים</h3>
+                        <div class="space-y-2">
+                            <div class="flex justify-between p-2 bg-slate-700/50 rounded text-sm">
+                                <span class="text-slate-300">⏱️ זמן ממוצע</span>
+                                <span class="font-bold" id="avgTime">-</span>
+                            </div>
+                            <div class="flex justify-between p-2 bg-slate-700/50 rounded text-sm">
+                                <span class="text-slate-300">🏃 הכי מהיר</span>
+                                <span class="font-bold text-emerald-400" id="fastestTime">-</span>
+                            </div>
+                            <div class="flex justify-between p-2 bg-slate-700/50 rounded text-sm">
+                                <span class="text-slate-300">✅ אחוז השלמה</span>
+                                <span class="font-bold text-blue-400" id="completionRate">-%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ניתוח הכנסות -->
+                <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
+                    <h3 class="text-lg font-bold mb-3">💰 ניתוח הכנסות</h3>
+                    <div class="grid grid-cols-3 gap-3 mb-3">
+                        <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+                            <div class="text-xs text-slate-300 mb-1">החודש</div>
+                            <div class="text-xl font-bold" id="currentMonthEarnings">₪0</div>
+                            <div class="text-xs text-slate-400" id="currentMonthDays">0 ימים</div>
+                        </div>
+                        <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+                            <div class="text-xs text-slate-300 mb-1">קצב יומי</div>
+                            <div class="text-xl font-bold" id="dailyRate">₪0</div>
+                            <div class="text-xs text-slate-400">ממוצע</div>
+                        </div>
+                        <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg p-3 text-center">
+                            <div class="text-xs text-emerald-100 mb-1">צפי סוף חודש</div>
+                            <div class="text-xl font-bold text-white" id="projectedEarnings">₪0</div>
+                            <div class="text-xs text-emerald-100">📈</div>
+                        </div>
+                    </div>
+                    <div class="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                        <div class="flex justify-between text-sm">
+                            <div>
+                                <div class="text-amber-400 mb-1">🌟 יום הכי טוב</div>
+                                <div class="font-bold" id="bestDayEarnings">₪0</div>
+                            </div>
+                            <div class="text-left">
+                                <div class="text-slate-400 text-xs" id="bestDayDate">-</div>
+                                <div class="text-slate-400 text-xs" id="bestDayDeliveries">- משלוחים</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- פיצול שעות -->
+                <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                    <h3 class="text-lg font-bold mb-3">🕐 פיצול שעות</h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+                            <div class="text-2xl mb-1">🌅</div>
+                            <div class="text-xs text-slate-300 mb-1">בוקר</div>
+                            <div class="text-lg font-bold" id="morningDeliveries">0</div>
+                            <div class="text-xs text-slate-400" id="morningPercentage">0%</div>
+                        </div>
+                        <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+                            <div class="text-2xl mb-1">☀️</div>
+                            <div class="text-xs text-slate-300 mb-1">צהריים</div>
+                            <div class="text-lg font-bold" id="noonDeliveries">0</div>
+                            <div class="text-xs text-slate-400" id="noonPercentage">0%</div>
+                        </div>
+                        <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+                            <div class="text-2xl mb-1">🌆</div>
+                            <div class="text-xs text-slate-300 mb-1">ערב</div>
+                            <div class="text-lg font-bold" id="eveningDeliveries">0</div>
+                            <div class="text-xs text-slate-400" id="eveningPercentage">0%</div>
+                        </div>
+                        <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+                            <div class="text-2xl mb-1">🌙</div>
+                            <div class="text-xs text-slate-300 mb-1">לילה</div>
+                            <div class="text-lg font-bold" id="nightDeliveries">0</div>
+                            <div class="text-xs text-slate-400" id="nightPercentage">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- History Tab -->
+            <!-- ========================================== -->
+            <div id="historyTab" class="courier-tab-content hidden">
+                <div id="historyOrdersList" class="space-y-3">
+                    <div class="text-center py-12 text-slate-400">
+                        <div class="text-6xl mb-4">⏳</div>
+                        <p>טוען...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- Earnings Tab -->
+            <!-- ========================================== -->
+            <div id="earningsTab" class="courier-tab-content hidden">
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">💰 יתרה לתשלום</h2>
+                        <p class="text-3xl font-bold text-emerald-400" id="earningsBalance">₪0</p>
+                    </div>
+                    <button onclick="requestPayout()" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        💸 בקש משיכה
+                    </button>
+                </div>
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-lg font-bold mb-4">בקשות משיכה</h2>
+                    <div id="payoutRequestsList" class="space-y-3"></div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script src="/courier/courier.js"></script>
+    
+    <!-- Handle WhatsApp action links -->
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const action = urlParams.get('action');
+        const orderId = urlParams.get('order');
+        
+        if (action && orderId) {
+            const checkAuth = setInterval(() => {
+                if (courierToken) {
+                    clearInterval(checkAuth);
+                    
+                    if (action === 'pickup') {
+                        switchOrdersView('active');
+                        setTimeout(() => markAsPickedUp(parseInt(orderId)), 1000);
+                    } else if (action === 'deliver') {
+                        switchOrdersView('active');
+                        setTimeout(() => markAsDelivered(parseInt(orderId)), 1000);
+                    }
+                    
+                    window.history.replaceState({}, '', '/courier');
+                }
+            }, 500);
+            
+            setTimeout(() => clearInterval(checkAuth), 10000);
+        }
+    });
+    </script>
+</body>
+</html>
+
