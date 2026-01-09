@@ -538,21 +538,7 @@ class OrdersController {
       client.release();
     }
   }
-      // Notify via WebSocket
-      websocketService.broadcast({
-        type: 'order_cancelled',
-        order
-      });
-
-      res.json({ 
-        order,
-        message: 'ההזמנה בוטלה'
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-
+    
   // Get statistics
   async getStatistics(req, res, next) {
     try {
@@ -700,6 +686,7 @@ class OrdersController {
 }
 
 module.exports = new OrdersController();
+
 
 
 
