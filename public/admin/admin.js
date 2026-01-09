@@ -114,7 +114,7 @@ function showLoginError(message) {
 function logout() {
     if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
         localStorage.clear();
-        location.reload();
+        window.location.href = "/";  // ✅ Redirect to home page!
     }
 }
 
