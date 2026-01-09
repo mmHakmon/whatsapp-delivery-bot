@@ -538,32 +538,6 @@ class OrdersController {
       client.release();
     }
   }
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('❌ Cancel order error:', error);
-    res.status(500).json({ 
-      error: 'שגיאה בביטול ההזמנה', 
-      details: error.message 
-    });
-  } finally {
-    client.release();
-  }
-}
-      // If courier was assigned, notify them
-      if (order.courier_id) {
-        const courierResult = await pool.query(
-          'SELECT phone FROM couriers WHERE id = $1',
-          [order.courier_id]
-        );
-        
-        if (courierResult.rows.length > 0) {
-          await whatsappService.sendMessage(
-            courierResult.rows[0].phone,
-            `❌ *משלוח בוטל*\n\nמספר הזמנה: ${order.order_number}\nסיבה: ${reason || 'לא צוינה'}`
-          );
-        }
-      }
-
       // Notify via WebSocket
       websocketService.broadcast({
         type: 'order_cancelled',
@@ -726,5 +700,6 @@ class OrdersController {
 }
 
 module.exports = new OrdersController();
+
 
 
