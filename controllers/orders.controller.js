@@ -478,87 +478,66 @@ class OrdersController {
   }
 
   // Cancel order
-async function cancelOrder(req, res) {
-  const client = await pool.connect();
-  try {
-    const { id } = req.params;
-    const { cancelReason, reason } = req.body; // ✅ תומך בשני השמות
-    
-    const finalReason = cancelReason || reason || 'ביטול ללא סיבה';
-    
-    await client.query('BEGIN');
-    
-    // Get order details
-    const orderResult = await client.query(
-      'SELECT * FROM orders WHERE id = $1',
-      [id]
-    );
-    
-    if (orderResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'הזמנה לא נמצאה' });
-    }
-    
-    const order = orderResult.rows[0];
-    
-    // Check if order can be cancelled
-    if (order.status === 'delivered') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'לא ניתן לבטל הזמנה שכבר נמסרה' });
-    }
-    
-    if (order.status === 'cancelled') {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'ההזמנה כבר בוטלה' });
-    }
-    
-    // Update order status
-    await client.query(
-      `UPDATE orders 
-       SET status = 'cancelled', 
-           cancel_reason = $1,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
-      [finalReason, id]
-    );
-    
-    // If courier was assigned, update their balance
-    if (order.courier_id && order.courier_payout) {
-      await client.query(
-        'UPDATE couriers SET balance = balance - $1 WHERE id = $2',
-        [order.courier_payout, order.courier_id]
-      );
-    }
-    
-    await client.query('COMMIT');
-    
-    // Send WebSocket notification
-    const websocketService = require('../services/websocket.service');
-    websocketService.broadcastToAdmins({
-      type: 'order_updated',
-      orderId: id,
-      status: 'cancelled'
-    });
-    
-    // Notify courier if assigned
-    if (order.courier_id) {
-      websocketService.sendToCourier(order.courier_id, {
-        type: 'order_cancelled',
-        orderId: id,
-        orderNumber: order.order_number,
-        reason: finalReason
-      });
-    }
-    
-    res.json({ 
-      message: 'ההזמנה בוטלה בהצלחה',
-      order: { 
-        id, 
-        status: 'cancelled',
-        cancel_reason: finalReason
+// Cancel order
+  async cancelOrder(req, res, next) {
+    const client = await pool.connect();
+    try {
+      const { id } = req.params;
+      const { cancelReason, reason } = req.body;
+      
+      const finalReason = cancelReason || reason || 'ביטול ללא סיבה';
+      
+      await client.query('BEGIN');
+      
+      const orderResult = await client.query('SELECT * FROM orders WHERE id = $1', [id]);
+      
+      if (orderResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'הזמנה לא נמצאה' });
       }
-    });
-    
+      
+      const order = orderResult.rows[0];
+      
+      if (order.status === 'delivered') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'לא ניתן לבטל הזמנה שכבר נמסרה' });
+      }
+      
+      if (order.status === 'cancelled') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'ההזמנה כבר בוטלה' });
+      }
+      
+      await client.query(
+        `UPDATE orders SET status = 'cancelled', cancel_reason = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
+        [finalReason, id]
+      );
+      
+      if (order.courier_id && order.courier_payout) {
+        await client.query('UPDATE couriers SET balance = balance - $1 WHERE id = $2', [order.courier_payout, order.courier_id]);
+      }
+      
+      await client.query('COMMIT');
+      
+      if (order.courier_id) {
+        const courierResult = await pool.query('SELECT phone FROM couriers WHERE id = $1', [order.courier_id]);
+        if (courierResult.rows.length > 0) {
+          await whatsappService.sendMessage(courierResult.rows[0].phone, `❌ *משלוח בוטל*\n\nמספר הזמנה: ${order.order_number}\nסיבה: ${finalReason}`);
+        }
+      }
+      
+      websocketService.broadcast({ type: 'order_cancelled', order });
+      
+      res.json({ message: 'ההזמנה בוטלה בהצלחה', order: { id, status: 'cancelled', cancel_reason: finalReason } });
+      
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('❌ Cancel order error:', error);
+      next(error);
+    } finally {
+      client.release();
+    }
+  }
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('❌ Cancel order error:', error);
@@ -747,4 +726,5 @@ async function cancelOrder(req, res) {
 }
 
 module.exports = new OrdersController();
+
 
