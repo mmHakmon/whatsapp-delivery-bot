@@ -40,11 +40,12 @@ app.use(express.static('public'));
 
 // Request logging
 app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`, { 
-    ip: req.ip,
-    userAgent: req.get('user-agent')
-  });
-  next();
+    if (req.path.endsWith('.html') || req.path === '/courier') {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+    next();
 });
 
 // ==========================================
@@ -170,3 +171,4 @@ process.on('SIGINT', () => {
 });
 
 module.exports = app;
+
