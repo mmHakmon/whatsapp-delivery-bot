@@ -47,6 +47,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// ==========================================
+// CONFIG ENDPOINT FOR GOOGLE MAPS - ✅ ADDED!
+// ==========================================
+app.get('/api/config/google-maps-key', (req, res) => {
+  res.json({ 
+    apiKey: process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || ''
+  });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 
@@ -135,11 +144,11 @@ server.listen(PORT, () => {
   console.log('');
   console.log('✅ M.M.H Delivery System is ready!');
   console.log('');
-  console.log('📍 Admin Panel:', `${PUBLIC_URL}/admin`);
-  console.log('📍 Courier App:', `${PUBLIC_URL}/courier`);
-  console.log('📍 Customer Order:', `${PUBLIC_URL}/customer/order.html`);
-  console.log('📍 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
-  console.log('📍 Price Calculator:', `${PUBLIC_URL}/calculator`);
+  console.log('🔗 Admin Panel:', `${PUBLIC_URL}/admin`);
+  console.log('🔗 Courier App:', `${PUBLIC_URL}/courier`);
+  console.log('🔗 Customer Order:', `${PUBLIC_URL}/customer/order.html`);
+  console.log('🔗 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
+  console.log('🔗 Price Calculator:', `${PUBLIC_URL}/calculator`);
   console.log('');
 });
 
