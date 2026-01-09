@@ -236,14 +236,23 @@ function connectWebSocket() {
 }
 
 function handleWebSocketMessage(data) {
+    console.log('📨 WebSocket message:', data);
+    
     switch (data.type) {
         case 'new_order':
             showNotification('📦 הזמנה חדשה התקבלה!');
-            loadOrders();
+            loadOrders(currentFilter === 'all' ? null : currentFilter);
             loadStatistics();
             break;
         case 'order_updated':
-            loadOrders();
+            console.log('🔄 Order updated, reloading...');
+            loadOrders(currentFilter === 'all' ? null : currentFilter);
+            loadStatistics();
+            break;
+        case 'order_published':
+            showNotification('📢 ההזמנה פורסמה!');
+            loadOrders(currentFilter === 'all' ? null : currentFilter);
+            loadStatistics();
             break;
     }
 }
@@ -1602,6 +1611,7 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
 
 
 
