@@ -478,12 +478,15 @@ function showCreateOrderModal() {
                         <div>
                             <label class="block text-sm mb-1">שם מלא *</label>
                             <input type="text" name="senderName" required
+                                   placeholder="שם מלא"
                                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">טלפון *</label>
                             <input type="tel" name="senderPhone" required 
-                                   pattern="[0-9]{10}" placeholder="0501234567"
+                                   pattern="0[0-9]{9}" 
+                                   placeholder="0501234567"
+                                   title="הזן מספר טלפון ישראלי תקין (10 ספרות)"
                                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                         </div>
                     </div>
@@ -491,6 +494,7 @@ function showCreateOrderModal() {
                         <label class="block text-sm mb-1">כתובת איסוף * <span class="text-xs text-slate-400">(התחל להקליד...)</span></label>
                         <input type="text" id="pickupAddress" name="pickupAddress" required
                                placeholder="התחל להקליד כתובת..."
+                               autocomplete="off"
                                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                     </div>
                     <div class="mt-3">
@@ -508,12 +512,15 @@ function showCreateOrderModal() {
                         <div>
                             <label class="block text-sm mb-1">שם מלא *</label>
                             <input type="text" name="receiverName" required
+                                   placeholder="שם מלא"
                                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                         </div>
                         <div>
                             <label class="block text-sm mb-1">טלפון *</label>
                             <input type="tel" name="receiverPhone" required 
-                                   pattern="[0-9]{10}" placeholder="0501234567"
+                                   pattern="0[0-9]{9}"
+                                   placeholder="0501234567"
+                                   title="הזן מספר טלפון ישראלי תקין (10 ספרות)"
                                    class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                         </div>
                     </div>
@@ -521,6 +528,7 @@ function showCreateOrderModal() {
                         <label class="block text-sm mb-1">כתובת מסירה * <span class="text-xs text-slate-400">(התחל להקליד...)</span></label>
                         <input type="text" id="deliveryAddress" name="deliveryAddress" required
                                placeholder="התחל להקליד כתובת..."
+                               autocomplete="off"
                                class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
                     </div>
                     <div class="mt-3">
@@ -1449,3 +1457,4 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
