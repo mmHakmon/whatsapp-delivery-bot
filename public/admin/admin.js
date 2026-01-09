@@ -1,6 +1,6 @@
 // ==========================================
 // M.M.H DELIVERY - ADMIN DASHBOARD
-// ✅ FIXED VERSION - All issues resolved!
+// ✅ FIXED VERSION WITH REAL-TIME PRICE CALCULATION!
 // ==========================================
 
 let adminToken = localStorage.getItem('adminToken');
@@ -568,7 +568,7 @@ function viewOrderDetails(orderId) {
 }
 
 // ==========================================
-// CREATE ORDER MODAL - ✅ COMPLETELY FIXED!
+// CREATE ORDER MODAL - ✅ WITH PRICE DISPLAY!
 // ==========================================
 
 function showCreateOrderModal() {
@@ -651,9 +651,9 @@ function showCreateOrderModal() {
                     </div>
                 </div>
                 
-                <!-- Package Details -->
+                <!-- Package Details + Price Calc -->
                 <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold mb-3">📦 פרטי חבילה</h3>
+                    <h3 class="font-bold mb-3">📦 פרטי חבילה ומחיר</h3>
                     <div class="mb-3">
                         <label class="block text-sm mb-1">תיאור חבילה</label>
                         <input type="text" name="packageDescription"
@@ -662,7 +662,7 @@ function showCreateOrderModal() {
                     </div>
                     <div class="mb-3">
                         <label class="block text-sm mb-1">סוג רכב *</label>
-                        <select name="vehicleType" id="vehicleType" required
+                        <select name="vehicleType" id="vehicleType" required onchange="calculatePrice()"
                                 class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
                             <option value="">בחר סוג רכב...</option>
                             <option value="motorcycle">🏍️ אופנוע</option>
@@ -672,6 +672,27 @@ function showCreateOrderModal() {
                             <option value="van">🚐 מסחרית</option>
                             <option value="truck">🚚 משאית</option>
                         </select>
+                    </div>
+                    
+                    <!-- ✅ PRICE DISPLAY - SHOWS IN REAL-TIME! -->
+                    <div id="priceDisplay" class="bg-slate-800 rounded-lg p-4 border border-slate-600 hidden">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-slate-400">מרחק משוער:</span>
+                            <span id="distanceDisplay" class="font-bold">-- ק"מ</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-slate-400">מחיר בסיס:</span>
+                            <span id="basePriceDisplay" class="font-bold">₪--</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-slate-400">מע"מ (18%):</span>
+                            <span id="vatDisplay" class="font-bold">₪--</span>
+                        </div>
+                        <div class="h-px bg-slate-600 my-2"></div>
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-lg">מחיר סופי:</span>
+                            <span id="totalPriceDisplay" class="font-bold text-2xl text-emerald-400">₪--</span>
+                        </div>
                     </div>
                     
                     <div class="mt-3">
@@ -760,6 +781,7 @@ function initGooglePlacesAutocomplete() {
                     address: place.formatted_address || place.name
                 };
                 console.log('✅ Pickup location selected:', selectedPickupLocation);
+                calculatePrice(); // ✅ Calculate price when pickup changes
             }
         });
     } catch (error) {
@@ -777,6 +799,7 @@ function initGooglePlacesAutocomplete() {
                     address: place.formatted_address || place.name
                 };
                 console.log('✅ Delivery location selected:', selectedDeliveryLocation);
+                calculatePrice(); // ✅ Calculate price when delivery changes
             }
         });
     } catch (error) {
@@ -784,6 +807,79 @@ function initGooglePlacesAutocomplete() {
     }
     
     console.log('✅ Google Places Autocomplete initialized successfully');
+}
+
+// ==========================================
+// ✅ CALCULATE PRICE IN REAL-TIME!
+// ==========================================
+
+async function calculatePrice() {
+    const vehicleType = document.getElementById('vehicleType')?.value;
+    
+    if (!selectedPickupLocation || !selectedDeliveryLocation) {
+        console.log('⏳ Waiting for both locations...');
+        return;
+    }
+    
+    if (!vehicleType) {
+        console.log('⏳ Waiting for vehicle type...');
+        return;
+    }
+    
+    console.log('🧮 Calculating price...', {
+        pickup: selectedPickupLocation,
+        delivery: selectedDeliveryLocation,
+        vehicle: vehicleType
+    });
+    
+    try {
+        const response = await fetch('/api/orders/calculate', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                pickupLat: selectedPickupLocation.lat,
+                pickupLng: selectedPickupLocation.lng,
+                deliveryLat: selectedDeliveryLocation.lat,
+                deliveryLng: selectedDeliveryLocation.lng,
+                vehicleType: vehicleType
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayPrice(data);
+        } else {
+            const error = await response.json();
+            console.error('❌ Price calc error:', error);
+            showNotification('❌ שגיאה בחישוב מחיר', 'error');
+        }
+    } catch (error) {
+        console.error('❌ Price calc exception:', error);
+        showNotification('❌ שגיאה בחישוב מחיר', 'error');
+    }
+}
+
+function displayPrice(data) {
+    const priceDisplay = document.getElementById('priceDisplay');
+    const distanceDisplay = document.getElementById('distanceDisplay');
+    const basePriceDisplay = document.getElementById('basePriceDisplay');
+    const vatDisplay = document.getElementById('vatDisplay');
+    const totalPriceDisplay = document.getElementById('totalPriceDisplay');
+    
+    if (priceDisplay && distanceDisplay && basePriceDisplay && vatDisplay && totalPriceDisplay) {
+        priceDisplay.classList.remove('hidden');
+        distanceDisplay.textContent = `${data.distanceKm} ק"מ`;
+        basePriceDisplay.textContent = `₪${data.basePrice}`;
+        vatDisplay.textContent = `₪${data.vat}`;
+        totalPriceDisplay.textContent = `₪${data.totalPrice}`;
+        
+        console.log('✅ Price displayed:', data);
+    } else {
+        console.error('❌ Price display elements not found');
+    }
 }
 
 // ✅ FIXED: handleCreateOrder now properly loads orders with current filter!
