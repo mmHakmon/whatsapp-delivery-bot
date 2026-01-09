@@ -550,14 +550,15 @@ function showCreateOrderModal() {
                     </div>
                     <div class="mb-3">
                         <label class="block text-sm mb-1">סוג רכב *</label>
-                        <select name="vehicleType" id="vehicleType" required onchange="calculatePrice()"
-                                class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
-                            <option value="">בחר סוג רכב...</option>
-                            <option value="motorcycle">🏍️ אופנוע</option>
-                            <option value="car">🚗 רכב פרטי</option>
-                            <option value="van">🚐 מסחרית</option>
-                            <option value="truck">🚚 משאית</option>
-                        </select>
+<select name="vehicleType" id="vehicleType" required onchange="calculatePrice()"
+        class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
+    <option value="">בחר סוג רכב...</option>
+    <option value="bike">🚲 אופניים</option>
+    <option value="scooter">🛴 קטנוע</option>
+    <option value="car">🚗 רכב פרטי</option>
+    <option value="van">🚐 מסחרית</option>
+    <option value="truck">🚚 משאית</option>
+</select>
                     </div>
                     
                     <!-- Price Display -->
@@ -1457,4 +1458,5 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
 
