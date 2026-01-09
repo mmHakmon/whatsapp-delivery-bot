@@ -1,10 +1,126 @@
 // ==========================================
 // M.M.H DELIVERY - CUSTOMER APP
+// ✅ FIXED VERSION with Google Maps Autocomplete
 // ==========================================
 
 let currentStep = 1;
 let currentPricing = null;
 let createdOrderNumber = null;
+
+// ✅ NEW: Google Maps variables
+let autocompletePickup = null;
+let autocompleteDelivery = null;
+let selectedPickupLocation = null;
+let selectedDeliveryLocation = null;
+let googleMapsLoaded = false;
+
+// ==========================================
+// ✅ NEW: GOOGLE MAPS API LOADER
+// ==========================================
+
+async function loadGoogleMapsAPI() {
+    if (googleMapsLoaded) {
+        console.log('✅ Google Maps already loaded');
+        return Promise.resolve();
+    }
+    
+    try {
+        console.log('🗺️ Fetching Google Maps API key...');
+        const response = await fetch('/api/config/google-maps-key');
+        const data = await response.json();
+        
+        if (!data.apiKey) {
+            throw new Error('Google Maps API key not found');
+        }
+        
+        console.log('🗺️ Loading Google Maps API...');
+        
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&libraries=places&language=he`;
+            script.async = true;
+            script.defer = true;
+            
+            script.onload = () => {
+                googleMapsLoaded = true;
+                console.log('✅ Google Maps API loaded successfully');
+                resolve();
+            };
+            
+            script.onerror = () => {
+                console.error('❌ Failed to load Google Maps API');
+                reject(new Error('Failed to load Google Maps API'));
+            };
+            
+            document.head.appendChild(script);
+        });
+    } catch (error) {
+        console.error('❌ Error loading Google Maps API:', error);
+        throw error;
+    }
+}
+
+// ✅ NEW: Initialize Google Places Autocomplete
+function initGooglePlacesAutocomplete() {
+    if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
+        console.error('❌ Google Maps Places API not loaded!');
+        return;
+    }
+    
+    const pickupInput = document.getElementById('pickupAddress');
+    const deliveryInput = document.getElementById('deliveryAddress');
+    
+    if (!pickupInput || !deliveryInput) {
+        console.error('❌ Address inputs not found');
+        return;
+    }
+    
+    const options = {
+        componentRestrictions: { country: 'il' },
+        fields: ['formatted_address', 'geometry', 'name'],
+        types: ['address']
+    };
+    
+    console.log('🗺️ Initializing Google Places Autocomplete...');
+    
+    try {
+        autocompletePickup = new google.maps.places.Autocomplete(pickupInput, options);
+        autocompletePickup.addListener('place_changed', () => {
+            const place = autocompletePickup.getPlace();
+            if (place.geometry) {
+                selectedPickupLocation = {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    address: place.formatted_address || place.name
+                };
+                pickupInput.value = selectedPickupLocation.address;
+                console.log('✅ Pickup location selected:', selectedPickupLocation);
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error initializing pickup autocomplete:', error);
+    }
+    
+    try {
+        autocompleteDelivery = new google.maps.places.Autocomplete(deliveryInput, options);
+        autocompleteDelivery.addListener('place_changed', () => {
+            const place = autocompleteDelivery.getPlace();
+            if (place.geometry) {
+                selectedDeliveryLocation = {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    address: place.formatted_address || place.name
+                };
+                deliveryInput.value = selectedDeliveryLocation.address;
+                console.log('✅ Delivery location selected:', selectedDeliveryLocation);
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error initializing delivery autocomplete:', error);
+    }
+    
+    console.log('✅ Google Places Autocomplete initialized successfully');
+}
 
 // ==========================================
 // STEP NAVIGATION
@@ -314,9 +430,28 @@ document.getElementById('orderForm').addEventListener('submit', async (e) => {
     }
 });
 
+// ✅ FIXED: Redirect to dashboard if logged in
 function trackOrder() {
     if (createdOrderNumber) {
-        window.location.href = `/customer/track.html`;
+        // Check if user is logged in
+        const customerToken = localStorage.getItem('customerToken');
+        if (customerToken) {
+            // ✅ Logged in → go to dashboard
+            window.location.href = '/customer/dashboard.html';
+        } else {
+            // ✅ Not logged in → go to track page
+            window.location.href = `/customer/track.html`;
+        }
+    }
+}
+
+// ✅ NEW: Function to go directly to dashboard
+function goToDashboard() {
+    const customerToken = localStorage.getItem('customerToken');
+    if (customerToken) {
+        window.location.href = '/customer/dashboard.html';
+    } else {
+        window.location.href = '/';
     }
 }
 
@@ -351,5 +486,18 @@ document.querySelectorAll('.vehicle-option').forEach(option => {
     });
 });
 
-// Initialize
-updateStepDisplay();
+// ✅ Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    updateStepDisplay();
+    
+    // Load Google Maps API
+    loadGoogleMapsAPI()
+        .then(() => {
+            setTimeout(() => {
+                initGooglePlacesAutocomplete();
+            }, 100);
+        })
+        .catch(err => {
+            console.error('Failed to initialize Google Maps:', err);
+        });
+});
