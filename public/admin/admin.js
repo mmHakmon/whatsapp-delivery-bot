@@ -12,6 +12,114 @@ let autocompletePickup = null;
 let autocompleteDelivery = null;
 let selectedPickupLocation = null;
 let selectedDeliveryLocation = null;
+let googleMapsLoaded = false; // ✅ הוסף את זה
+
+// ✅ הוסף את כל הפונקציה הזו:
+async function loadGoogleMapsAPI() {
+    if (googleMapsLoaded) {
+        console.log('✅ Google Maps already loaded');
+        return Promise.resolve();
+    }
+    
+    try {
+        console.log('🗺️ Fetching Google Maps API key...');
+        const response = await fetch('/api/config/google-maps-key');
+        const data = await response.json();
+        
+        if (!data.apiKey) {
+            throw new Error('Google Maps API key not found');
+        }
+        
+        console.log('🗺️ Loading Google Maps API...');
+        
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&libraries=places&language=he`;
+            script.async = true;
+            script.defer = true;
+            
+            script.onload = () => {
+                googleMapsLoaded = true;
+                console.log('✅ Google Maps API loaded successfully');
+                resolve();
+            };
+            
+            script.onerror = () => {
+                console.error('❌ Failed to load Google Maps API');
+                reject(new Error('Failed to load Google Maps API'));
+            };
+            
+            document.head.appendChild(script);
+        });
+    } catch (error) {
+        console.error('❌ Error loading Google Maps API:', error);
+        throw error;
+    }
+}
+
+// ==========================================
+// GOOGLE MAPS API KEY LOADER
+// ==========================================
+
+let googleMapsLoaded = false;
+
+async function loadGoogleMapsAPI() {
+    if (googleMapsLoaded) {
+        console.log('✅ Google Maps already loaded');
+        return Promise.resolve();
+    }
+    
+    try {
+        // Fetch API key from server
+        const response = await fetch('/api/config/google-maps-key');
+        const data = await response.json();
+        
+        if (!data.apiKey) {
+            throw new Error('Google Maps API key not found');
+        }
+        
+        console.log('🗺️ Loading Google Maps API...');
+        
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&libraries=places&language=he`;
+            script.async = true;
+            script.defer = true;
+            
+            script.onload = () => {
+                googleMapsLoaded = true;
+                console.log('✅ Google Maps API loaded successfully');
+                resolve();
+            };
+
+// ==========================================
+// CONFIG ENDPOINT FOR GOOGLE MAPS
+// ==========================================
+app.get('/api/config/google-maps-key', (req, res) => {
+  res.json({ 
+    apiKey: process.env.GOOGLE_MAPS_API_KEY || ''
+  });
+});
+            
+            script.onerror = () => {
+                console.error('❌ Failed to load Google Maps API');
+                reject(new Error('Failed to load Google Maps API'));
+            };
+            
+            document.head.appendChild(script);
+        });
+    } catch (error) {
+        console.error('❌ Error loading Google Maps API:', error);
+        throw error;
+    }
+}
+
+// Load Google Maps on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadGoogleMapsAPI().catch(err => {
+        console.error('Failed to initialize Google Maps:', err);
+    });
+});
 
 // ==========================================
 // AUTHENTICATION
@@ -555,15 +663,16 @@ function showCreateOrderModal() {
                     </div>
                     <div class="mb-3">
                         <label class="block text-sm mb-1">סוג רכב *</label>
-<select name="vehicleType" id="vehicleType" required onchange="calculatePrice()"
-        class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
-    <option value="">בחר סוג רכב...</option>
-    <option value="bike">🚲 אופניים</option>
-    <option value="scooter">🛴 קטנוע</option>
-    <option value="car">🚗 רכב פרטי</option>
-    <option value="van">🚐 מסחרית</option>
-    <option value="truck">🚚 משאית</option>
-</select>
+                        <select name="vehicleType" id="vehicleType" required onchange="calculatePrice()"
+                                class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
+                            <option value="">בחר סוג רכב...</option>
+                            <option value="motorcycle">🏍️ אופנוע</option>
+                            <option value="bike">🚲 אופניים</option>
+                            <option value="scooter">🛴 קטנוע</option>
+                            <option value="car">🚗 רכב פרטי</option>
+                            <option value="van">🚐 מסחרית</option>
+                            <option value="truck">🚚 משאית</option>
+                        </select>
                     </div>
                     
                     <!-- Price Display -->
@@ -610,9 +719,23 @@ function showCreateOrderModal() {
     
     document.body.appendChild(modal);
     
-    setTimeout(() => {
-        initGooglePlacesAutocomplete();
-    }, 100);
+    // ✅ Wait for Google Maps to load before initializing autocomplete
+    if (googleMapsLoaded) {
+        setTimeout(() => {
+            initGooglePlacesAutocomplete();
+        }, 100);
+    } else {
+        loadGoogleMapsAPI()
+            .then(() => {
+                setTimeout(() => {
+                    initGooglePlacesAutocomplete();
+                }, 100);
+            })
+            .catch(err => {
+                console.error('Failed to load Google Maps:', err);
+                showNotification('❌ שגיאה בטעינת Google Maps', 'error');
+            });
+    }
 }
 
 function closeCreateOrderModal() {
@@ -626,9 +749,9 @@ function closeCreateOrderModal() {
 }
 
 function initGooglePlacesAutocomplete() {
-    if (typeof google === 'undefined' || !google.maps) {
-        console.error('❌ Google Maps not loaded!');
-        showNotification('❌ Google Maps לא נטען - ודא API Key', 'error');
+    if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
+        console.error('❌ Google Maps Places API not loaded!');
+        showNotification('❌ Google Maps לא נטען - נסה שוב', 'error');
         return;
     }
     
@@ -646,35 +769,45 @@ function initGooglePlacesAutocomplete() {
         types: ['address']
     };
     
-    autocompletePickup = new google.maps.places.Autocomplete(pickupInput, options);
-    autocompletePickup.addListener('place_changed', () => {
-        const place = autocompletePickup.getPlace();
-        if (place.geometry) {
-            selectedPickupLocation = {
-                lat: place.geometry.location.lat(),
-                lng: place.geometry.location.lng(),
-                address: place.formatted_address || place.name
-            };
-            console.log('✅ Pickup:', selectedPickupLocation);
-            calculatePrice();
-        }
-    });
+    console.log('🗺️ Initializing Google Places Autocomplete...');
     
-    autocompleteDelivery = new google.maps.places.Autocomplete(deliveryInput, options);
-    autocompleteDelivery.addListener('place_changed', () => {
-        const place = autocompleteDelivery.getPlace();
-        if (place.geometry) {
-            selectedDeliveryLocation = {
-                lat: place.geometry.location.lat(),
-                lng: place.geometry.location.lng(),
-                address: place.formatted_address || place.name
-            };
-            console.log('✅ Delivery:', selectedDeliveryLocation);
-            calculatePrice();
-        }
-    });
+    try {
+        autocompletePickup = new google.maps.places.Autocomplete(pickupInput, options);
+        autocompletePickup.addListener('place_changed', () => {
+            const place = autocompletePickup.getPlace();
+            if (place.geometry) {
+                selectedPickupLocation = {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    address: place.formatted_address || place.name
+                };
+                console.log('✅ Pickup location selected:', selectedPickupLocation);
+                calculatePrice();
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error initializing pickup autocomplete:', error);
+    }
     
-    console.log('✅ Google Places Autocomplete initialized');
+    try {
+        autocompleteDelivery = new google.maps.places.Autocomplete(deliveryInput, options);
+        autocompleteDelivery.addListener('place_changed', () => {
+            const place = autocompleteDelivery.getPlace();
+            if (place.geometry) {
+                selectedDeliveryLocation = {
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    address: place.formatted_address || place.name
+                };
+                console.log('✅ Delivery location selected:', selectedDeliveryLocation);
+                calculatePrice();
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error initializing delivery autocomplete:', error);
+    }
+    
+    console.log('✅ Google Places Autocomplete initialized successfully');
 }
 
 async function calculatePrice() {
@@ -1439,6 +1572,8 @@ async function deleteUserConfirm(userId, username) {
 function getVehicleNameHebrew(type) {
     const names = {
         'motorcycle': 'אופנוע',
+        'bike': 'אופניים',
+        'scooter': 'קטנוע',
         'car': 'רכב פרטי',
         'van': 'מסחרית',
         'truck': 'משאית'
@@ -1467,6 +1602,7 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
 
 
 
