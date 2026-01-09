@@ -26,13 +26,19 @@ async function login(event) {
         
         const data = await response.json();
         
-        if (response.ok) {
+if (response.ok) {
             adminToken = data.accessToken;
             userData = data.user;
             localStorage.setItem('adminToken', adminToken);
             localStorage.setItem('userData', JSON.stringify(userData));
             
+            // 🔥 FIX: הוספת לוג התחברות
+            console.log('✅ התחברות הצליחה!');
+            console.log('🔑 טוקן נשמר:', adminToken ? 'כן' : 'לא');
+            console.log('👤 משתמש:', userData.username, '| תפקיד:', userData.role);
+            
             showDashboard();
+            
         } else {
             showLoginError(data.error || 'שגיאה בהתחברות');
         }
@@ -60,9 +66,15 @@ function checkAuth() {
     adminToken = localStorage.getItem('adminToken');
     const savedData = localStorage.getItem('userData');
     
+    // 🔥 FIX: הוספת לוגים
+    console.log('🔍 בודק אימות...');
+    console.log('🔑 טוקן בזיכרון:', adminToken ? 'קיים ✅' : 'חסר ❌');
+    
     if (adminToken && savedData) {
         userData = JSON.parse(savedData);
+        console.log('👤 משתמש נמצא:', userData.username);
         showDashboard();
+        
     } else {
         document.getElementById('loginModal').classList.remove('hidden');
         document.getElementById('mainContent').classList.add('hidden');
@@ -149,6 +161,12 @@ async function initDashboard() {
 
 async function loadStatistics() {
     try {
+        // 🔥 FIX: וידוא טוקן קיים
+        if (!adminToken) {
+            console.error('❌ loadStatistics: אין טוקן!');
+            return;
+        }
+
         const response = await fetch('/api/admin/dashboard-stats', {
             headers: { 'Authorization': `Bearer ${adminToken}` }
         });
@@ -569,22 +587,34 @@ function showCreateOrderModal() {
 async function handleCreateOrder(event) {
     event.preventDefault();
     
+    // 🔥 FIX: בדיקת טוקן
+    if (!adminToken) {
+        showNotification('❌ אין טוקן - התחבר מחדש', 'error');
+        logout();
+        return;
+    }
+
     const formData = new FormData(event.target);
     const data = {
         senderName: formData.get('senderName'),
         senderPhone: formData.get('senderPhone'),
         pickupAddress: formData.get('pickupAddress'),
-        pickupNotes: formData.get('pickupNotes'),
+        pickupNotes: formData.get('pickupNotes') || '',
         receiverName: formData.get('receiverName'),
         receiverPhone: formData.get('receiverPhone'),
         deliveryAddress: formData.get('deliveryAddress'),
-        deliveryNotes: formData.get('deliveryNotes'),
-        packageDescription: formData.get('packageDescription'),
+        deliveryNotes: formData.get('deliveryNotes') || '',
+        packageDescription: formData.get('packageDescription') || '',
         vehicleType: formData.get('vehicleType'),
-        notes: formData.get('notes')
+        notes: formData.get('notes') || '',
+        priority: 'normal' // 🔥 FIX: הוספת priority
     };
+
+    // 🔥 FIX: הוספת לוגים
+    console.log('📤 שולח הזמנה:', data);
+    console.log('🔑 טוקן:', adminToken ? 'קיים ✅' : 'חסר ❌');
     
-    try {
+   try {
         const response = await fetch('/api/orders', {
             method: 'POST',
             headers: {
@@ -594,8 +624,12 @@ async function handleCreateOrder(event) {
             body: JSON.stringify(data)
         });
         
+        // 🔥 FIX: הוספת לוג תגובה
+        console.log('📥 תגובה מהשרת:', response.status, response.statusText);
+        
         if (response.ok) {
             const result = await response.json();
+            console.log('✅ הזמנה נוצרה:', result);
             showNotification(`✅ הזמנה ${result.order.order_number} נוצרה בהצלחה!`);
             
             // Close modal
@@ -604,10 +638,12 @@ async function handleCreateOrder(event) {
             // Reload orders
             loadOrders();
             loadStatistics();
-        } else {
+} else {
             const error = await response.json();
+            console.error('❌ שגיאה מהשרת:', error);
             showNotification('❌ ' + (error.error || 'שגיאה ביצירת הזמנה'), 'error');
         }
+       
     } catch (error) {
         console.error('Create order error:', error);
         showNotification('❌ שגיאת תקשורת', 'error');
