@@ -705,13 +705,35 @@ class OrdersController {
   // ==========================================
   async calculatePricingEndpoint(req, res, next) {
     try {
-      const { pickupAddress, deliveryAddress, vehicleType } = req.body;
+      const { pickupLat, pickupLng, deliveryLat, deliveryLng, vehicleType } = req.body;
 
-      const distanceKm = await mapsService.calculateDistance(pickupAddress, deliveryAddress);
+      // Validate coordinates
+      if (!pickupLat || !pickupLng || !deliveryLat || !deliveryLng) {
+        return res.status(400).json({ error: 'חסרים נתוני מיקום' });
+      }
+
+      if (!vehicleType) {
+        return res.status(400).json({ error: 'חסר סוג רכב' });
+      }
+
+      // Calculate distance using Haversine formula
+      const R = 6371; // Earth radius in km
+      const dLat = (deliveryLat - pickupLat) * Math.PI / 180;
+      const dLon = (deliveryLng - pickupLng) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(pickupLat * Math.PI / 180) * Math.cos(deliveryLat * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const distanceKm = R * c;
+
+      // Calculate pricing
       const pricing = calculatePricing(distanceKm, vehicleType);
+
+      console.log('✅ Price calculated:', pricing);
 
       res.json(pricing);
     } catch (error) {
+      console.error('❌ Calculate pricing error:', error);
       next(error);
     }
   }
