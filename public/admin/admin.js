@@ -26,16 +26,11 @@ async function login(event) {
         
         const data = await response.json();
         
-if (response.ok) {
+        if (response.ok) {
             adminToken = data.accessToken;
             userData = data.user;
             localStorage.setItem('adminToken', adminToken);
             localStorage.setItem('userData', JSON.stringify(userData));
-            
-            // 🔥 FIX: הוספת לוג התחברות
-            console.log('✅ התחברות הצליחה!');
-            console.log('🔑 טוקן נשמר:', adminToken ? 'כן' : 'לא');
-            console.log('👤 משתמש:', userData.username, '| תפקיד:', userData.role);
             
             showDashboard();
             
@@ -66,18 +61,13 @@ function checkAuth() {
     adminToken = localStorage.getItem('adminToken');
     const savedData = localStorage.getItem('userData');
     
-    // 🔥 FIX: הוספת לוגים
-    console.log('🔍 בודק אימות...');
-    console.log('🔑 טוקן בזיכרון:', adminToken ? 'קיים ✅' : 'חסר ❌');
-    
     if (adminToken && savedData) {
         userData = JSON.parse(savedData);
-        console.log('👤 משתמש נמצא:', userData.username);
         showDashboard();
-        
     } else {
         document.getElementById('loginModal').classList.remove('hidden');
         document.getElementById('mainContent').classList.add('hidden');
+        return;
     }
 }
 
@@ -161,7 +151,6 @@ async function initDashboard() {
 
 async function loadStatistics() {
     try {
-        // 🔥 FIX: וידוא טוקן קיים
         if (!adminToken) {
             console.error('❌ loadStatistics: אין טוקן!');
             return;
@@ -609,29 +598,16 @@ async function handleCreateOrder(event) {
         priority: 'normal'
     };
 
-    // 🔥 בדיקות חדשות
-    console.log('=== בדיקת נתונים לפני שליחה ===');
-    console.log('שולח:', data.senderName, '|', data.senderPhone);
-    console.log('מקבל:', data.receiverName, '|', data.receiverPhone);
-    console.log('מ:', data.pickupAddress);
-    console.log('ל:', data.deliveryAddress);
-    console.log('רכב:', data.vehicleType);
-    console.log('טוקן קיים:', adminToken ? 'כן ✅' : 'לא ❌');
-    
     // בדיקת שדות ריקים
     if (!data.pickupAddress || data.pickupAddress.trim() === '') {
-        console.error('❌ כתובת איסוף ריקה!');
         showNotification('❌ חסרה כתובת איסוף', 'error');
         return;
     }
     
     if (!data.deliveryAddress || data.deliveryAddress.trim() === '') {
-        console.error('❌ כתובת מסירה ריקה!');
         showNotification('❌ חסרה כתובת מסירה', 'error');
         return;
     }
-
-    console.log('📤 שולח בקשה לשרת...');
     
     try {
         const response = await fetch('/api/orders', {
@@ -643,64 +619,19 @@ async function handleCreateOrder(event) {
             body: JSON.stringify(data)
         });
         
-        console.log('📥 תגובה:', response.status, response.statusText);
-        
-        // קריאת התשובה בכל מקרה
         const result = await response.json();
-        console.log('📄 תוכן תשובה:', result);
         
         if (response.ok) {
-            console.log('✅ הצלחה!');
             showNotification(`✅ הזמנה ${result.order.order_number} נוצרה!`);
-            
             event.target.closest('.fixed').remove();
             loadOrders();
             loadStatistics();
         } else {
-            console.error('❌ שגיאה:', result);
             showNotification('❌ ' + (result.error || 'שגיאה ביצירת הזמנה'), 'error');
         }
     } catch (error) {
-        console.error('💥 Exception:', error);
-        showNotification('❌ שגיאת תקשורת: ' + error.message, 'error');
-    }
-}
-
-console.log('📦 Body JSON:', JSON.stringify(data, null, 2));
-    
-   try {
-        const response = await fetch('/api/orders', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        // 🔥 FIX: הוספת לוג תגובה
-        console.log('📥 תגובה מהשרת:', response.status, response.statusText);
-        
-        if (response.ok) {
-            const result = await response.json();
-            console.log('✅ הזמנה נוצרה:', result);
-            showNotification(`✅ הזמנה ${result.order.order_number} נוצרה בהצלחה!`);
-            
-            // Close modal
-            event.target.closest('.fixed').remove();
-            
-            // Reload orders
-            loadOrders();
-            loadStatistics();
-} else {
-            const error = await response.json();
-            console.error('❌ שגיאה מהשרת:', error);
-            showNotification('❌ ' + (error.error || 'שגיאה ביצירת הזמנה'), 'error');
-        }
-       
-    } catch (error) {
         console.error('Create order error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
+        showNotification('❌ שגיאת תקשורת: ' + error.message, 'error');
     }
 }
 
@@ -1022,10 +953,29 @@ function showSettings() {
                     <h3 class="font-bold text-lg mb-3">📦 ניהול הזמנות</h3>
                     <div class="space-y-3">
                         <button onclick="deleteOldOrders()" class="w-full bg-orange-500 hover:bg-orange-600 px-4 py-3 rounded-lg text-left">
-                            🗑️ מחק הזמנות ישנות (מעל 6 חודשים)
+                            🗑️ מחק הזמנות ישנות
                         </button>
                         <button onclick="archiveDeliveredOrders()" class="w-full bg-orange-500 hover:bg-orange-600 px-4 py-3 rounded-lg text-left">
                             📁 העבר הזמנות שהושלמו לארכיון
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Payments & Couriers Management -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <h3 class="font-bold text-lg mb-3">💰 ניהול תשלומים ושליחים</h3>
+                    <div class="space-y-3">
+                        <button onclick="resetCourierPayments()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
+                            💳 איפוס תשלומים ממתינים
+                        </button>
+                        <button onclick="resetCourierEarnings()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
+                            💵 איפוס רווחי שליחים
+                        </button>
+                        <button onclick="resetCourierRatings()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-left">
+                            ⭐ איפוס דירוגי שליחים
+                        </button>
+                        <button onclick="payoutPendingPayments()" class="w-full bg-emerald-500 hover:bg-emerald-600 px-4 py-3 rounded-lg text-left">
+                            💸 ביצוע תשלומים לשליחים
                         </button>
                     </div>
                 </div>
@@ -1067,6 +1017,9 @@ function showSettings() {
                 <div class="bg-red-500/10 border border-red-500 rounded-lg p-4">
                     <h3 class="font-bold text-lg mb-3 text-red-400">⚠️ אזור מסוכן</h3>
                     <div class="space-y-3">
+                        <button onclick="resetAllCouriers()" class="w-full bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-bold">
+                            🗑️ מחק את כל השליחים
+                        </button>
                         <button onclick="dangerResetAll()" class="w-full bg-red-600 hover:bg-red-700 px-4 py-3 rounded-lg font-bold">
                             💀 איפוס מלא של המערכת
                         </button>
@@ -1094,6 +1047,16 @@ async function resetStatistics(period) {
     
     if (!confirm(messages[period])) return;
     
+    // Map frontend values to backend values
+    const periodMap = {
+        'today': 'daily',
+        'week': 'weekly',
+        'month': 'monthly',
+        'all': 'all'
+    };
+    
+    const backendPeriod = periodMap[period] || period;
+    
     try {
         const response = await fetch(`/api/admin/reset-statistics`, {
             method: 'POST',
@@ -1101,14 +1064,15 @@ async function resetStatistics(period) {
                 'Authorization': `Bearer ${adminToken}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ period })
+            body: JSON.stringify({ period: backendPeriod })
         });
         
+        const data = await response.json();
+        
         if (response.ok) {
-            showNotification(`✅ סטטיסטיקות ${period === 'all' ? 'כל' : ''} אופסו בהצלחה!`);
+            showNotification(`✅ ${data.message || 'סטטיסטיקות אופסו בהצלחה!'}`);
             loadStatistics();
         } else {
-            const data = await response.json();
             showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
         }
     } catch (error) {
@@ -1118,20 +1082,28 @@ async function resetStatistics(period) {
 }
 
 async function deleteOldOrders() {
-    if (!confirm('האם למחוק הזמנות ישנות מעל 6 חודשים?')) return;
+    const months = prompt('כמה חודשים לאחור למחוק? (ברירת מחדל: 6)', '6');
+    if (!months) return;
+    
+    if (!confirm(`האם למחוק הזמנות ישנות מעל ${months} חודשים?`)) return;
     
     try {
         const response = await fetch('/api/admin/delete-old-orders', {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${adminToken}` }
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ months: parseInt(months) })
         });
         
+        const data = await response.json();
+        
         if (response.ok) {
-            const data = await response.json();
-            showNotification(`✅ נמחקו ${data.deleted} הזמנות ישנות`);
+            showNotification(`✅ ${data.message || `נמחקו ${data.deleted} הזמנות ישנות`}`);
             loadOrders();
         } else {
-            showNotification('❌ שגיאה במחיקה', 'error');
+            showNotification('❌ ' + (data.error || 'שגיאה במחיקה'), 'error');
         }
     } catch (error) {
         console.error('Delete old orders error:', error);
@@ -1140,22 +1112,30 @@ async function deleteOldOrders() {
 }
 
 async function archiveDeliveredOrders() {
-    if (!confirm('האם להעביר הזמנות שהושלמו לארכיון?')) return;
+    const days = prompt('כמה ימים לאחור לארכב? (ברירת מחדל: 30)', '30');
+    if (!days) return;
+    
+    if (!confirm(`האם להעביר הזמנות שהושלמו לפני ${days} ימים לארכיון?`)) return;
     
     showNotification('⏳ מעביר לארכיון...');
     
     try {
         const response = await fetch('/api/admin/archive-delivered', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${adminToken}` }
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ days: parseInt(days) })
         });
         
+        const data = await response.json();
+        
         if (response.ok) {
-            const data = await response.json();
-            showNotification(`✅ ${data.archived} הזמנות הועברו לארכיון`);
+            showNotification(`✅ ${data.message || `${data.archived} הזמנות הועברו לארכיון`}`);
             loadOrders();
         } else {
-            showNotification('❌ שגיאה בארכוב', 'error');
+            showNotification('❌ ' + (data.error || 'שגיאה בארכוב'), 'error');
         }
     } catch (error) {
         console.error('Archive error:', error);
@@ -1171,15 +1151,7 @@ async function saveSystemSettings() {
     showNotification('ℹ️ הגדרות אלו דורשות שינוי ב-Environment Variables ב-Render', 'error');
 }
 
-function showAddAgent() {
-    showNotification('👥 הוספת נציג - בקרוב!');
-}
-
-function manageAgents() {
-    showNotification('📋 ניהול נציגים - בקרוב!');
-}
-
-async function dangerResetAll() {
+function dangerResetAll() {
     if (!confirm('⚠️ האם אתה בטוח שברצונך למחוק את כל הנתונים?')) return;
     if (!confirm('⚠️⚠️ פעולה זו תמחק הכל ללא אפשרות שחזור! האם להמשיך?')) return;
     
@@ -1288,7 +1260,6 @@ async function handleAddAgent(event) {
         if (response.ok) {
             showNotification(`✅ נציג ${name} (${username}) נוסף בהצלחה!`);
             closeAddAgent();
-            // Refresh users list if open
             if (document.getElementById('manageAgentsModal')) {
                 manageAgents();
             }
@@ -1449,7 +1420,7 @@ async function deleteUserConfirm(userId, username) {
         
         if (response.ok) {
             showNotification(`✅ ${username} נמחק בהצלחה`);
-            manageAgents(); // Refresh list
+            manageAgents();
         } else {
             showNotification(`❌ ${data.error || 'שגיאה במחיקת נציג'}`, 'error');
         }
@@ -1458,111 +1429,7 @@ async function deleteUserConfirm(userId, username) {
         showNotification('❌ שגיאת תקשורת', 'error');
     }
 }
-async function resetStatistics(period) {
-    const messages = {
-        'today': 'האם לאפס את הסטטיסטיקות של היום?',
-        'week': 'האם לאפס את הסטטיסטיקות של השבוע?',
-        'month': 'האם לאפס את הסטטיסטיקות של החודש?',
-        'all': 'האם לאפס את כל הסטטיסטיקות? (פעולה בלתי הפיכה!)'
-    };
-    
-    if (!confirm(messages[period])) return;
-    
-    // Map frontend values to backend values
-    const periodMap = {
-        'today': 'daily',
-        'week': 'weekly',
-        'month': 'monthly',
-        'all': 'all'
-    };
-    
-    const backendPeriod = periodMap[period] || period;
-    
-    try {
-        const response = await fetch(`/api/admin/reset-statistics`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ period: backendPeriod })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'סטטיסטיקות אופסו בהצלחה!'}`);
-            loadStatistics();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
-        }
-    } catch (error) {
-        console.error('Reset statistics error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
 
-async function deleteOldOrders() {
-    const months = prompt('כמה חודשים לאחור למחוק? (ברירת מחדל: 6)', '6');
-    if (!months) return;
-    
-    if (!confirm(`האם למחוק הזמנות ישנות מעל ${months} חודשים?`)) return;
-    
-    try {
-        const response = await fetch('/api/admin/delete-old-orders', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ months: parseInt(months) })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || `נמחקו ${data.deleted} הזמנות ישנות`}`);
-            loadOrders();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה במחיקה'), 'error');
-        }
-    } catch (error) {
-        console.error('Delete old orders error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
-async function archiveDeliveredOrders() {
-    const days = prompt('כמה ימים לאחור לארכב? (ברירת מחדל: 30)', '30');
-    if (!days) return;
-    
-    if (!confirm(`האם להעביר הזמנות שהושלמו לפני ${days} ימים לארכיון?`)) return;
-    
-    showNotification('⏳ מעביר לארכיון...');
-    
-    try {
-        const response = await fetch('/api/admin/archive-delivered', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ days: parseInt(days) })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || `${data.archived} הזמנות הועברו לארכיון`}`);
-            loadOrders();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה בארכוב'), 'error');
-        }
-    } catch (error) {
-        console.error('Archive error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
 // ==========================================
 // PAYMENTS & COURIERS RESET FUNCTIONS
 // ==========================================
