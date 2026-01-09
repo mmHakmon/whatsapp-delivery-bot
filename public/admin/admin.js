@@ -12,9 +12,12 @@ let autocompletePickup = null;
 let autocompleteDelivery = null;
 let selectedPickupLocation = null;
 let selectedDeliveryLocation = null;
-let googleMapsLoaded = false; // ✅ הוסף את זה
+let googleMapsLoaded = false;
 
-// ✅ הוסף את כל הפונקציה הזו:
+// ==========================================
+// GOOGLE MAPS API LOADER
+// ==========================================
+
 async function loadGoogleMapsAPI() {
     if (googleMapsLoaded) {
         console.log('✅ Google Maps already loaded');
@@ -43,63 +46,6 @@ async function loadGoogleMapsAPI() {
                 console.log('✅ Google Maps API loaded successfully');
                 resolve();
             };
-            
-            script.onerror = () => {
-                console.error('❌ Failed to load Google Maps API');
-                reject(new Error('Failed to load Google Maps API'));
-            };
-            
-            document.head.appendChild(script);
-        });
-    } catch (error) {
-        console.error('❌ Error loading Google Maps API:', error);
-        throw error;
-    }
-}
-
-// ==========================================
-// GOOGLE MAPS API KEY LOADER
-// ==========================================
-
-let googleMapsLoaded = false;
-
-async function loadGoogleMapsAPI() {
-    if (googleMapsLoaded) {
-        console.log('✅ Google Maps already loaded');
-        return Promise.resolve();
-    }
-    
-    try {
-        // Fetch API key from server
-        const response = await fetch('/api/config/google-maps-key');
-        const data = await response.json();
-        
-        if (!data.apiKey) {
-            throw new Error('Google Maps API key not found');
-        }
-        
-        console.log('🗺️ Loading Google Maps API...');
-        
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&libraries=places&language=he`;
-            script.async = true;
-            script.defer = true;
-            
-            script.onload = () => {
-                googleMapsLoaded = true;
-                console.log('✅ Google Maps API loaded successfully');
-                resolve();
-            };
-
-// ==========================================
-// CONFIG ENDPOINT FOR GOOGLE MAPS
-// ==========================================
-app.get('/api/config/google-maps-key', (req, res) => {
-  res.json({ 
-    apiKey: process.env.GOOGLE_MAPS_API_KEY || ''
-  });
-});
             
             script.onerror = () => {
                 console.error('❌ Failed to load Google Maps API');
@@ -427,15 +373,30 @@ function getStatusBadge(status) {
 async function publishOrder(orderId) {
     if (!confirm('האם לפרסם את ההזמנה לשליחים ב-WhatsApp?')) return;
     
+    if (!adminToken) {
+        showNotification('❌ אין טוקן - התחבר מחדש', 'error');
+        logout();
+        return;
+    }
+    
+    console.log('📤 Publishing order:', orderId);
+    
     try {
         const response = await fetch(`/api/orders/${orderId}/publish`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
+        console.log('📥 Response status:', response.status);
+        
+        if (response.status === 401) {
+            showNotification('❌ פג תוקף הטוקן - מתנתק...', 'error');
+            setTimeout(() => logout(), 2000);
+            return;
+        }
+        
         if (response.ok) {
             showNotification('✅ ההזמנה פורסמה בהצלחה!');
-            // ✅ טען מחדש את ההזמנות עם הפילטר הנוכחי
             setTimeout(() => {
                 loadOrders(currentFilter === 'all' ? null : currentFilter);
                 loadStatistics();
@@ -452,7 +413,15 @@ async function publishOrder(orderId) {
 
 async function cancelOrder(orderId) {
     const reason = prompt('סיבת ביטול (אופציונלי):');
-    if (reason === null) return; // User clicked cancel
+    if (reason === null) return;
+    
+    if (!adminToken) {
+        showNotification('❌ אין טוקן - התחבר מחדש', 'error');
+        logout();
+        return;
+    }
+    
+    console.log('📤 Cancelling order:', orderId);
     
     try {
         const response = await fetch(`/api/orders/${orderId}/cancel`, {
@@ -465,6 +434,14 @@ async function cancelOrder(orderId) {
                 cancelReason: reason || 'ביטול ללא סיבה'
             })
         });
+        
+        console.log('📥 Response status:', response.status);
+        
+        if (response.status === 401) {
+            showNotification('❌ פג תוקף הטוקן - מתנתק...', 'error');
+            setTimeout(() => logout(), 2000);
+            return;
+        }
         
         if (response.ok) {
             showNotification('✅ ההזמנה בוטלה');
@@ -740,7 +717,7 @@ function showCreateOrderModal() {
     
     document.body.appendChild(modal);
     
-    // ✅ Wait for Google Maps to load before initializing autocomplete
+    // Wait for Google Maps to load before initializing autocomplete
     if (googleMapsLoaded) {
         setTimeout(() => {
             initGooglePlacesAutocomplete();
@@ -1626,9 +1603,3 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
-
-
-
-
-
-
