@@ -206,13 +206,18 @@ async function loadOrders(status = null) {
             url += `&status=${status}`;
         }
         
+        console.log('📥 Loading orders with URL:', url);
+        
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
         if (response.ok) {
             const data = await response.json();
+            console.log('✅ Orders loaded:', data.orders?.length || 0);
             displayOrders(data.orders);
+        } else {
+            console.error('❌ Failed to load orders:', response.status);
         }
     } catch (error) {
         console.error('Load orders error:', error);
@@ -728,7 +733,7 @@ function displayPrice(data) {
     const vatDisplay = document.getElementById('vatDisplay');
     const totalPriceDisplay = document.getElementById('totalPriceDisplay');
     
-    if (priceDisplay) {
+    if (priceDisplay && distanceDisplay && basePriceDisplay && vatDisplay && totalPriceDisplay) {
         priceDisplay.classList.remove('hidden');
         distanceDisplay.textContent = `${data.distanceKm} ק"מ`;
         basePriceDisplay.textContent = `₪${data.basePrice}`;
@@ -736,6 +741,8 @@ function displayPrice(data) {
         totalPriceDisplay.textContent = `₪${data.totalPrice}`;
         
         console.log('✅ Price displayed:', data);
+    } else {
+        console.error('❌ Price display elements not found');
     }
 }
 
@@ -823,6 +830,7 @@ async function handleCreateOrder(event) {
 function filterOrders(status) {
     currentFilter = status;
     
+    // Update buttons
     document.querySelectorAll('.filter-btn, .filter-btn-active').forEach(btn => {
         btn.className = 'filter-btn px-4 py-2 rounded-lg';
     });
@@ -833,6 +841,7 @@ function filterOrders(status) {
         activeBtn.className = 'filter-btn-active px-4 py-2 rounded-lg';
     }
     
+    // ✅ FIX: Pass null for 'all' to get all orders
     loadOrders(status === 'all' ? null : status);
 }
 
@@ -1458,5 +1467,6 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
 
 
