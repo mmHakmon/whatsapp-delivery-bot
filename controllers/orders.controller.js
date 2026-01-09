@@ -429,27 +429,42 @@ class OrdersController {
         return res.status(400).json({ error: 'ההזמנה לא זמינה' });
       }
 
+      // Update order status
       await client.query(
         'UPDATE orders SET status = $1, courier_id = $2, taken_at = NOW() WHERE id = $3',
         [ORDER_STATUS.TAKEN, courierId, id]
       );
 
+      // ✅ UPDATE BALANCE IMMEDIATELY when taking order!
       await client.query(
-        'UPDATE couriers SET balance = balance + $1, total_deliveries = total_deliveries + 1 WHERE id = $2',
+        'UPDATE couriers SET balance = balance + $1 WHERE id = $2',
         [order.courier_payout, courierId]
       );
 
       await client.query('COMMIT');
 
+      // Get updated courier info
       const courierResult = await pool.query('SELECT * FROM couriers WHERE id = $1', [courierId]);
       const courier = courierResult.rows[0];
 
+      // ✅ Send WhatsApp to CUSTOMER that courier was assigned
+      await whatsappService.notifyCourierAssigned(order.sender_phone, order, courier);
+      
+      // Send WhatsApp to courier with pickup details
       await whatsappService.sendOrderToCourier(courier.phone, order, 'pickup');
+      
+      // Announce to group
       await whatsappService.announceOrderTaken(order, courier);
 
+      // Notify via WebSocket
       websocketService.broadcast({ type: 'order_taken', order });
 
-      res.json({ message: 'ההזמנה נתפסה בהצלחה', order });
+      res.json({ 
+        message: 'ההזמנה נתפסה בהצלחה',
+        earned: order.courier_payout,
+        balance: courier.balance,
+        order 
+      });
     } catch (error) {
       await client.query('ROLLBACK');
       next(error);
@@ -557,38 +572,66 @@ class OrdersController {
   // DELIVER ORDER
   // ==========================================
   async deliverOrder(req, res, next) {
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
+
       const { id } = req.params;
       const courierId = req.courier.id;
 
-      const orderResult = await pool.query('SELECT * FROM orders WHERE id = $1', [id]);
+      const orderResult = await client.query('SELECT * FROM orders WHERE id = $1', [id]);
 
       if (orderResult.rows.length === 0) {
+        await client.query('ROLLBACK');
         return res.status(404).json({ error: 'הזמנה לא נמצאה' });
       }
 
       const order = orderResult.rows[0];
 
       if (order.courier_id !== courierId) {
+        await client.query('ROLLBACK');
         return res.status(403).json({ error: 'אין לך הרשאה' });
       }
 
       if (order.status !== ORDER_STATUS.PICKED) {
+        await client.query('ROLLBACK');
         return res.status(400).json({ error: 'לא ניתן למסור הזמנה זו' });
       }
 
-      await pool.query(
+      // Update order to delivered
+      await client.query(
         'UPDATE orders SET status = $1, delivered_at = NOW() WHERE id = $2',
         [ORDER_STATUS.DELIVERED, id]
       );
 
+      // ✅ Update courier stats (total_deliveries & total_earned)
+      await client.query(`
+        UPDATE couriers 
+        SET total_deliveries = total_deliveries + 1,
+            total_earned = total_earned + $1
+        WHERE id = $2
+      `, [order.courier_payout, courierId]);
+
+      await client.query('COMMIT');
+
+      // Get updated courier balance
+      const courierResult = await pool.query('SELECT balance FROM couriers WHERE id = $1', [courierId]);
+      
+      // Send notifications
       await whatsappService.notifyDelivered(order.sender_phone, order);
 
       websocketService.broadcast({ type: 'order_delivered', order });
 
-      res.json({ message: 'המשלוח הושלם בהצלחה!' });
+      res.json({ 
+        message: '✅ המשלוח הושלם! הכסף כבר נוסף ליתרה שלך',
+        balance: courierResult.rows[0].balance,
+        earned: order.courier_payout
+      });
     } catch (error) {
+      await client.query('ROLLBACK');
       next(error);
+    } finally {
+      client.release();
     }
   }
 
