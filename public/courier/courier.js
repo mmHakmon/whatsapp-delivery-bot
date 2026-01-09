@@ -859,6 +859,13 @@ async function loadOrderHistory() {
     }
 }
 
+// ==========================================
+// COURIER.JS - HISTORY POPUP FIX
+// Add these functions to courier.js
+// ==========================================
+
+// ✅ REPLACE the displayOrderHistory function (around line 862):
+
 function displayOrderHistory(orders) {
     const container = document.getElementById('historyOrdersList');
     
@@ -873,15 +880,112 @@ function displayOrderHistory(orders) {
     }
     
     container.innerHTML = orders.map(order => `
-        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
+        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors"
+             onclick='showOrderHistoryDetails(${JSON.stringify(order).replace(/'/g, "&#39;")})'>
             <div class="flex justify-between items-center mb-2">
                 <p class="font-bold">${order.order_number}</p>
                 <p class="text-emerald-400 font-bold">+₪${order.courier_payout}</p>
             </div>
             <p class="text-xs text-slate-400">${new Date(order.delivered_at).toLocaleDateString('he-IL')}</p>
             <p class="text-xs text-slate-400">${order.distance_km} ק"מ</p>
+            <p class="text-xs text-blue-400 mt-2">👆 לחץ לפרטים מלאים</p>
         </div>
     `).join('');
+}
+
+// ✅ ADD this NEW function after displayOrderHistory:
+
+function showOrderHistoryDetails(order) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+    modal.onclick = (e) => {
+        if (e.target === modal) modal.remove();
+    };
+    
+    const commission = order.price - order.courier_payout;
+    const commissionPercent = ((commission / order.price) * 100).toFixed(0);
+    
+    modal.innerHTML = `
+        <div class="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full border border-slate-700">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold mb-2">${order.order_number}</h2>
+                    <span class="px-3 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">
+                        ✅ נמסר
+                    </span>
+                </div>
+                <button onclick="this.closest('.fixed').remove()" class="text-4xl hover:text-red-500">&times;</button>
+            </div>
+            
+            <div class="space-y-4">
+                <!-- Pickup Address -->
+                <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                    <p class="font-bold text-blue-400 mb-2">📤 כתובת איסוף</p>
+                    <p class="text-slate-200">${order.pickup_address}</p>
+                </div>
+                
+                <!-- Delivery Address -->
+                <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
+                    <p class="font-bold text-emerald-400 mb-2">📥 כתובת מסירה</p>
+                    <p class="text-slate-200">${order.delivery_address}</p>
+                </div>
+                
+                <!-- Distance -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <p class="font-bold mb-2">📏 מרחק</p>
+                    <p class="text-2xl font-bold text-blue-400">${order.distance_km} ק"מ</p>
+                </div>
+                
+                <!-- Money Breakdown -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <p class="font-bold mb-3">💰 פירוט כספי</p>
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">מחיר מלא:</span>
+                            <span class="font-bold">₪${order.price}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">עמלת חברה (${commissionPercent}%):</span>
+                            <span class="font-bold text-red-400">-₪${commission.toFixed(2)}</span>
+                        </div>
+                        <div class="h-px bg-slate-600 my-2"></div>
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-lg">הרווחת:</span>
+                            <span class="font-bold text-2xl text-emerald-400">₪${order.courier_payout}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Dates -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <p class="font-bold mb-2">📅 תאריכים</p>
+                    <div class="space-y-1 text-sm">
+                        <p class="text-slate-400">נתפס: ${new Date(order.taken_at).toLocaleString('he-IL')}</p>
+                        ${order.picked_at ? `<p class="text-slate-400">נאסף: ${new Date(order.picked_at).toLocaleString('he-IL')}</p>` : ''}
+                        <p class="text-slate-400">נמסר: ${new Date(order.delivered_at).toLocaleString('he-IL')}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-6">
+                <button onclick="this.closest('.fixed').remove()" 
+                        class="w-full bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+                    סגור
+                </button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+// ✅ REPLACE the logout function (search for "function logout"):
+
+function logout() {
+    if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
+        localStorage.clear();
+        window.location.href = '/';  // ✅ Redirect to home page!
+    }
 }
 
 // ==========================================
@@ -1039,4 +1143,5 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
 
