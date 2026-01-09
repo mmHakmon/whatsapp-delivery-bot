@@ -323,7 +323,7 @@ async function loadOrders(status = null) {
             url += `&status=${status}`;
         }
         
-        console.log('📥 Loading orders with URL:', url);
+        console.log('📥 Loading orders:', { url, status, currentFilter });
         
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${adminToken}` }
@@ -331,13 +331,15 @@ async function loadOrders(status = null) {
         
         if (response.ok) {
             const data = await response.json();
-            console.log('✅ Orders loaded:', data.orders?.length || 0);
-            displayOrders(data.orders);
+            console.log(`✅ Loaded ${data.orders?.length || 0} orders`);
+            displayOrders(data.orders || []);
         } else {
             console.error('❌ Failed to load orders:', response.status);
+            const error = await response.json();
+            console.error('Error details:', error);
         }
     } catch (error) {
-        console.error('Load orders error:', error);
+        console.error('❌ Load orders error:', error);
     }
 }
 
@@ -433,7 +435,11 @@ async function publishOrder(orderId) {
         
         if (response.ok) {
             showNotification('✅ ההזמנה פורסמה בהצלחה!');
-            loadOrders();
+            // ✅ טען מחדש את ההזמנות עם הפילטר הנוכחי
+            setTimeout(() => {
+                loadOrders(currentFilter === 'all' ? null : currentFilter);
+                loadStatistics();
+            }, 500);
         } else {
             const data = await response.json();
             showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
@@ -446,7 +452,7 @@ async function publishOrder(orderId) {
 
 async function cancelOrder(orderId) {
     const reason = prompt('סיבת ביטול (אופציונלי):');
-    if (reason === null) return;
+    if (reason === null) return; // User clicked cancel
     
     try {
         const response = await fetch(`/api/orders/${orderId}/cancel`, {
@@ -455,18 +461,24 @@ async function cancelOrder(orderId) {
                 'Authorization': `Bearer ${adminToken}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ reason })
+            body: JSON.stringify({ 
+                cancelReason: reason || 'ביטול ללא סיבה'
+            })
         });
         
         if (response.ok) {
             showNotification('✅ ההזמנה בוטלה');
-            loadOrders();
+            setTimeout(() => {
+                loadOrders(currentFilter === 'all' ? null : currentFilter);
+                loadStatistics();
+            }, 500);
         } else {
             const data = await response.json();
             showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
         }
     } catch (error) {
         console.error('Cancel error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
     }
 }
 
@@ -972,18 +984,21 @@ async function handleCreateOrder(event) {
 function filterOrders(status) {
     currentFilter = status;
     
-    // Update buttons
+    console.log('🔍 Filtering orders by:', status);
+    
+    // Update all filter buttons
     document.querySelectorAll('.filter-btn, .filter-btn-active').forEach(btn => {
         btn.className = 'filter-btn px-4 py-2 rounded-lg';
     });
     
+    // Highlight active button
     const btnId = 'filter' + status.charAt(0).toUpperCase() + status.slice(1);
     const activeBtn = document.getElementById(btnId);
     if (activeBtn) {
         activeBtn.className = 'filter-btn-active px-4 py-2 rounded-lg';
     }
     
-    // ✅ FIX: Pass null for 'all' to get all orders
+    // Load orders with filter
     loadOrders(status === 'all' ? null : status);
 }
 
@@ -1611,6 +1626,7 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
 
 
 
