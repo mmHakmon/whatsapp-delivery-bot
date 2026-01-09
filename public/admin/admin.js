@@ -587,7 +587,6 @@ function showCreateOrderModal() {
 async function handleCreateOrder(event) {
     event.preventDefault();
     
-    // 🔥 FIX: בדיקת טוקן
     if (!adminToken) {
         showNotification('❌ אין טוקן - התחבר מחדש', 'error');
         logout();
@@ -607,12 +606,67 @@ async function handleCreateOrder(event) {
         packageDescription: formData.get('packageDescription') || '',
         vehicleType: formData.get('vehicleType'),
         notes: formData.get('notes') || '',
-        priority: 'normal' // 🔥 FIX: הוספת priority
+        priority: 'normal'
     };
 
-    // 🔥 FIX: הוספת לוגים
-    console.log('📤 שולח הזמנה:', data);
-    console.log('🔑 טוקן:', adminToken ? 'קיים ✅' : 'חסר ❌');
+    // 🔥 בדיקות חדשות
+    console.log('=== בדיקת נתונים לפני שליחה ===');
+    console.log('שולח:', data.senderName, '|', data.senderPhone);
+    console.log('מקבל:', data.receiverName, '|', data.receiverPhone);
+    console.log('מ:', data.pickupAddress);
+    console.log('ל:', data.deliveryAddress);
+    console.log('רכב:', data.vehicleType);
+    console.log('טוקן קיים:', adminToken ? 'כן ✅' : 'לא ❌');
+    
+    // בדיקת שדות ריקים
+    if (!data.pickupAddress || data.pickupAddress.trim() === '') {
+        console.error('❌ כתובת איסוף ריקה!');
+        showNotification('❌ חסרה כתובת איסוף', 'error');
+        return;
+    }
+    
+    if (!data.deliveryAddress || data.deliveryAddress.trim() === '') {
+        console.error('❌ כתובת מסירה ריקה!');
+        showNotification('❌ חסרה כתובת מסירה', 'error');
+        return;
+    }
+
+    console.log('📤 שולח בקשה לשרת...');
+    
+    try {
+        const response = await fetch('/api/orders', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        console.log('📥 תגובה:', response.status, response.statusText);
+        
+        // קריאת התשובה בכל מקרה
+        const result = await response.json();
+        console.log('📄 תוכן תשובה:', result);
+        
+        if (response.ok) {
+            console.log('✅ הצלחה!');
+            showNotification(`✅ הזמנה ${result.order.order_number} נוצרה!`);
+            
+            event.target.closest('.fixed').remove();
+            loadOrders();
+            loadStatistics();
+        } else {
+            console.error('❌ שגיאה:', result);
+            showNotification('❌ ' + (result.error || 'שגיאה ביצירת הזמנה'), 'error');
+        }
+    } catch (error) {
+        console.error('💥 Exception:', error);
+        showNotification('❌ שגיאת תקשורת: ' + error.message, 'error');
+    }
+}
+
+console.log('📦 Body JSON:', JSON.stringify(data, null, 2));
     
    try {
         const response = await fetch('/api/orders', {
