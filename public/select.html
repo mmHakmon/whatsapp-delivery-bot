@@ -61,7 +61,9 @@
         <!-- Logo & Title -->
         <div class="text-center mb-12">
             <div class="logo-container inline-block mb-6">
-                <img src="/assets/logo.png" alt="M.M.H Logo" class="w-32 h-32 mx-auto" onerror="this.style.display='none'">
+                <img src="/assets/logo.png" alt="M.M.H Logo" class="h-32 w-auto mx-auto" 
+                     style="max-width: 400px; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.3));"
+                     onerror="this.outerHTML='<div class=\'text-9xl\'>🚚</div>'">
             </div>
             <h1 class="text-5xl md:text-6xl font-black text-white mb-4">M.M.H Delivery</h1>
             <p class="text-xl md:text-2xl text-white/90">בחר את סוג המשתמש שלך</p>
