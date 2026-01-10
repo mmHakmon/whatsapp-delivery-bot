@@ -114,7 +114,7 @@ function logout() {
     if (confirm('האם להתנתק?')) {
         localStorage.removeItem('customerToken');
         localStorage.removeItem('customerData');
-        location.reload();
+        window.location.href = "/clear-session.html";
     }
 }
 
