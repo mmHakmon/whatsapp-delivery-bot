@@ -1217,6 +1217,22 @@ function showSettings() {
                         </button>
                     </div>
                 </div>
+                
+                <!-- Courier Management -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <h3 class="font-bold text-lg mb-3">🏍️ ניהול שליחים</h3>
+                    <div class="space-y-3">
+                        <button onclick="resetCourierEarnings()" class="w-full bg-amber-500 hover:bg-amber-600 px-4 py-3 rounded-lg text-right">
+                            💰 איפוס רווחים של שליחים
+                        </button>
+                        <button onclick="resetCourierRatings()" class="w-full bg-amber-500 hover:bg-amber-600 px-4 py-3 rounded-lg text-right">
+                            ⭐ איפוס דירוגים וסטטיסטיקות
+                        </button>
+                        <button onclick="resetAllCouriers()" class="w-full bg-red-500 hover:bg-red-600 px-4 py-3 rounded-lg text-right font-bold">
+                            ⚠️ מחק את כל השליחים
+                        </button>
+                    </div>
+                </div>
             </div>
             
             <button onclick="this.closest('.fixed').remove()" class="w-full mt-6 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
@@ -1575,3 +1591,103 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
+
+
+
+
+
+
+// ==========================================
+// COURIER MANAGEMENT
+// ==========================================
+
+async function resetCourierEarnings() {
+    if (!confirm('האם לאפס את כל הרווחים של השליחים? (total_earnings + pending_payout = 0)')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/reset-courier-earnings', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'רווחי שליחים אופסו בהצלחה!'}`);
+            loadCouriers(); // Refresh courier list if visible
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset courier earnings error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function resetCourierRatings() {
+    if (!confirm('האם לאפס את כל הדירוגים והסטטיסטיקות של השליחים? (rating, total_deliveries, successful_deliveries = 0)')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/reset-courier-ratings', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'דירוגי שליחים אופסו בהצלחה!'}`);
+            loadCouriers(); // Refresh courier list if visible
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset courier ratings error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function resetAllCouriers() {
+    if (!confirm('⚠️ אזהרה! פעולה זו תמחק את כל השליחים ממערכת!\n\nהאם אתה בטוח?')) {
+        return;
+    }
+    
+    // Second confirmation for destructive action
+    if (!confirm('אישור נוסף: פעולה זו בלתי הפיכה! האם להמשיך?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/admin/reset-all-couriers', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'כל השליחים נמחקו בהצלחה!'}`);
+            loadCouriers(); // Refresh courier list if visible
+            loadStatistics(); // Update dashboard stats
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset all couriers error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
