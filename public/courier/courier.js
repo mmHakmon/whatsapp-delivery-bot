@@ -52,13 +52,20 @@ function showLoginError(message) {
 }
 
 function checkAuth() {
+    console.log('🔐 Courier checkAuth running...');
+    
     courierToken = localStorage.getItem('courierToken');
     const savedData = localStorage.getItem('courierData');
     
+    console.log('🔐 courierToken:', courierToken ? 'EXISTS' : 'MISSING');
+    console.log('🔐 courierData:', savedData ? 'EXISTS' : 'MISSING');
+    
     if (courierToken && savedData) {
         courierData = JSON.parse(savedData);
+        console.log('✅ Auth OK - showing main app');
         showMainApp();
     } else {
+        console.log('❌ Auth FAILED - showing login');
         document.getElementById('loginScreen').classList.remove('hidden');
         document.getElementById('mainApp').classList.add('hidden');
     }
@@ -77,7 +84,7 @@ function logoutCourier() {
             clearInterval(locationInterval);
         }
         
-        window.location.href = "/clear-session.html";
+        window.location.reload();
     }
 }
 
@@ -873,15 +880,111 @@ function displayOrderHistory(orders) {
     }
     
     container.innerHTML = orders.map(order => `
-        <div class="bg-slate-800 rounded-lg p-4 border border-slate-700">
+        <div onclick="viewOrderDetails('${order.id}')" 
+             class="bg-slate-800 rounded-lg p-4 border border-slate-700 cursor-pointer hover:bg-slate-700 transition-colors">
             <div class="flex justify-between items-center mb-2">
                 <p class="font-bold">${order.order_number}</p>
                 <p class="text-emerald-400 font-bold">+₪${order.courier_payout}</p>
             </div>
             <p class="text-xs text-slate-400">${new Date(order.delivered_at).toLocaleDateString('he-IL')}</p>
             <p class="text-xs text-slate-400">${order.distance_km} ק"מ</p>
+            <p class="text-xs text-blue-400 mt-2">👆 לחץ לפרטים מלאים</p>
         </div>
     `).join('');
+}
+
+async function viewOrderDetails(orderId) {
+    try {
+        const response = await fetch(`/api/orders/${orderId}`, {
+            headers: { 'Authorization': `Bearer ${courierToken}` }
+        });
+        
+        if (!response.ok) {
+            showNotification('❌ שגיאה בטעינת פרטי הזמנה', 'error');
+            return;
+        }
+        
+        const data = await response.json();
+        const order = data.order;
+        
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+        modal.innerHTML = `
+            <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold">📦 ${order.order_number}</h2>
+                    <button onclick="this.closest('.fixed').remove()" 
+                            class="text-4xl hover:text-red-500 leading-none">&times;</button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <p class="text-slate-400 text-sm">סטטוס</p>
+                        <p class="font-bold text-lg">${getOrderStatusBadge(order.status)}</p>
+                    </div>
+                    
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <p class="text-slate-400 text-sm mb-2">📍 איסוף</p>
+                        <p class="font-bold">${order.pickup_address}</p>
+                    </div>
+                    
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <p class="text-slate-400 text-sm mb-2">📍 יעד</p>
+                        <p class="font-bold">${order.delivery_address}</p>
+                    </div>
+                    
+                    <div class="bg-slate-700 rounded-lg p-4">
+                        <p class="text-slate-400 text-sm">מרחק</p>
+                        <p class="font-bold text-lg">${order.distance_km} ק"מ</p>
+                    </div>
+                    
+                    <div class="bg-emerald-900/30 border border-emerald-500/50 rounded-lg p-4">
+                        <p class="text-emerald-400 text-sm">הרווח שלך</p>
+                        <p class="font-bold text-3xl text-emerald-400">₪${order.courier_payout}</p>
+                    </div>
+                    
+                    ${order.customer_name ? `
+                        <div class="bg-slate-700 rounded-lg p-4">
+                            <p class="text-slate-400 text-sm">לקוח</p>
+                            <p class="font-bold">${order.customer_name}</p>
+                            ${order.customer_phone ? `
+                                <p class="text-blue-400 mt-1">📞 ${order.customer_phone}</p>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    ${order.delivered_at ? `
+                        <div class="bg-slate-700 rounded-lg p-4">
+                            <p class="text-slate-400 text-sm">הושלם ב</p>
+                            <p class="font-bold">${new Date(order.delivered_at).toLocaleString('he-IL')}</p>
+                        </div>
+                    ` : ''}
+                </div>
+                
+                <button onclick="this.closest('.fixed').remove()" 
+                        class="w-full mt-6 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg transition-colors">
+                    סגור
+                </button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+    } catch (error) {
+        console.error('View order details error:', error);
+        showNotification('❌ שגיאה בטעינת פרטים', 'error');
+    }
+}
+
+function getOrderStatusBadge(status) {
+    const badges = {
+        'pending': '⏳ ממתין',
+        'assigned': '📍 שוייך',
+        'in_progress': '🚚 בדרך',
+        'delivered': '✅ הושלם',
+        'cancelled': '❌ בוטל'
+    };
+    return badges[status] || status;
 }
 
 // ==========================================
