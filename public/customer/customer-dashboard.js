@@ -7,9 +7,23 @@ let customerData = null;
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Customer dashboard loaded');
+    console.log('🔐 Checking customerToken...');
+    
+    customerToken = localStorage.getItem('customerToken');
+    const savedData = localStorage.getItem('customerData');
+    
+    console.log('🔐 customerToken:', customerToken ? 'EXISTS' : 'MISSING');
+    console.log('🔐 customerData:', savedData ? 'EXISTS' : 'MISSING');
+    
     if (customerToken) {
+        if (savedData) {
+            customerData = JSON.parse(savedData);
+        }
+        console.log('✅ Auth OK - loading dashboard');
         loadDashboard();
     } else {
+        console.log('❌ No token - showing login');
         document.getElementById('loginScreen').classList.remove('hidden');
     }
 });
@@ -114,7 +128,7 @@ function logout() {
     if (confirm('האם להתנתק?')) {
         localStorage.removeItem('customerToken');
         localStorage.removeItem('customerData');
-        window.location.href = "/clear-session.html";
+        location.reload();
     }
 }
 
