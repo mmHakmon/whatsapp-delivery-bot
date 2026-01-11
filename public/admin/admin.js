@@ -62,6 +62,56 @@ async function loadGoogleMapsAPI() {
 // ==========================================
 
 
+async function loadGoogleMapsAPI() {
+    if (googleMapsLoaded) {
+        console.log('✅ Google Maps already loaded');
+        return Promise.resolve();
+    }
+    
+    try {
+        // Fetch API key from server
+        const response = await fetch('/api/config/google-maps-key');
+        const data = await response.json();
+        
+        if (!data.apiKey) {
+            throw new Error('Google Maps API key not found');
+        }
+        
+        console.log('🗺️ Loading Google Maps API...');
+        
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&libraries=places&language=he`;
+            script.async = true;
+            script.defer = true;
+            
+            script.onload = () => {
+                googleMapsLoaded = true;
+                console.log('✅ Google Maps API loaded successfully');
+                resolve();
+            };
+
+// ==========================================
+// CONFIG ENDPOINT FOR GOOGLE MAPS
+// ==========================================
+app.get('/api/config/google-maps-key', (req, res) => {
+  res.json({ 
+    apiKey: process.env.GOOGLE_MAPS_API_KEY || ''
+  });
+});
+            
+            script.onerror = () => {
+                console.error('❌ Failed to load Google Maps API');
+                reject(new Error('Failed to load Google Maps API'));
+            };
+            
+            document.head.appendChild(script);
+        });
+    } catch (error) {
+        console.error('❌ Error loading Google Maps API:', error);
+        throw error;
+    }
+}
 
 // Load Google Maps on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -115,19 +165,26 @@ function showLoginError(message) {
 
 function logout() {
     if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
-        // Redirect to clear-session page which handles full cleanup
-        window.location.href = "/clear-session.html";
+        localStorage.clear();
+        location.reload();
     }
 }
 
 function checkAuth() {
+    console.log('🔐 Admin checkAuth running...');
+    
     adminToken = localStorage.getItem('adminToken');
     const savedData = localStorage.getItem('userData');
     
+    console.log('🔐 adminToken:', adminToken ? 'EXISTS' : 'MISSING');
+    console.log('🔐 userData:', savedData ? 'EXISTS' : 'MISSING');
+    
     if (adminToken && savedData) {
         userData = JSON.parse(savedData);
+        console.log('✅ Auth OK - showing dashboard for:', userData.name);
         showDashboard();
     } else {
+        console.log('❌ Auth FAILED - showing login');
         document.getElementById('loginModal').classList.remove('hidden');
         document.getElementById('mainContent').classList.add('hidden');
     }
@@ -211,9 +268,18 @@ function handleWebSocketMessage(data) {
 // ==========================================
 
 async function initDashboard() {
-    connectWebSocket();
+    console.log('🚀 initDashboard starting...');
+    
+    // Load orders FIRST (don't wait for WebSocket)
+    await loadOrders();
+    
+    // Load statistics
     loadStatistics();
-    loadOrders();
+    
+    // Connect WebSocket (in background)
+    connectWebSocket();
+    
+    console.log('✅ initDashboard completed');
 }
 
 // ==========================================
@@ -1217,22 +1283,6 @@ function showSettings() {
                         </button>
                     </div>
                 </div>
-                
-                <!-- Courier Management -->
-                <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold text-lg mb-3">🏍️ ניהול שליחים</h3>
-                    <div class="space-y-3">
-                        <button onclick="resetCourierEarnings()" class="w-full bg-amber-500 hover:bg-amber-600 px-4 py-3 rounded-lg text-right">
-                            💰 איפוס רווחים של שליחים
-                        </button>
-                        <button onclick="resetCourierRatings()" class="w-full bg-amber-500 hover:bg-amber-600 px-4 py-3 rounded-lg text-right">
-                            ⭐ איפוס דירוגים וסטטיסטיקות
-                        </button>
-                        <button onclick="resetAllCouriers()" class="w-full bg-red-500 hover:bg-red-600 px-4 py-3 rounded-lg text-right font-bold">
-                            ⚠️ מחק את כל השליחים
-                        </button>
-                    </div>
-                </div>
             </div>
             
             <button onclick="this.closest('.fixed').remove()" class="w-full mt-6 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
@@ -1583,6 +1633,15 @@ function showNotification(message, type = 'success') {
         notification.remove();
     }, 3000);
 }
+
+// ==========================================
+// INIT
+// ==========================================
+
+document.addEventListener('DOMContentLoaded', () => {
+    checkAuth();
+});
+
 
 // ==========================================
 // INIT
