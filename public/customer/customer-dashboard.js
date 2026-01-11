@@ -126,9 +126,12 @@ function showAuthError(message) {
 
 function logout() {
     if (confirm('האם להתנתק?')) {
+        // Clear all data
         localStorage.removeItem('customerToken');
         localStorage.removeItem('customerData');
-        location.reload();
+        
+        // Redirect to select page
+        window.location.href = '/select.html';
     }
 }
 
