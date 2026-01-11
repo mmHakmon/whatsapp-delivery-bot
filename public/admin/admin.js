@@ -2,7 +2,7 @@
 // M.M.H DELIVERY - ADMIN DASHBOARD
 // ==========================================
 
-let adminToken = localStorage.getItem('adminToken');
+let adminToken = null;
 let userData = null;
 let ws = null;
 let currentFilter = 'all';
