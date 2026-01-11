@@ -20,6 +20,8 @@ async function courierLoginById(event) {
     
     const idNumber = document.getElementById('loginId').value;
     
+    console.log('🔑 Attempting login with ID:', idNumber);
+    
     try {
         const response = await fetch('/api/auth/courier-login-id', {
             method: 'POST',
@@ -29,11 +31,22 @@ async function courierLoginById(event) {
         
         const data = await response.json();
         
+        console.log('🔑 Login response:', response.status, data);
+        
         if (response.ok) {
             courierToken = data.token;
             courierData = data.courier;
+            
+            console.log('🔑 Saving to localStorage...');
+            console.log('🔑 Token:', courierToken ? 'EXISTS' : 'NULL');
+            console.log('🔑 Data:', courierData ? 'EXISTS' : 'NULL');
+            
             localStorage.setItem('courierToken', courierToken);
             localStorage.setItem('courierData', JSON.stringify(courierData));
+            
+            console.log('🔑 Saved! Verifying...');
+            console.log('🔑 Token from storage:', localStorage.getItem('courierToken') ? 'EXISTS' : 'NULL');
+            console.log('🔑 Data from storage:', localStorage.getItem('courierData') ? 'EXISTS' : 'NULL');
             
             showMainApp();
         } else if (data.needsRegistration) {
@@ -42,8 +55,8 @@ async function courierLoginById(event) {
             showLoginError(data.error || 'שגיאה בהתחברות');
         }
     } catch (error) {
+        console.error('❌ Login error:', error);
         showLoginError('שגיאת תקשורת');
-        console.error('Login error:', error);
     }
 }
 
