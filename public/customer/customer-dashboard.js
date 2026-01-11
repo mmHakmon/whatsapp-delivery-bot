@@ -1,5 +1,5 @@
 // Global variables
-let customerToken = localStorage.getItem('customerToken');
+let customerToken = null;
 let customerData = null;
 
 // ==========================================
