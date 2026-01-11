@@ -2,7 +2,7 @@
 // M.M.H DELIVERY - COURIER APP
 // ==========================================
 
-let courierToken = localStorage.getItem('courierToken');
+let courierToken = null;
 let courierData = null;
 let ws = null;
 let locationInterval = null;
