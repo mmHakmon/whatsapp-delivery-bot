@@ -165,8 +165,12 @@ function showLoginError(message) {
 
 function logout() {
     if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
-        localStorage.clear();
-        location.reload();
+        // Clear all data
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('userData');
+        
+        // Redirect to select page
+        window.location.href = '/select.html';
     }
 }
 
