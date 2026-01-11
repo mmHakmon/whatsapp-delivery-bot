@@ -53,17 +53,30 @@ function showLoginError(message) {
 
 function checkAuth() {
     console.log('🔐 Courier checkAuth running...');
+    console.log('📍 Current URL:', window.location.href);
     
+    // Force read from localStorage
     courierToken = localStorage.getItem('courierToken');
     const savedData = localStorage.getItem('courierData');
     
     console.log('🔐 courierToken:', courierToken ? 'EXISTS' : 'MISSING');
     console.log('🔐 courierData:', savedData ? 'EXISTS' : 'MISSING');
     
+    if (courierToken) {
+        console.log('🔐 Token value (first 20 chars):', courierToken.substring(0, 20));
+    }
+    
     if (courierToken && savedData) {
-        courierData = JSON.parse(savedData);
-        console.log('✅ Auth OK - showing main app');
-        showMainApp();
+        try {
+            courierData = JSON.parse(savedData);
+            console.log('✅ Auth OK - courier:', courierData.firstName, courierData.lastName);
+            showMainApp();
+        } catch (error) {
+            console.error('❌ Error parsing courierData:', error);
+            localStorage.removeItem('courierData');
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
     } else {
         console.log('❌ Auth FAILED - showing login');
         document.getElementById('loginScreen').classList.remove('hidden');
@@ -73,18 +86,22 @@ function checkAuth() {
 
 function logoutCourier() {
     if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
-        localStorage.removeItem('courierToken');
-        localStorage.removeItem('courierData');
-        
+        // Close WebSocket
         if (ws) {
             ws.close();
         }
         
+        // Clear location tracking
         if (locationInterval) {
             clearInterval(locationInterval);
         }
         
-        window.location.reload();
+        // Clear all data
+        localStorage.removeItem('courierToken');
+        localStorage.removeItem('courierData');
+        
+        // Redirect to select page
+        window.location.href = '/select.html';
     }
 }
 
