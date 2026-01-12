@@ -48,7 +48,9 @@ async function courierLoginById(event) {
             console.log('🔑 Token from storage:', localStorage.getItem('courierToken') ? 'EXISTS' : 'NULL');
             console.log('🔑 Data from storage:', localStorage.getItem('courierData') ? 'EXISTS' : 'NULL');
             
-            showMainApp();
+            // ✅ FORCE PAGE RELOAD to ensure courier.js loads with token
+            console.log('🔄 Forcing page reload to load courier.js properly...');
+            window.location.reload(true);
         } else if (data.needsRegistration) {
             window.location.href = '/courier/register.html';
         } else {
