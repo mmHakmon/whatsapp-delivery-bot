@@ -677,10 +677,44 @@ function showCreateOrderModal() {
                             <span id="vatDisplay" class="font-bold">₪--</span>
                         </div>
                         <div class="h-px bg-slate-600 my-2"></div>
-                        <div class="flex justify-between items-center">
-                            <span class="font-bold text-lg">מחיר סופי:</span>
-                            <span id="totalPriceDisplay" class="font-bold text-2xl text-emerald-400">₪--</span>
+                        
+                        <!-- Price Override Section -->
+                        <div class="mb-3">
+                            <div class="flex justify-between items-center">
+                                <span class="font-bold text-lg">מחיר סופי:</span>
+                                <div class="flex items-center gap-2">
+                                    <span id="totalPriceDisplay" class="font-bold text-2xl text-emerald-400">₪--</span>
+                                    <button type="button" id="editPriceBtn" onclick="enablePriceEdit()" 
+                                            class="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded text-sm">
+                                        ✏️ ערוך
+                                    </button>
+                                </div>
+                            </div>
                         </div>
+                        
+                        <!-- Manual Price Input (hidden by default) -->
+                        <div id="manualPriceSection" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                            <label class="block text-sm text-amber-400 font-bold mb-2">💰 עריכת מחיר ידנית</label>
+                            <div class="flex gap-2 items-center">
+                                <input type="number" id="manualPrice" 
+                                       placeholder="הכנס מחיר חדש"
+                                       step="1" min="0"
+                                       class="flex-1 bg-slate-700 border border-amber-500/50 rounded px-3 py-2 text-lg font-bold text-center">
+                                <button type="button" onclick="applyManualPrice()" 
+                                        class="bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded font-bold whitespace-nowrap">
+                                    ✅ אישור
+                                </button>
+                                <button type="button" onclick="cancelPriceEdit()" 
+                                        class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded font-bold">
+                                    ✖️
+                                </button>
+                            </div>
+                            <p class="text-xs text-amber-300 mt-2">⚠️ מחיר זה ישלח לשרת במקום המחיר המחושב</p>
+                        </div>
+                        
+                        <!-- Hidden inputs to store calculated and manual prices -->
+                        <input type="hidden" id="calculatedPrice" value="">
+                        <input type="hidden" id="finalPrice" name="manualPrice" value="">
                     </div>
                     
                     <div class="mt-3">
@@ -852,6 +886,8 @@ function displayPrice(data) {
     const basePriceDisplay = document.getElementById('basePriceDisplay');
     const vatDisplay = document.getElementById('vatDisplay');
     const totalPriceDisplay = document.getElementById('totalPriceDisplay');
+    const calculatedPriceInput = document.getElementById('calculatedPrice');
+    const finalPriceInput = document.getElementById('finalPrice');
     
     if (priceDisplay && distanceDisplay && basePriceDisplay && vatDisplay && totalPriceDisplay) {
         priceDisplay.classList.remove('hidden');
@@ -860,11 +896,83 @@ function displayPrice(data) {
         vatDisplay.textContent = `₪${data.vat}`;
         totalPriceDisplay.textContent = `₪${data.totalPrice}`;
         
+        // Store calculated price
+        if (calculatedPriceInput) {
+            calculatedPriceInput.value = data.totalPrice;
+        }
+        
+        // Set final price to calculated (unless manually overridden)
+        if (finalPriceInput && !finalPriceInput.value) {
+            finalPriceInput.value = data.totalPrice;
+        }
+        
         console.log('✅ Price displayed:', data);
     } else {
         console.error('❌ Price display elements not found');
     }
 }
+
+// Price editing functions
+function enablePriceEdit() {
+    const manualSection = document.getElementById('manualPriceSection');
+    const editBtn = document.getElementById('editPriceBtn');
+    const calculatedPrice = document.getElementById('calculatedPrice').value;
+    const manualPriceInput = document.getElementById('manualPrice');
+    
+    if (manualSection && editBtn) {
+        manualSection.classList.remove('hidden');
+        editBtn.classList.add('hidden');
+        
+        // Pre-fill with calculated price
+        if (manualPriceInput && calculatedPrice) {
+            manualPriceInput.value = calculatedPrice;
+            manualPriceInput.focus();
+            manualPriceInput.select();
+        }
+    }
+}
+
+function applyManualPrice() {
+    const manualPriceInput = document.getElementById('manualPrice');
+    const totalPriceDisplay = document.getElementById('totalPriceDisplay');
+    const finalPriceInput = document.getElementById('finalPrice');
+    const manualSection = document.getElementById('manualPriceSection');
+    const editBtn = document.getElementById('editPriceBtn');
+    
+    const newPrice = parseFloat(manualPriceInput.value);
+    
+    if (!newPrice || newPrice <= 0) {
+        showNotification('❌ יש להזין מחיר תקין', 'error');
+        return;
+    }
+    
+    // Update display
+    totalPriceDisplay.textContent = `₪${newPrice}`;
+    totalPriceDisplay.classList.remove('text-emerald-400');
+    totalPriceDisplay.classList.add('text-amber-400');
+    
+    // Store manual price
+    finalPriceInput.value = newPrice;
+    
+    // Hide edit section, show edit button
+    manualSection.classList.add('hidden');
+    editBtn.classList.remove('hidden');
+    editBtn.textContent = '✏️ ערוך (שונה ידנית)';
+    editBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+    editBtn.classList.add('bg-amber-500', 'hover:bg-amber-600');
+    
+    showNotification(`✅ מחיר עודכן ל-₪${newPrice}`);
+    console.log('💰 Manual price set:', newPrice);
+}
+
+function cancelPriceEdit() {
+    const manualSection = document.getElementById('manualPriceSection');
+    const editBtn = document.getElementById('editPriceBtn');
+    
+    manualSection.classList.add('hidden');
+    editBtn.classList.remove('hidden');
+}
+
 
 async function handleCreateOrder(event) {
     event.preventDefault();
@@ -888,6 +996,16 @@ async function handleCreateOrder(event) {
         return;
     }
     
+    // Get manual price if set
+    const manualPrice = formData.get('manualPrice');
+    const finalPrice = manualPrice ? parseFloat(manualPrice) : null;
+    
+    console.log('💰 Price info:', {
+        manual: manualPrice,
+        final: finalPrice,
+        hasManualPrice: !!finalPrice
+    });
+    
     const data = {
         senderName: formData.get('senderName'),
         senderPhone: formData.get('senderPhone'),
@@ -906,6 +1024,12 @@ async function handleCreateOrder(event) {
         notes: formData.get('notes') || '',
         priority: 'normal'
     };
+    
+    // Add manual price if set
+    if (finalPrice && finalPrice > 0) {
+        data.manualPrice = finalPrice;
+        console.log('💰 Using manual price:', finalPrice);
+    }
 
     console.log('📤 Sending order:', data);
     
