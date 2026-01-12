@@ -650,7 +650,7 @@ function showCreateOrderModal() {
                     </div>
                     <div class="mb-3">
                         <label class="block text-sm mb-1">סוג רכב *</label>
-                        <select name="vehicleType" id="vehicleType" required onchange="calculatePrice()"
+                        <select name="vehicleType" id="vehicleType" required
                                 class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
                             <option value="">בחר סוג רכב...</option>
                             <option value="motorcycle">🏍️ אופנוע</option>
@@ -660,6 +660,14 @@ function showCreateOrderModal() {
                             <option value="van">🚐 מסחרית</option>
                             <option value="truck">🚚 משאית</option>
                         </select>
+                    </div>
+                    
+                    <!-- Calculate Price Button -->
+                    <div class="mb-3">
+                        <button type="button" onclick="calculatePrice()" 
+                                class="w-full bg-blue-500 hover:bg-blue-600 font-bold py-3 rounded-lg">
+                            🧮 חשב מחיר
+                        </button>
                     </div>
                     
                     <!-- Price Display -->
@@ -803,7 +811,6 @@ function initGooglePlacesAutocomplete() {
                     address: place.formatted_address || place.name
                 };
                 console.log('✅ Pickup location selected:', selectedPickupLocation);
-                calculatePrice();
             }
         });
     } catch (error) {
@@ -821,7 +828,6 @@ function initGooglePlacesAutocomplete() {
                     address: place.formatted_address || place.name
                 };
                 console.log('✅ Delivery location selected:', selectedDeliveryLocation);
-                calculatePrice();
             }
         });
     } catch (error) {
@@ -833,15 +839,23 @@ function initGooglePlacesAutocomplete() {
 
 async function calculatePrice() {
     const vehicleType = document.getElementById('vehicleType')?.value;
+    const calculateBtn = event?.target;
     
+    // Validation
     if (!selectedPickupLocation || !selectedDeliveryLocation) {
-        console.log('⏳ Waiting for both locations...');
+        showNotification('❌ יש לבחור כתובות איסוף ומסירה תחילה', 'error');
         return;
     }
     
     if (!vehicleType) {
-        console.log('⏳ Waiting for vehicle type...');
+        showNotification('❌ יש לבחור סוג רכב תחילה', 'error');
         return;
+    }
+    
+    // Show loading
+    if (calculateBtn) {
+        calculateBtn.disabled = true;
+        calculateBtn.innerHTML = '⏳ מחשב...';
     }
     
     console.log('🧮 Calculating price...', {
@@ -869,14 +883,21 @@ async function calculatePrice() {
         if (response.ok) {
             const data = await response.json();
             displayPrice(data);
+            showNotification('✅ מחיר חושב בהצלחה!');
         } else {
             const error = await response.json();
             console.error('❌ Price calc error:', error);
-            showNotification('❌ שגיאה בחישוב מחיר', 'error');
+            showNotification('❌ שגיאה בחישוב מחיר: ' + (error.error || 'שגיאה לא ידועה'), 'error');
         }
     } catch (error) {
         console.error('❌ Price calc exception:', error);
-        showNotification('❌ שגיאה בחישוב מחיר', 'error');
+        showNotification('❌ שגיאת תקשורת בחישוב מחיר', 'error');
+    } finally {
+        // Restore button
+        if (calculateBtn) {
+            calculateBtn.disabled = false;
+            calculateBtn.innerHTML = '🧮 חשב מחיר';
+        }
     }
 }
 
