@@ -14,7 +14,10 @@ let selectedPickupLocation = null;
 let selectedDeliveryLocation = null;
 let googleMapsLoaded = false; // ✅ הוסף את זה
 
-// ✅ הוסף את כל הפונקציה הזו:
+// ==========================================
+// GOOGLE MAPS API KEY LOADER
+// ==========================================
+
 async function loadGoogleMapsAPI() {
     if (googleMapsLoaded) {
         console.log('✅ Google Maps already loaded');
@@ -43,62 +46,6 @@ async function loadGoogleMapsAPI() {
                 console.log('✅ Google Maps API loaded successfully');
                 resolve();
             };
-            
-            script.onerror = () => {
-                console.error('❌ Failed to load Google Maps API');
-                reject(new Error('Failed to load Google Maps API'));
-            };
-            
-            document.head.appendChild(script);
-        });
-    } catch (error) {
-        console.error('❌ Error loading Google Maps API:', error);
-        throw error;
-    }
-}
-
-// ==========================================
-// GOOGLE MAPS API KEY LOADER
-// ==========================================
-
-
-async function loadGoogleMapsAPI() {
-    if (googleMapsLoaded) {
-        console.log('✅ Google Maps already loaded');
-        return Promise.resolve();
-    }
-    
-    try {
-        // Fetch API key from server
-        const response = await fetch('/api/config/google-maps-key');
-        const data = await response.json();
-        
-        if (!data.apiKey) {
-            throw new Error('Google Maps API key not found');
-        }
-        
-        console.log('🗺️ Loading Google Maps API...');
-        
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = `https://maps.googleapis.com/maps/api/js?key=${data.apiKey}&libraries=places&language=he`;
-            script.async = true;
-            script.defer = true;
-            
-            script.onload = () => {
-                googleMapsLoaded = true;
-                console.log('✅ Google Maps API loaded successfully');
-                resolve();
-            };
-
-// ==========================================
-// CONFIG ENDPOINT FOR GOOGLE MAPS
-// ==========================================
-app.get('/api/config/google-maps-key', (req, res) => {
-  res.json({ 
-    apiKey: process.env.GOOGLE_MAPS_API_KEY || ''
-  });
-});
             
             script.onerror = () => {
                 console.error('❌ Failed to load Google Maps API');
