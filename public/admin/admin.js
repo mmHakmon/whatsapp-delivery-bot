@@ -662,68 +662,17 @@ function showCreateOrderModal() {
                         </select>
                     </div>
                     
-                    <!-- Calculate Price Button -->
-                    <div class="mb-3">
-                        <button type="button" onclick="calculatePrice()" 
-                                class="w-full bg-blue-500 hover:bg-blue-600 font-bold py-3 rounded-lg">
-                            🧮 חשב מחיר
-                        </button>
+                    <!-- Manual Price Input (always visible) -->
+                    <div class="mb-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                        <label class="block text-sm text-amber-400 font-bold mb-2">💰 הזן מחיר סופי (כולל מע"מ)</label>
+                        <input type="number" name="manualPrice" id="manualPriceInput" 
+                               placeholder="לדוגמה: 150"
+                               required
+                               step="1" min="1"
+                               class="w-full bg-slate-700 border border-amber-500/50 rounded px-4 py-3 text-lg font-bold text-center">
+                        <p class="text-xs text-slate-400 mt-2">💡 טיפ: אופנוע בד"כ ₪3-4 לק"מ + מע"מ</p>
                     </div>
                     
-                    <!-- Price Display -->
-                    <div id="priceDisplay" class="bg-slate-800 rounded-lg p-4 border border-slate-600 hidden">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm text-slate-400">מרחק משוער:</span>
-                            <span id="distanceDisplay" class="font-bold">-- ק"מ</span>
-                        </div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm text-slate-400">מחיר בסיס:</span>
-                            <span id="basePriceDisplay" class="font-bold">₪--</span>
-                        </div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm text-slate-400">מע"מ (18%):</span>
-                            <span id="vatDisplay" class="font-bold">₪--</span>
-                        </div>
-                        <div class="h-px bg-slate-600 my-2"></div>
-                        
-                        <!-- Price Override Section -->
-                        <div class="mb-3">
-                            <div class="flex justify-between items-center">
-                                <span class="font-bold text-lg">מחיר סופי:</span>
-                                <div class="flex items-center gap-2">
-                                    <span id="totalPriceDisplay" class="font-bold text-2xl text-emerald-400">₪--</span>
-                                    <button type="button" id="editPriceBtn" onclick="enablePriceEdit()" 
-                                            class="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded text-sm">
-                                        ✏️ ערוך
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Manual Price Input (hidden by default) -->
-                        <div id="manualPriceSection" class="hidden bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
-                            <label class="block text-sm text-amber-400 font-bold mb-2">💰 עריכת מחיר ידנית</label>
-                            <div class="flex gap-2 items-center">
-                                <input type="number" id="manualPrice" 
-                                       placeholder="הכנס מחיר חדש"
-                                       step="1" min="0"
-                                       class="flex-1 bg-slate-700 border border-amber-500/50 rounded px-3 py-2 text-lg font-bold text-center">
-                                <button type="button" onclick="applyManualPrice()" 
-                                        class="bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded font-bold whitespace-nowrap">
-                                    ✅ אישור
-                                </button>
-                                <button type="button" onclick="cancelPriceEdit()" 
-                                        class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded font-bold">
-                                    ✖️
-                                </button>
-                            </div>
-                            <p class="text-xs text-amber-300 mt-2">⚠️ מחיר זה ישלח לשרת במקום המחיר המחושב</p>
-                        </div>
-                        
-                        <!-- Hidden inputs to store calculated and manual prices -->
-                        <input type="hidden" id="calculatedPrice" value="">
-                        <input type="hidden" id="finalPrice" name="manualPrice" value="">
-                    </div>
                     
                     <div class="mt-3">
                         <label class="block text-sm mb-1">הערות כלליות</label>
