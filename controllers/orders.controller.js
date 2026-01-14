@@ -495,10 +495,10 @@ class OrdersController {
       const courierResult = await pool.query('SELECT * FROM couriers WHERE id = $1', [courierId]);
       const courier = courierResult.rows[0];
 
-      await whatsappService.sendOrderToCourier(courier.phone, order, 'pickup');
-      await whatsappService.announceOrderTaken(order, courier);
-
-      websocketService.broadcast({ type: 'order_taken', order });
+await whatsappService.sendOrderToCourier(courier.phone, order, 'pickup');
+await whatsappService.announceOrderTaken(order, courier);
+await whatsappService.notifyCourierAssigned(order.sender_phone, order, courier); // ✅ הוסף
+websocketService.broadcast({ type: 'order_taken', order });
 
       res.json({ message: 'תפסת את המשלוח!' });
     } catch (error) {
@@ -544,10 +544,10 @@ class OrdersController {
       const courierResult = await pool.query('SELECT * FROM couriers WHERE id = $1', [courierId]);
       const courier = courierResult.rows[0];
 
-      await whatsappService.sendOrderToCourier(courier.phone, order, 'pickup');
-      await whatsappService.announceOrderTaken(order, courier);
-
-      websocketService.broadcast({ type: 'order_taken', order });
+await whatsappService.sendOrderToCourier(courier.phone, order, 'pickup');
+await whatsappService.announceOrderTaken(order, courier);
+await whatsappService.notifyCourierAssigned(order.sender_phone, order, courier); // ✅ הוסף
+websocketService.broadcast({ type: 'order_taken', order });
 
       res.json({ message: 'תפסת את המשלוח!' });
     } catch (error) {
@@ -645,13 +645,23 @@ class OrdersController {
 
       await client.query('COMMIT');
 
-      // Get updated courier balance
-      const courierResult = await pool.query('SELECT balance FROM couriers WHERE id = $1', [courierId]);
-      
-      // Send notifications
-      await whatsappService.notifyDelivered(order.sender_phone, order);
+// Get updated courier balance + phone
+const courierResult = await pool.query('SELECT balance, phone FROM couriers WHERE id = $1', [courierId]);
 
-      websocketService.broadcast({ type: 'order_delivered', order });
+// Send notifications
+await whatsappService.notifyDelivered(order.sender_phone, order);
+
+// ✅ הוסף הודעה לשליח:
+await whatsappService.sendMessage(
+  courierResult.rows[0].phone,
+  `🎉 *המשלוח הושלם בהצלחה!*\n\n` +
+  `📦 הזמנה: ${order.order_number}\n` +
+  `💰 הרווחת: *₪${order.courier_payout}*\n` +
+  `💳 יתרה עדכנית: *₪${courierResult.rows[0].balance}*\n\n` +
+  `המשך להרוויח! 🚀`
+);
+
+websocketService.broadcast({ type: 'order_delivered', order });
 
       res.json({ 
         message: '✅ המשלוח הושלם! הכסף נוסף ליתרה שלך',
@@ -734,3 +744,4 @@ class OrdersController {
 }
 
 module.exports = new OrdersController();
+
