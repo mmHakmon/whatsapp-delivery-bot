@@ -186,20 +186,51 @@ function handleWebSocketMessage(data) {
     
     switch (data.type) {
         case 'new_order':
+        case 'vip_order_created':
             showNotification('📦 הזמנה חדשה התקבלה!');
             loadOrders(currentFilter === 'all' ? null : currentFilter);
             loadStatistics();
             break;
+            
         case 'order_updated':
             console.log('🔄 Order updated, reloading...');
             loadOrders(currentFilter === 'all' ? null : currentFilter);
             loadStatistics();
             break;
+            
         case 'order_published':
             showNotification('📢 ההזמנה פורסמה!');
             loadOrders(currentFilter === 'all' ? null : currentFilter);
             loadStatistics();
             break;
+            
+        // ✅ הוסף את כל האירועים האלה:
+        case 'order_taken':
+            showNotification('🚗 שליח תפס הזמנה!');
+            loadOrders(currentFilter === 'all' ? null : currentFilter);
+            loadStatistics();
+            break;
+            
+        case 'order_picked':
+            showNotification('📦 חבילה נאספה!');
+            loadOrders(currentFilter === 'all' ? null : currentFilter);
+            loadStatistics();
+            break;
+            
+        case 'order_delivered':
+            showNotification('✅ משלוח הושלם!');
+            loadOrders(currentFilter === 'all' ? null : currentFilter);
+            loadStatistics();
+            break;
+            
+        case 'order_cancelled':
+            showNotification('❌ הזמנה בוטלה');
+            loadOrders(currentFilter === 'all' ? null : currentFilter);
+            loadStatistics();
+            break;
+            
+        default:
+            console.log('⚠️ Unknown WebSocket event:', data.type);
     }
 }
 
@@ -1700,3 +1731,4 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
