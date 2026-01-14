@@ -8,7 +8,7 @@ const { generateOrderNumber } = require('../utils/helpers');
 
 class OrdersController {
   // ==========================================
-  // CREATE ORDER (ADMIN/AGENT) - ✅ WITH MANUAL PRICE SUPPORT!
+  // CREATE ORDER (ADMIN/AGENT) - ✅ WITH ROAD DISTANCE!
   // ==========================================
   async createOrder(req, res, next) {
     try {
@@ -29,7 +29,7 @@ class OrdersController {
         notes,
         vehicleType = 'motorcycle',
         priority = 'normal',
-        manualPrice  // ✅ NEW: Manual price override
+        manualPrice  // ✅ Manual price override
       } = req.body;
 
       console.log('📦 Creating order:', {
@@ -49,27 +49,43 @@ class OrdersController {
       let finalDeliveryLat = deliveryLat;
       let finalDeliveryLng = deliveryLng;
 
-      // ✅ If frontend sent coordinates, use them directly!
+      // ✅ CRITICAL FIX: Use ROAD distance instead of air distance!
       if (pickupLat && pickupLng && deliveryLat && deliveryLng) {
-        console.log('✅ Using coordinates from frontend');
+        console.log('✅ Coordinates provided - calculating ROAD distance via Google Maps...');
         
-        // Calculate distance using Haversine formula
-        const R = 6371; // Earth radius in km
-        const dLat = (deliveryLat - pickupLat) * Math.PI / 180;
-        const dLon = (deliveryLng - pickupLng) * Math.PI / 180;
-        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(pickupLat * Math.PI / 180) * Math.cos(deliveryLat * Math.PI / 180) *
-                  Math.sin(dLon/2) * Math.sin(dLon/2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-        distanceKm = R * c;
-        
-        console.log('✅ Calculated distance:', distanceKm, 'km');
+        try {
+          // ✅ Use Google Maps Distance Matrix API for ROAD distance
+          distanceKm = await mapsService.calculateDistanceByCoords(
+            pickupLat,
+            pickupLng,
+            deliveryLat,
+            deliveryLng
+          );
+          
+          console.log('✅ ROAD distance calculated:', distanceKm, 'km');
+        } catch (error) {
+          console.error('⚠️ Google Maps failed, falling back to air distance:', error.message);
+          
+          // ⚠️ Fallback ONLY if Google fails: Haversine (air distance)
+          const R = 6371; // Earth radius in km
+          const dLat = (deliveryLat - pickupLat) * Math.PI / 180;
+          const dLon = (deliveryLng - pickupLng) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(pickupLat * Math.PI / 180) * Math.cos(deliveryLat * Math.PI / 180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          distanceKm = R * c;
+          
+          console.log('⚠️ Using AIR distance (fallback):', distanceKm, 'km');
+        }
       } else {
-        // ❌ Fallback: geocode addresses (requires Google Maps API)
+        // No coordinates - geocode addresses first
         console.log('⚠️ No coordinates provided, geocoding addresses...');
         
         try {
+          // This already uses Google Distance Matrix (road distance)
           distanceKm = await mapsService.calculateDistance(pickupAddress, deliveryAddress);
+          
           const pickupCoords = await mapsService.geocodeAddress(pickupAddress);
           const deliveryCoords = await mapsService.geocodeAddress(deliveryAddress);
           
@@ -88,12 +104,11 @@ class OrdersController {
       // ✅ Calculate pricing (or use manual price)
       let pricing;
       if (manualPrice && manualPrice > 0) {
-        // Manual price provided - calculate commission and courier payout
+        // Manual price provided
         console.log('💰 Using manual price:', manualPrice);
         const commissionRate = parseFloat(process.env.COMMISSION_RATE || 0.25);
         const vatRate = parseFloat(process.env.VAT_RATE || 0.18);
         
-        // Calculate backwards: totalPrice includes VAT
         const priceBeforeVat = manualPrice / (1 + vatRate);
         const vat = manualPrice - priceBeforeVat;
         const commission = Math.floor(manualPrice * commissionRate);
@@ -102,8 +117,8 @@ class OrdersController {
         pricing = {
           distanceKm: parseFloat(distanceKm.toFixed(2)),
           vehicleType,
-          basePrice: 0, // N/A for manual price
-          pricePerKm: 0, // N/A for manual price
+          basePrice: 0,
+          pricePerKm: 0,
           billableKm: parseFloat(distanceKm.toFixed(2)),
           priceBeforeVat: parseFloat(priceBeforeVat.toFixed(2)),
           vat: parseFloat(vat.toFixed(2)),
@@ -168,7 +183,7 @@ class OrdersController {
   }
 
   // ==========================================
-  // CREATE ORDER PUBLIC (לקוחות - ללא אימות!)
+  // CREATE ORDER PUBLIC (CUSTOMERS)
   // ==========================================
   async createOrderPublic(req, res, next) {
     try {
@@ -187,7 +202,7 @@ class OrdersController {
         priority = 'normal'
       } = req.body;
 
-      // Calculate distance
+      // Calculate ROAD distance
       const distanceKm = await mapsService.calculateDistance(pickupAddress, deliveryAddress);
       
       // Calculate pricing
@@ -220,14 +235,13 @@ class OrdersController {
 
       const order = result.rows[0];
 
-      // Send WhatsApp to customer
+      // Send WhatsApp
       try {
         await whatsappService.sendOrderConfirmation(senderPhone, order);
       } catch (error) {
         console.error('WhatsApp error:', error);
       }
 
-      // Notify admins via WebSocket
       websocketService.notifyNewOrder(order);
 
       res.status(201).json({ 
@@ -236,6 +250,56 @@ class OrdersController {
         message: 'הזמנה נוצרה בהצלחה' 
       });
     } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==========================================
+  // CALCULATE PRICING ENDPOINT
+  // ==========================================
+  async calculatePricingEndpoint(req, res, next) {
+    try {
+      const { pickupLat, pickupLng, deliveryLat, deliveryLng, vehicleType } = req.body;
+
+      if (!pickupLat || !pickupLng || !deliveryLat || !deliveryLng) {
+        return res.status(400).json({ error: 'חסרים נתוני מיקום' });
+      }
+
+      if (!vehicleType) {
+        return res.status(400).json({ error: 'חסר סוג רכב' });
+      }
+
+      // ✅ Calculate ROAD distance via Google Maps
+      let distanceKm;
+      try {
+        distanceKm = await mapsService.calculateDistanceByCoords(
+          pickupLat,
+          pickupLng,
+          deliveryLat,
+          deliveryLng
+        );
+        console.log('✅ Price calculation - ROAD distance:', distanceKm, 'km');
+      } catch (error) {
+        console.error('⚠️ Google Maps failed, using air distance');
+        // Fallback to Haversine
+        const R = 6371;
+        const dLat = (deliveryLat - pickupLat) * Math.PI / 180;
+        const dLon = (deliveryLng - pickupLng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(pickupLat * Math.PI / 180) * Math.cos(deliveryLat * Math.PI / 180) *
+                  Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        distanceKm = R * c;
+      }
+
+      // Calculate pricing
+      const pricing = calculatePricing(distanceKm, vehicleType);
+
+      console.log('✅ Price calculated:', pricing);
+
+      res.json(pricing);
+    } catch (error) {
+      console.error('❌ Calculate pricing error:', error);
       next(error);
     }
   }
@@ -664,44 +728,6 @@ class OrdersController {
 
       res.json({ statistics: result.rows[0] });
     } catch (error) {
-      next(error);
-    }
-  }
-
-  // ==========================================
-  // CALCULATE PRICING ENDPOINT
-  // ==========================================
-  async calculatePricingEndpoint(req, res, next) {
-    try {
-      const { pickupLat, pickupLng, deliveryLat, deliveryLng, vehicleType } = req.body;
-
-      // Validate coordinates
-      if (!pickupLat || !pickupLng || !deliveryLat || !deliveryLng) {
-        return res.status(400).json({ error: 'חסרים נתוני מיקום' });
-      }
-
-      if (!vehicleType) {
-        return res.status(400).json({ error: 'חסר סוג רכב' });
-      }
-
-      // Calculate distance using Haversine formula
-      const R = 6371; // Earth radius in km
-      const dLat = (deliveryLat - pickupLat) * Math.PI / 180;
-      const dLon = (deliveryLng - pickupLng) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(pickupLat * Math.PI / 180) * Math.cos(deliveryLat * Math.PI / 180) *
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-      const distanceKm = R * c;
-
-      // Calculate pricing
-      const pricing = calculatePricing(distanceKm, vehicleType);
-
-      console.log('✅ Price calculated:', pricing);
-
-      res.json(pricing);
-    } catch (error) {
-      console.error('❌ Calculate pricing error:', error);
       next(error);
     }
   }
