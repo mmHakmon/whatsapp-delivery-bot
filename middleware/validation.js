@@ -15,7 +15,7 @@ const validatePayoutRequest = (req, res, next) => {
   
   // Validate payment method (optional)
   if (paymentMethod) {
-    const validMethods = ['bank_transfer', 'paypal', 'cash', 'other'];
+    const validMethods = ['bank_transfer', 'bit', 'cash'];
     if (!validMethods.includes(paymentMethod)) {
       return res.status(400).json({ error: 'אמצעי תשלום לא תקין' });
     }
@@ -68,7 +68,7 @@ const validateOrderCreation = (req, res, next) => {
     return res.status(400).json({ error: 'מספר טלפון מקבל לא תקין' });
   }
 
-  // Validate vehicle type - UPDATED TO INCLUDE MOTORCYCLE
+  // ✅ FIXED: Validate vehicle type - NOW INCLUDES MOTORCYCLE
   const validVehicles = ['motorcycle', 'bike', 'scooter', 'car', 'van', 'truck'];
   if (!validVehicles.includes(vehicleType)) {
     console.error('❌ Invalid vehicle type:', vehicleType);
@@ -111,7 +111,7 @@ const validateCourierRegistration = (req, res, next) => {
     return res.status(400).json({ error: 'תעודת זהות לא תקינה' });
   }
   
-  // Validate vehicle type - UPDATED TO INCLUDE MOTORCYCLE
+  // ✅ FIXED: Validate vehicle type - NOW INCLUDES MOTORCYCLE
   const validVehicles = ['motorcycle', 'bike', 'scooter', 'car', 'van', 'truck'];
   if (!validVehicles.includes(vehicleType)) {
     return res.status(400).json({ error: 'סוג רכב לא תקין' });
