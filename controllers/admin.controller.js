@@ -89,40 +89,23 @@ class AdminController {
     }
   }
 
-  // Change password
+  // ✅ FIXED: Change password - admin can change any user's password without current password
   async changePassword(req, res, next) {
     try {
       const { id } = req.params;
-      const { currentPassword, newPassword } = req.body;
+      const { password } = req.body;
 
-      // Check if user is changing own password or is admin
-      if (req.user.id !== parseInt(id) && req.user.role !== 'admin') {
+      // Only admin can change other users' passwords
+      if (req.user.role !== 'admin') {
         return res.status(403).json({ error: 'אין הרשאה' });
       }
 
-      if (!newPassword || newPassword.length < 8) {
-        return res.status(400).json({ error: 'סיסמה חדשה חייבת להיות לפחות 8 תווים' });
-      }
-
-      // If changing own password, verify current password
-      if (req.user.id === parseInt(id)) {
-        const userResult = await pool.query(
-          'SELECT password FROM users WHERE id = $1',
-          [id]
-        );
-
-        if (userResult.rows.length === 0) {
-          return res.status(404).json({ error: 'משתמש לא נמצא' });
-        }
-
-        const validPassword = await bcrypt.compare(currentPassword, userResult.rows[0].password);
-        if (!validPassword) {
-          return res.status(401).json({ error: 'סיסמה נוכחית שגויה' });
-        }
+      if (!password || password.length < 6) {
+        return res.status(400).json({ error: 'סיסמה חדשה חייבת להיות לפחות 6 תווים' });
       }
 
       // Hash new password
-      const hashedPassword = await bcrypt.hash(newPassword, 12);
+      const hashedPassword = await bcrypt.hash(password, 12);
 
       // Update password
       await pool.query(
@@ -305,11 +288,9 @@ class AdminController {
         SELECT 
           p.*,
           c.first_name || ' ' || c.last_name as courier_name,
-          c.phone as courier_phone,
-          u.name as created_by_name
+          c.phone as courier_phone
         FROM payments p
         JOIN couriers c ON p.courier_id = c.id
-        LEFT JOIN users u ON p.created_by = u.id
         WHERE 1=1
       `;
 
@@ -344,41 +325,38 @@ class AdminController {
   }
 
   // ==========================================
-  // ANALYTICS
+  // REVENUE BY PERIOD
   // ==========================================
 
-  // Revenue by period
   async getRevenueByPeriod(req, res, next) {
     try {
       const { period = 'day', startDate, endDate } = req.query;
 
-      let groupBy;
+      let timeFormat;
       switch (period) {
         case 'hour':
-          groupBy = "DATE_TRUNC('hour', delivered_at)";
+          timeFormat = 'YYYY-MM-DD HH24:00';
           break;
         case 'day':
-          groupBy = "DATE_TRUNC('day', delivered_at)";
+          timeFormat = 'YYYY-MM-DD';
           break;
         case 'week':
-          groupBy = "DATE_TRUNC('week', delivered_at)";
+          timeFormat = 'IYYY-IW';
           break;
         case 'month':
-          groupBy = "DATE_TRUNC('month', delivered_at)";
+          timeFormat = 'YYYY-MM';
           break;
         default:
-          groupBy = "DATE_TRUNC('day', delivered_at)";
+          timeFormat = 'YYYY-MM-DD';
       }
 
       let query = `
         SELECT 
-          ${groupBy} as period,
-          COUNT(*) as orders_count,
-          SUM(price) as revenue,
-          SUM(commission) as commission,
-          SUM(courier_payout) as courier_payout,
-          AVG(price) as avg_order_value,
-          AVG(distance_km) as avg_distance
+          TO_CHAR(delivered_at, '${timeFormat}') as period,
+          COUNT(*) as orders,
+          COALESCE(SUM(price), 0) as revenue,
+          COALESCE(SUM(commission), 0) as commission,
+          COALESCE(SUM(courier_payout), 0) as courier_payout
         FROM orders
         WHERE status = 'delivered'
       `;
@@ -395,7 +373,7 @@ class AdminController {
         params.push(endDate);
       }
 
-      query += ` GROUP BY ${groupBy} ORDER BY period DESC`;
+      query += ` GROUP BY period ORDER BY period DESC LIMIT 30`;
 
       const result = await pool.query(query, params);
 
@@ -405,10 +383,22 @@ class AdminController {
     }
   }
 
-  // Top couriers
+  // ==========================================
+  // TOP COURIERS
+  // ==========================================
+
   async getTopCouriers(req, res, next) {
     try {
-      const { limit = 10, period = 30 } = req.query;
+      const { limit = 10, period = 'all' } = req.query;
+
+      let dateFilter = '';
+      if (period === 'today') {
+        dateFilter = "AND o.delivered_at >= CURRENT_DATE";
+      } else if (period === 'week') {
+        dateFilter = "AND o.delivered_at >= date_trunc('week', CURRENT_DATE)";
+      } else if (period === 'month') {
+        dateFilter = "AND o.delivered_at >= date_trunc('month', CURRENT_DATE)";
+      }
 
       const result = await pool.query(`
         SELECT 
@@ -417,16 +407,13 @@ class AdminController {
           c.phone,
           c.vehicle_type,
           c.rating,
-          COUNT(o.id) as deliveries_count,
-          SUM(o.courier_payout) as total_earned,
-          AVG(o.distance_km) as avg_distance
+          COUNT(o.id) as deliveries,
+          COALESCE(SUM(o.courier_payout), 0) as earned
         FROM couriers c
-        LEFT JOIN orders o ON c.id = o.courier_id 
-          AND o.status = 'delivered'
-          AND o.delivered_at >= NOW() - INTERVAL '${period} days'
+        LEFT JOIN orders o ON c.id = o.courier_id AND o.status = 'delivered' ${dateFilter}
+        WHERE c.status = 'active'
         GROUP BY c.id
-        HAVING COUNT(o.id) > 0
-        ORDER BY deliveries_count DESC
+        ORDER BY deliveries DESC, earned DESC
         LIMIT $1
       `, [limit]);
 
@@ -436,20 +423,28 @@ class AdminController {
     }
   }
 
-  // Orders by status over time
+  // ==========================================
+  // ORDERS BY STATUS
+  // ==========================================
+
   async getOrdersByStatus(req, res, next) {
     try {
-      const { days = 7 } = req.query;
-
       const result = await pool.query(`
         SELECT 
-          DATE(created_at) as date,
           status,
-          COUNT(*) as count
+          COUNT(*) as count,
+          COALESCE(SUM(price), 0) as total_value
         FROM orders
-        WHERE created_at >= NOW() - INTERVAL '${days} days'
-        GROUP BY DATE(created_at), status
-        ORDER BY date DESC, status
+        GROUP BY status
+        ORDER BY 
+          CASE status
+            WHEN 'new' THEN 1
+            WHEN 'published' THEN 2
+            WHEN 'taken' THEN 3
+            WHEN 'picked' THEN 4
+            WHEN 'delivered' THEN 5
+            WHEN 'cancelled' THEN 6
+          END
       `);
 
       res.json({ data: result.rows });
@@ -469,9 +464,15 @@ class AdminController {
       await pool.query(`
         INSERT INTO activity_log (user_id, action, description, details, ip_address)
         VALUES ($1, $2, $3, $4, $5)
-      `, [req.user.id, action, description, JSON.stringify(details), req.ip]);
+      `, [
+        req.user.id,
+        action,
+        description,
+        JSON.stringify(details || {}),
+        req.ip
+      ]);
 
-      res.json({ message: 'פעילות נרשמה' });
+      res.json({ message: 'Activity logged' });
     } catch (error) {
       next(error);
     }
@@ -483,27 +484,27 @@ class AdminController {
 
       let query = `
         SELECT 
-          al.*,
+          a.*,
           u.name as user_name,
           u.username
-        FROM activity_log al
-        LEFT JOIN users u ON al.user_id = u.id
+        FROM activity_log a
+        LEFT JOIN users u ON a.user_id = u.id
         WHERE 1=1
       `;
 
       const params = [];
 
       if (userId) {
-        query += ` AND al.user_id = $${params.length + 1}`;
+        query += ` AND a.user_id = $${params.length + 1}`;
         params.push(userId);
       }
 
       if (action) {
-        query += ` AND al.action = $${params.length + 1}`;
+        query += ` AND a.action = $${params.length + 1}`;
         params.push(action);
       }
 
-      query += ` ORDER BY al.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+      query += ` ORDER BY a.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
       params.push(limit, offset);
 
       const result = await pool.query(query, params);
@@ -515,12 +516,12 @@ class AdminController {
   }
 
   // ==========================================
-  // SYSTEM SETTINGS
+  // SETTINGS
   // ==========================================
 
   async getSettings(req, res, next) {
     try {
-      const result = await pool.query('SELECT * FROM settings ORDER BY key');
+      const result = await pool.query('SELECT * FROM settings');
       
       const settings = {};
       result.rows.forEach(row => {
@@ -544,39 +545,41 @@ class AdminController {
         DO UPDATE SET value = $2, updated_at = NOW()
       `, [key, value]);
 
-      res.json({ message: 'הגדרה עודכנה' });
+      res.json({ message: 'Setting updated' });
     } catch (error) {
       next(error);
     }
   }
 
   // ==========================================
-  // SYSTEM MAINTENANCE
+  // MAINTENANCE & CLEANUP
   // ==========================================
 
   async cleanupOldData(req, res, next) {
     try {
-      const { days = 90 } = req.query;
+      const { days = 90 } = req.body;
 
       // Delete old cancelled orders
       const ordersResult = await pool.query(`
         DELETE FROM orders 
         WHERE status = 'cancelled' 
-        AND cancelled_at < NOW() - INTERVAL '${days} days'
+        AND cancelled_at < NOW() - INTERVAL '${parseInt(days)} days'
         RETURNING id
       `);
 
-      // Delete old logs
+      // Delete old activity logs
       const logsResult = await pool.query(`
         DELETE FROM activity_log 
-        WHERE created_at < NOW() - INTERVAL '${days} days'
+        WHERE created_at < NOW() - INTERVAL '${parseInt(days)} days'
         RETURNING id
       `);
 
       res.json({ 
-        message: 'ניקוי הושלם',
-        deleted_orders: ordersResult.rows.length,
-        deleted_logs: logsResult.rows.length
+        message: 'Cleanup completed',
+        deleted: {
+          orders: ordersResult.rowCount,
+          logs: logsResult.rowCount
+        }
       });
     } catch (error) {
       next(error);
@@ -585,27 +588,22 @@ class AdminController {
 
   async getDatabaseStats(req, res, next) {
     try {
-      const stats = await pool.query(`
+      const result = await pool.query(`
         SELECT 
-          schemaname,
-          tablename,
-          pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size,
-          pg_total_relation_size(schemaname||'.'||tablename) AS size_bytes
-        FROM pg_tables 
-        WHERE schemaname = 'public'
-        ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC
+          (SELECT COUNT(*) FROM orders) as total_orders,
+          (SELECT COUNT(*) FROM couriers) as total_couriers,
+          (SELECT COUNT(*) FROM customers) as total_customers,
+          (SELECT COUNT(*) FROM users) as total_users,
+          (SELECT COUNT(*) FROM payout_requests) as total_payout_requests,
+          (SELECT COUNT(*) FROM payments) as total_payments,
+          (SELECT COUNT(*) FROM activity_log) as total_logs
       `);
 
-      res.json({ tables: stats.rows });
+      res.json({ stats: result.rows[0] });
     } catch (error) {
       next(error);
     }
   }
-
-  // ==========================================
-  // SETTINGS PANEL FUNCTIONS
-  // ==========================================
-
 
   // ==========================================
   // SETTINGS PANEL FUNCTIONS
@@ -717,6 +715,7 @@ class AdminController {
       next(error);
     }
   }
+
   // ==========================================
   // PAYMENTS & COURIERS MANAGEMENT
   // ==========================================
@@ -739,8 +738,8 @@ class AdminController {
     try {
       const result = await pool.query(`
         UPDATE couriers 
-        SET total_earnings = 0, 
-            pending_payout = 0
+        SET total_earned = 0, 
+            balance = 0
         RETURNING id
       `);
       
@@ -758,9 +757,8 @@ class AdminController {
     try {
       const result = await pool.query(`
         UPDATE couriers 
-        SET rating = 0, 
-            total_deliveries = 0,
-            successful_deliveries = 0
+        SET rating = 5.0, 
+            total_deliveries = 0
         RETURNING id
       `);
       
@@ -809,7 +807,7 @@ class AdminController {
       
       const result = await pool.query(query, params);
       
-      // Update courier pending_payout
+      // Update courier balance (deduct)
       if (result.rows.length > 0) {
         const courierIds = [...new Set(result.rows.map(r => r.courier_id))];
         
@@ -820,7 +818,7 @@ class AdminController {
           
           await pool.query(`
             UPDATE couriers 
-            SET pending_payout = GREATEST(pending_payout - $1, 0)
+            SET balance = GREATEST(balance - $1, 0)
             WHERE id = $2
           `, [totalPaid, cId]);
         }
