@@ -12,9 +12,12 @@ let autocompletePickup = null;
 let autocompleteDelivery = null;
 let selectedPickupLocation = null;
 let selectedDeliveryLocation = null;
-let googleMapsLoaded = false; // ✅ הוסף את זה
+let googleMapsLoaded = false;
 
-// ✅ הוסף את כל הפונקציה הזו:
+// ==========================================
+// GOOGLE MAPS API LOADER
+// ==========================================
+
 async function loadGoogleMapsAPI() {
     if (googleMapsLoaded) {
         console.log('✅ Google Maps already loaded');
@@ -56,12 +59,6 @@ async function loadGoogleMapsAPI() {
         throw error;
     }
 }
-
-// ==========================================
-// GOOGLE MAPS API KEY LOADER
-// ==========================================
-
-
 
 // Load Google Maps on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -116,7 +113,7 @@ function showLoginError(message) {
 function logout() {
     if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
         localStorage.clear();
-        window.location.href = "/";  // ✅ Redirect to home page
+        window.location.href = "/";
     }
 }
 
@@ -241,23 +238,39 @@ async function loadStatistics() {
             
             const totalRevenue = parseFloat(stats.total_revenue || 0);
             const commissionRate = 0.25;
-            const netProfit = Math.floor(totalRevenue * commissionRate);
+            const netProfit = totalRevenue * commissionRate;
             const courierPayout = totalRevenue - netProfit;
             
-            document.getElementById('statRevenue').textContent = `₪${totalRevenue.toLocaleString()}`;
-            
-            const netProfitEl = document.getElementById('statNetProfit');
-            if (netProfitEl) {
-                netProfitEl.textContent = `₪${netProfit.toLocaleString()}`;
-            }
-            
-            const courierPayoutEl = document.getElementById('statCourierPayout');
-            if (courierPayoutEl) {
-                courierPayoutEl.textContent = `₪${courierPayout.toLocaleString()}`;
-            }
+            document.getElementById('statRevenue').textContent = `₪${totalRevenue.toFixed(0)}`;
+            document.getElementById('statNetProfit').textContent = `₪${netProfit.toFixed(0)}`;
+            document.getElementById('statCourierPayout').textContent = `₪${courierPayout.toFixed(0)}`;
         }
     } catch (error) {
-        console.error('Statistics error:', error);
+        console.error('Load statistics error:', error);
+    }
+}
+
+// ==========================================
+// TABS
+// ==========================================
+
+function switchTab(tab) {
+    ['orders', 'couriers', 'payments'].forEach(t => {
+        document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`).classList.remove('tab-active');
+        document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`).classList.add('tab-inactive');
+        document.getElementById(`${t}Tab`).classList.add('hidden');
+    });
+    
+    document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('tab-active');
+    document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.remove('tab-inactive');
+    document.getElementById(`${tab}Tab`).classList.remove('hidden');
+    
+    if (tab === 'orders') {
+        loadOrders();
+    } else if (tab === 'couriers') {
+        loadCouriers();
+    } else if (tab === 'payments') {
+        loadPayments();
     }
 }
 
@@ -267,12 +280,10 @@ async function loadStatistics() {
 
 async function loadOrders(status = null) {
     try {
-        let url = '/api/orders?limit=100';
-        if (status && status !== 'all') {
-            url += `&status=${status}`;
+        let url = '/api/orders';
+        if (status) {
+            url += `?status=${status}`;
         }
-        
-        console.log('📥 Loading orders:', { url, status, currentFilter });
         
         const response = await fetch(url, {
             headers: { 'Authorization': `Bearer ${adminToken}` }
@@ -280,81 +291,66 @@ async function loadOrders(status = null) {
         
         if (response.ok) {
             const data = await response.json();
-            console.log(`✅ Loaded ${data.orders?.length || 0} orders`);
-            displayOrders(data.orders || []);
-        } else {
-            console.error('❌ Failed to load orders:', response.status);
-            const error = await response.json();
-            console.error('Error details:', error);
+            displayOrders(data.orders);
         }
     } catch (error) {
-        console.error('❌ Load orders error:', error);
+        console.error('Load orders error:', error);
     }
 }
 
 function displayOrders(orders) {
     const container = document.getElementById('ordersList');
     
-    if (!orders || orders.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-12 text-slate-400">
-                <div class="text-6xl mb-4">📭</div>
-                <p class="text-lg font-bold mb-2">אין הזמנות</p>
-                <p class="text-sm">צור הזמנה חדשה כדי להתחיל</p>
-            </div>
-        `;
+    if (orders.length === 0) {
+        container.innerHTML = '<p class="text-center text-slate-400 py-8">אין הזמנות</p>';
         return;
     }
     
     container.innerHTML = orders.map(order => `
-        <div class="bg-slate-700 rounded-xl p-4 border border-slate-600">
+        <div class="bg-slate-700 rounded-lg p-4 border border-slate-600">
             <div class="flex justify-between items-start mb-3">
                 <div>
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="text-lg font-bold">${order.order_number}</span>
-                        ${getStatusBadge(order.status)}
-                    </div>
-                    <p class="text-sm text-slate-400">
-                        ${new Date(order.created_at).toLocaleDateString('he-IL')} • 
-                        ${order.created_by_name || 'לקוח'}
-                    </p>
+                    <span class="text-lg font-bold">${order.order_number}</span>
+                    <span class="mr-2">${getStatusBadge(order.status)}</span>
                 </div>
-                <div class="text-left">
-                    <p class="text-xl font-bold text-emerald-400">₪${order.price}</p>
-                    <p class="text-xs text-slate-400">${order.distance_km} ק"מ</p>
+                <span class="text-emerald-400 font-bold text-xl">₪${order.price}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-sm mb-3">
+                <div>
+                    <p class="text-slate-400">שולח</p>
+                    <p class="font-bold">${order.sender_name}</p>
+                    <p>${order.sender_phone}</p>
+                </div>
+                <div>
+                    <p class="text-slate-400">מקבל</p>
+                    <p class="font-bold">${order.receiver_name}</p>
+                    <p>${order.receiver_phone}</p>
                 </div>
             </div>
-            
-            <div class="space-y-2 text-sm mb-3">
-                <div class="flex items-start gap-2">
-                    <span>📍</span>
-                    <p class="text-slate-300">${order.pickup_address}</p>
-                </div>
-                <div class="flex items-start gap-2">
-                    <span>🏠</span>
-                    <p class="text-slate-300">${order.delivery_address}</p>
-                </div>
-                ${order.courier_first_name ? `
-                <div class="flex items-center gap-2 bg-slate-600 rounded p-2">
-                    <span>🏍️</span>
-                    <p>שליח: <strong>${order.courier_first_name} ${order.courier_last_name}</strong></p>
-                </div>
-                ` : ''}
+            <div class="text-sm space-y-1 mb-3">
+                <p>📍 מ: ${order.pickup_address}</p>
+                <p>🏠 ל: ${order.delivery_address}</p>
+                <p>🏍️ ${getVehicleNameHebrew(order.vehicle_type)} | 📏 ${order.distance_km} ק"מ</p>
             </div>
-            
+            ${order.courier_first_name ? `
+                <div class="bg-slate-600 rounded p-2 text-sm mb-3">
+                    🚚 שליח: ${order.courier_first_name} ${order.courier_last_name} | ${order.courier_phone}
+                </div>
+            ` : ''}
             <div class="flex gap-2">
                 ${order.status === 'new' ? `
-                    <button onclick="publishOrder(${order.id})" class="flex-1 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg text-sm font-bold">
+                    <button onclick="publishOrder(${order.id})" 
+                            class="flex-1 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded text-sm">
                         📢 פרסם
                     </button>
                 ` : ''}
-                ${order.status !== 'delivered' && order.status !== 'cancelled' ? `
-                    <button onclick="cancelOrder(${order.id})" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg text-sm">
-                        ❌
-                    </button>
-                ` : ''}
-                <button onclick="viewOrderDetails(${order.id})" class="flex-1 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-sm font-bold">
+                <button onclick="viewOrderDetails(${order.id})" 
+                        class="flex-1 bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded text-sm">
                     👁️ פרטים
+                </button>
+                <button onclick="deleteOrderConfirm(${order.id}, '${order.order_number}')" 
+                        class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded text-sm">
+                    🗑️
                 </button>
             </div>
         </div>
@@ -363,324 +359,185 @@ function displayOrders(orders) {
 
 function getStatusBadge(status) {
     const badges = {
-        'new': '<span class="px-3 py-1 rounded-full text-xs bg-slate-500/20 text-slate-300 border border-slate-500/50">חדש</span>',
-        'published': '<span class="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/50">מפורסם</span>',
-        'taken': '<span class="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 border border-blue-500/50">נתפס</span>',
-        'picked': '<span class="px-3 py-1 rounded-full text-xs bg-purple-500/20 text-purple-400 border border-purple-500/50">נאסף</span>',
-        'delivered': '<span class="px-3 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">נמסר</span>',
-        'cancelled': '<span class="px-3 py-1 rounded-full text-xs bg-red-500/20 text-red-400 border border-red-500/50">בוטל</span>'
+        'new': '<span class="bg-blue-500 px-2 py-1 rounded text-xs">🆕 חדש</span>',
+        'published': '<span class="bg-purple-500 px-2 py-1 rounded text-xs">📢 מפורסם</span>',
+        'taken': '<span class="bg-yellow-500 px-2 py-1 rounded text-xs">🔵 נתפס</span>',
+        'picked': '<span class="bg-orange-500 px-2 py-1 rounded text-xs">📦 נאסף</span>',
+        'delivered': '<span class="bg-emerald-500 px-2 py-1 rounded text-xs">✅ נמסר</span>',
+        'cancelled': '<span class="bg-red-500 px-2 py-1 rounded text-xs">❌ בוטל</span>'
     };
-    return badges[status] || '';
+    return badges[status] || status;
 }
 
-async function publishOrder(orderId) {
-    if (!confirm('האם לפרסם את ההזמנה לשליחים ב-WhatsApp?')) return;
+function filterOrders(status) {
+    currentFilter = status;
     
-    try {
-        const response = await fetch(`/api/orders/${orderId}/publish`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${adminToken}` }
-        });
-        
-        if (response.ok) {
-            showNotification('✅ ההזמנה פורסמה בהצלחה!');
-            // ✅ טען מחדש את ההזמנות עם הפילטר הנוכחי
-            setTimeout(() => {
-                loadOrders(currentFilter === 'all' ? null : currentFilter);
-                loadStatistics();
-            }, 500);
-        } else {
-            const data = await response.json();
-            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+    // Update button styles
+    ['all', 'new', 'published', 'taken', 'delivered'].forEach(s => {
+        const btn = document.getElementById(`filter${s.charAt(0).toUpperCase() + s.slice(1)}`);
+        if (btn) {
+            btn.classList.remove('filter-btn-active');
+            btn.classList.add('filter-btn');
         }
-    } catch (error) {
-        console.error('Publish error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
-async function cancelOrder(orderId) {
-    const reason = prompt('סיבת ביטול (אופציונלי):');
-    if (reason === null) return; // User clicked cancel
-    
-    try {
-        const response = await fetch(`/api/orders/${orderId}/cancel`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                cancelReason: reason || 'ביטול ללא סיבה'
-            })
-        });
-        
-        if (response.ok) {
-            showNotification('✅ ההזמנה בוטלה');
-            setTimeout(() => {
-                loadOrders(currentFilter === 'all' ? null : currentFilter);
-                loadStatistics();
-            }, 500);
-        } else {
-            const data = await response.json();
-            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
-        }
-    } catch (error) {
-        console.error('Cancel error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
-function viewOrderDetails(orderId) {
-    fetch(`/api/orders/${orderId}`, {
-        headers: { 'Authorization': `Bearer ${adminToken}` }
-    })
-    .then(res => res.json())
-    .then(data => {
-        const order = data.order;
-        
-        const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
-        modal.innerHTML = `
-            <div class="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
-                <div class="flex justify-between items-start mb-6">
-                    <div>
-                        <h2 class="text-2xl font-bold mb-2">${order.order_number}</h2>
-                        ${getStatusBadge(order.status)}
-                    </div>
-                    <button onclick="this.closest('.fixed').remove()" class="text-4xl hover:text-red-500">&times;</button>
-                </div>
-                
-                <div class="space-y-4">
-                    <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                        <p class="font-bold text-blue-400 mb-2">📤 פרטי שולח</p>
-                        <p><strong>שם:</strong> ${order.sender_name}</p>
-                        <p><strong>טלפון:</strong> ${order.sender_phone}</p>
-                        <p><strong>כתובת:</strong> ${order.pickup_address}</p>
-                        ${order.pickup_notes ? `<p class="text-sm text-slate-400 mt-2">📝 ${order.pickup_notes}</p>` : ''}
-                    </div>
-                    
-                    <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
-                        <p class="font-bold text-emerald-400 mb-2">📥 פרטי מקבל</p>
-                        <p><strong>שם:</strong> ${order.receiver_name}</p>
-                        <p><strong>טלפון:</strong> ${order.receiver_phone}</p>
-                        <p><strong>כתובת:</strong> ${order.delivery_address}</p>
-                        ${order.delivery_notes ? `<p class="text-sm text-slate-400 mt-2">📝 ${order.delivery_notes}</p>` : ''}
-                    </div>
-                    
-                    ${order.courier_first_name ? `
-                    <div class="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4">
-                        <p class="font-bold text-purple-400 mb-2">🏍️ פרטי שליח</p>
-                        <p><strong>שם:</strong> ${order.courier_first_name} ${order.courier_last_name}</p>
-                        <p><strong>טלפון:</strong> ${order.courier_phone}</p>
-                        <p><strong>רכב:</strong> ${getVehicleNameHebrew(order.courier_vehicle_type)}</p>
-                    </div>
-                    ` : ''}
-                    
-                    <div class="bg-slate-700 rounded-lg p-4">
-                        <p class="font-bold mb-2">💰 פרטי מחיר</p>
-                        <div class="space-y-1 text-sm">
-                            <div class="flex justify-between">
-                                <span>מרחק:</span>
-                                <span>${order.distance_km} ק"מ</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>מחיר לפני מע"מ:</span>
-                                <span>₪${(order.price - order.vat).toFixed(2)}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>מע"מ:</span>
-                                <span>₪${order.vat}</span>
-                            </div>
-                            <div class="h-px bg-slate-600 my-2"></div>
-                            <div class="flex justify-between font-bold text-lg">
-                                <span>סה"כ:</span>
-                                <span class="text-emerald-400">₪${order.price}</span>
-                            </div>
-                            <div class="flex justify-between text-slate-400">
-                                <span>עמלה (${order.commission_rate}%):</span>
-                                <span>₪${order.commission}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span>תשלום לשליח:</span>
-                                <span class="text-emerald-400">₪${order.courier_payout}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    ${order.package_description ? `
-                    <div class="bg-slate-700 rounded-lg p-4">
-                        <p class="font-bold mb-2">📦 תיאור חבילה</p>
-                        <p class="text-slate-300">${order.package_description}</p>
-                    </div>
-                    ` : ''}
-                </div>
-                
-                <div class="mt-6 flex gap-3">
-                    ${order.status === 'new' ? `
-                        <button onclick="publishOrder(${order.id}); this.closest('.fixed').remove();" class="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
-                            📢 פרסם לשליחים
-                        </button>
-                    ` : ''}
-                    ${order.status !== 'delivered' && order.status !== 'cancelled' ? `
-                        <button onclick="cancelOrder(${order.id}); this.closest('.fixed').remove();" class="flex-1 bg-red-500 hover:bg-red-600 font-bold py-3 rounded-lg">
-                            ❌ בטל הזמנה
-                        </button>
-                    ` : ''}
-                    <button onclick="this.closest('.fixed').remove()" class="flex-1 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
-                        סגור
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
     });
+    
+    const activeBtn = document.getElementById(`filter${status.charAt(0).toUpperCase() + status.slice(1)}`);
+    if (activeBtn) {
+        activeBtn.classList.add('filter-btn-active');
+        activeBtn.classList.remove('filter-btn');
+    }
+    
+    loadOrders(status === 'all' ? null : status);
 }
 
 // ==========================================
-// CREATE ORDER MODAL
+// CREATE ORDER MODAL - ✅ הפונקציה החדשה!
 // ==========================================
 
-function showCreateOrderModal() {
+async function showCreateOrderModal() {
+    // טען את Google Maps אם עדיין לא נטען
+    if (!googleMapsLoaded) {
+        await loadGoogleMapsAPI();
+    }
+    
     const modal = document.createElement('div');
     modal.id = 'createOrderModal';
-    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto';
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 overflow-y-auto p-4';
     modal.innerHTML = `
-        <div class="bg-slate-800 rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+        <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-4xl border border-slate-700 my-8">
             <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold">📦 הזמנה חדשה</h2>
-                <button onclick="closeCreateOrderModal()" class="text-4xl hover:text-red-500">&times;</button>
+                <h2 class="text-2xl font-bold">📦 יצירת הזמנה חדשה</h2>
+                <button onclick="closeCreateOrderModal()" class="text-3xl hover:text-red-500">✕</button>
             </div>
             
-            <form id="createOrderForm" onsubmit="handleCreateOrder(event)" class="space-y-4">
-                <!-- Sender Details -->
-                <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                    <h3 class="font-bold text-blue-400 mb-3">📤 פרטי שולח</h3>
-                    <div class="grid grid-cols-2 gap-3">
+            <form id="createOrderForm" onsubmit="submitNewOrder(event)" class="space-y-6">
+                <!-- פרטי שולח -->
+                <div class="bg-slate-700/50 rounded-lg p-4">
+                    <h3 class="font-bold mb-3 text-emerald-400">📤 פרטי שולח</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm mb-1">שם מלא *</label>
-                            <input type="text" name="senderName" required
-                                   placeholder="שם מלא"
-                                   class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                            <label class="block text-sm mb-2">שם שולח *</label>
+                            <input type="text" id="senderName" required
+                                   class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
                         </div>
                         <div>
-                            <label class="block text-sm mb-1">טלפון *</label>
-                            <input type="tel" name="senderPhone" required 
-                                   pattern="0[0-9]{9}" 
+                            <label class="block text-sm mb-2">טלפון *</label>
+                            <input type="tel" id="senderPhone" required pattern="[0-9]{10}"
                                    placeholder="0501234567"
-                                   title="הזן מספר טלפון ישראלי תקין (10 ספרות)"
-                                   class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                                   class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
                         </div>
-                    </div>
-                    <div class="mt-3">
-                        <label class="block text-sm mb-1">כתובת איסוף * <span class="text-xs text-slate-400">(התחל להקליד...)</span></label>
-                        <input type="text" id="pickupAddress" name="pickupAddress" required
-                               placeholder="התחל להקליד כתובת..."
-                               autocomplete="off"
-                               class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
-                    </div>
-                    <div class="mt-3">
-                        <label class="block text-sm mb-1">הערות לאיסוף</label>
-                        <input type="text" name="pickupNotes"
-                               placeholder="קומה, דירה, הערות..."
-                               class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                        <div class="md:col-span-2">
+                            <label class="block text-sm mb-2">כתובת איסוף * (התחל להקליד ובחר מהרשימה)</label>
+                            <input type="text" id="pickupAddress" required
+                                   placeholder="רחוב 1, תל אביב"
+                                   class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                            <input type="hidden" id="pickupLat">
+                            <input type="hidden" id="pickupLng">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm mb-2">הערות לאיסוף</label>
+                            <textarea id="pickupNotes" rows="2"
+                                      class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3"></textarea>
+                        </div>
                     </div>
                 </div>
-                
-                <!-- Receiver Details -->
-                <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
-                    <h3 class="font-bold text-emerald-400 mb-3">📥 פרטי מקבל</h3>
-                    <div class="grid grid-cols-2 gap-3">
+
+                <!-- פרטי מקבל -->
+                <div class="bg-slate-700/50 rounded-lg p-4">
+                    <h3 class="font-bold mb-3 text-blue-400">📥 פרטי מקבל</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm mb-1">שם מלא *</label>
-                            <input type="text" name="receiverName" required
-                                   placeholder="שם מלא"
-                                   class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                            <label class="block text-sm mb-2">שם מקבל *</label>
+                            <input type="text" id="receiverName" required
+                                   class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
                         </div>
                         <div>
-                            <label class="block text-sm mb-1">טלפון *</label>
-                            <input type="tel" name="receiverPhone" required 
-                                   pattern="0[0-9]{9}"
+                            <label class="block text-sm mb-2">טלפון *</label>
+                            <input type="tel" id="receiverPhone" required pattern="[0-9]{10}"
                                    placeholder="0501234567"
-                                   title="הזן מספר טלפון ישראלי תקין (10 ספרות)"
-                                   class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                                   class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
                         </div>
-                    </div>
-                    <div class="mt-3">
-                        <label class="block text-sm mb-1">כתובת מסירה * <span class="text-xs text-slate-400">(התחל להקליד...)</span></label>
-                        <input type="text" id="deliveryAddress" name="deliveryAddress" required
-                               placeholder="התחל להקליד כתובת..."
-                               autocomplete="off"
-                               class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
-                    </div>
-                    <div class="mt-3">
-                        <label class="block text-sm mb-1">הערות למסירה</label>
-                        <input type="text" name="deliveryNotes"
-                               placeholder="קומה, דירה, הערות..."
-                               class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-sm">
+                        <div class="md:col-span-2">
+                            <label class="block text-sm mb-2">כתובת מסירה * (התחל להקליד ובחר מהרשימה)</label>
+                            <input type="text" id="deliveryAddress" required
+                                   placeholder="רחוב 2, ירושלים"
+                                   class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                            <input type="hidden" id="deliveryLat">
+                            <input type="hidden" id="deliveryLng">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm mb-2">הערות למסירה</label>
+                            <textarea id="deliveryNotes" rows="2"
+                                      class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3"></textarea>
+                        </div>
                     </div>
                 </div>
-                
-                <!-- Package Details + Price Calc -->
-                <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold mb-3">📦 פרטי חבילה ומחיר</h3>
-                    <div class="mb-3">
-                        <label class="block text-sm mb-1">תיאור חבילה</label>
-                        <input type="text" name="packageDescription"
-                               placeholder="מסמכים, מזון, חבילה קטנה..."
-                               class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
-                    </div>
-                    <div class="mb-3">
-                        <label class="block text-sm mb-1">סוג רכב *</label>
-                        <select name="vehicleType" id="vehicleType" required onchange="calculatePrice()"
-                                class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm">
-                            <option value="">בחר סוג רכב...</option>
-                            <option value="motorcycle">🏍️ אופנוע</option>
-                            <option value="bike">🚲 אופניים</option>
-                            <option value="scooter">🛴 קטנוע</option>
-                            <option value="car">🚗 רכב פרטי</option>
-                            <option value="van">🚐 מסחרית</option>
-                            <option value="truck">🚚 משאית</option>
-                        </select>
-                    </div>
-                    
-                    <!-- Price Display -->
-                    <div id="priceDisplay" class="bg-slate-800 rounded-lg p-4 border border-slate-600 hidden">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm text-slate-400">מרחק משוער:</span>
-                            <span id="distanceDisplay" class="font-bold">-- ק"מ</span>
+
+                <!-- פרטי משלוח -->
+                <div class="bg-slate-700/50 rounded-lg p-4">
+                    <h3 class="font-bold mb-3 text-purple-400">📦 פרטי משלוח</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm mb-2">סוג רכב *</label>
+                            <select id="vehicleType" required
+                                    onchange="calculatePrice()"
+                                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                                <option value="motorcycle">🏍️ אופנוע</option>
+                                <option value="car">🚗 רכב פרטי</option>
+                                <option value="van">🚐 מסחרית</option>
+                                <option value="truck">🚚 משאית</option>
+                            </select>
                         </div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm text-slate-400">מחיר בסיס:</span>
-                            <span id="basePriceDisplay" class="font-bold">₪--</span>
+                        <div>
+                            <label class="block text-sm mb-2">עדיפות</label>
+                            <select id="priority"
+                                    class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                                <option value="normal">רגיל</option>
+                                <option value="express">מהיר</option>
+                                <option value="urgent">דחוף</option>
+                            </select>
                         </div>
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-sm text-slate-400">מע"מ (18%):</span>
-                            <span id="vatDisplay" class="font-bold">₪--</span>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm mb-2">תיאור חבילה</label>
+                            <input type="text" id="packageDescription"
+                                   placeholder="מסמכים, חבילה קטנה, וכו'..."
+                                   class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
                         </div>
-                        <div class="h-px bg-slate-600 my-2"></div>
-                        <div class="flex justify-between items-center">
-                            <span class="font-bold text-lg">מחיר סופי:</span>
-                            <span id="totalPriceDisplay" class="font-bold text-2xl text-emerald-400">₪--</span>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm mb-2">הערות כלליות</label>
+                            <textarea id="orderNotes" rows="2"
+                                      class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3"></textarea>
                         </div>
-                    </div>
-                    
-                    <div class="mt-3">
-                        <label class="block text-sm mb-1">הערות כלליות</label>
-                        <textarea name="notes" rows="2"
-                                  placeholder="הערות נוספות..."
-                                  class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-sm"></textarea>
                     </div>
                 </div>
-                
-                <div class="flex gap-3 pt-4">
-                    <button type="submit" id="submitBtn" class="flex-1 bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
-                        ✅ צור הזמנה
-                    </button>
-                    <button type="button" onclick="closeCreateOrderModal()" 
-                            class="flex-1 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+
+                <!-- מחיר משוער -->
+                <div id="pricingDisplay" class="hidden bg-gradient-to-r from-emerald-600 to-blue-600 rounded-lg p-4">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-sm opacity-80">מחיר משוער</p>
+                            <p class="text-3xl font-bold" id="estimatedPrice">₪0</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm opacity-80">מרחק</p>
+                            <p class="text-xl font-bold" id="estimatedDistance">0 ק"מ</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm opacity-80">לשליח</p>
+                            <p class="text-xl font-bold" id="courierPayout">₪0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- כפתורי שליחה -->
+                <div class="flex gap-3">
+                    <button type="button" onclick="closeCreateOrderModal()"
+                            class="flex-1 bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
                         ביטול
+                    </button>
+                    <button type="submit"
+                            class="flex-1 bg-emerald-500 hover:bg-emerald-600 py-3 rounded-lg font-bold">
+                        ✅ צור הזמנה
                     </button>
                 </div>
             </form>
@@ -689,39 +546,31 @@ function showCreateOrderModal() {
     
     document.body.appendChild(modal);
     
-    // ✅ Wait for Google Maps to load before initializing autocomplete
-    if (googleMapsLoaded) {
-        setTimeout(() => {
-            initGooglePlacesAutocomplete();
-        }, 100);
-    } else {
-        loadGoogleMapsAPI()
-            .then(() => {
-                setTimeout(() => {
-                    initGooglePlacesAutocomplete();
-                }, 100);
-            })
-            .catch(err => {
-                console.error('Failed to load Google Maps:', err);
-                showNotification('❌ שגיאה בטעינת Google Maps', 'error');
-            });
-    }
+    // Initialize Google Places Autocomplete
+    setTimeout(() => {
+        initializeAutocomplete();
+    }, 100);
 }
 
 function closeCreateOrderModal() {
     const modal = document.getElementById('createOrderModal');
     if (modal) modal.remove();
     
-    autocompletePickup = null;
-    autocompleteDelivery = null;
+    // Reset autocomplete
     selectedPickupLocation = null;
     selectedDeliveryLocation = null;
+    autocompletePickup = null;
+    autocompleteDelivery = null;
 }
 
-function initGooglePlacesAutocomplete() {
-    if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
-        console.error('❌ Google Maps Places API not loaded!');
-        showNotification('❌ Google Maps לא נטען - נסה שוב', 'error');
+// ==========================================
+// GOOGLE PLACES AUTOCOMPLETE
+// ==========================================
+
+function initializeAutocomplete() {
+    if (!window.google || !window.google.maps) {
+        console.error('❌ Google Maps לא נטען');
+        showNotification('❌ שגיאה בטעינת מפות', 'error');
         return;
     }
     
@@ -729,242 +578,298 @@ function initGooglePlacesAutocomplete() {
     const deliveryInput = document.getElementById('deliveryAddress');
     
     if (!pickupInput || !deliveryInput) {
-        console.error('❌ Address inputs not found');
+        console.error('❌ שדות כתובת לא נמצאו');
         return;
     }
     
+    // Autocomplete options - מוגבל לישראל
     const options = {
         componentRestrictions: { country: 'il' },
-        fields: ['formatted_address', 'geometry', 'name'],
-        types: ['address']
+        fields: ['geometry', 'formatted_address', 'name']
     };
     
-    console.log('🗺️ Initializing Google Places Autocomplete...');
-    
-    try {
-        autocompletePickup = new google.maps.places.Autocomplete(pickupInput, options);
-        autocompletePickup.addListener('place_changed', () => {
-            const place = autocompletePickup.getPlace();
-            if (place.geometry) {
-                selectedPickupLocation = {
-                    lat: place.geometry.location.lat(),
-                    lng: place.geometry.location.lng(),
-                    address: place.formatted_address || place.name
-                };
-                console.log('✅ Pickup location selected:', selectedPickupLocation);
-                calculatePrice();
-            }
-        });
-    } catch (error) {
-        console.error('❌ Error initializing pickup autocomplete:', error);
-    }
-    
-    try {
-        autocompleteDelivery = new google.maps.places.Autocomplete(deliveryInput, options);
-        autocompleteDelivery.addListener('place_changed', () => {
-            const place = autocompleteDelivery.getPlace();
-            if (place.geometry) {
-                selectedDeliveryLocation = {
-                    lat: place.geometry.location.lat(),
-                    lng: place.geometry.location.lng(),
-                    address: place.formatted_address || place.name
-                };
-                console.log('✅ Delivery location selected:', selectedDeliveryLocation);
-                calculatePrice();
-            }
-        });
-    } catch (error) {
-        console.error('❌ Error initializing delivery autocomplete:', error);
-    }
-    
-    console.log('✅ Google Places Autocomplete initialized successfully');
-}
-
-async function calculatePrice() {
-    const vehicleType = document.getElementById('vehicleType')?.value;
-    
-    if (!selectedPickupLocation || !selectedDeliveryLocation) {
-        console.log('⏳ Waiting for both locations...');
-        return;
-    }
-    
-    if (!vehicleType) {
-        console.log('⏳ Waiting for vehicle type...');
-        return;
-    }
-    
-    console.log('🧮 Calculating price...', {
-        pickup: selectedPickupLocation,
-        delivery: selectedDeliveryLocation,
-        vehicle: vehicleType
+    // Pickup autocomplete
+    autocompletePickup = new google.maps.places.Autocomplete(pickupInput, options);
+    autocompletePickup.addListener('place_changed', () => {
+        const place = autocompletePickup.getPlace();
+        if (place.geometry) {
+            selectedPickupLocation = {
+                address: place.formatted_address || place.name,
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng()
+            };
+            document.getElementById('pickupLat').value = selectedPickupLocation.lat;
+            document.getElementById('pickupLng').value = selectedPickupLocation.lng;
+            console.log('✅ בחרת כתובת איסוף:', selectedPickupLocation);
+            calculatePrice();
+        }
     });
     
+    // Delivery autocomplete
+    autocompleteDelivery = new google.maps.places.Autocomplete(deliveryInput, options);
+    autocompleteDelivery.addListener('place_changed', () => {
+        const place = autocompleteDelivery.getPlace();
+        if (place.geometry) {
+            selectedDeliveryLocation = {
+                address: place.formatted_address || place.name,
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng()
+            };
+            document.getElementById('deliveryLat').value = selectedDeliveryLocation.lat;
+            document.getElementById('deliveryLng').value = selectedDeliveryLocation.lng;
+            console.log('✅ בחרת כתובת מסירה:', selectedDeliveryLocation);
+            calculatePrice();
+        }
+    });
+    
+    console.log('✅ Autocomplete initialized');
+}
+
+// ==========================================
+// CALCULATE PRICING
+// ==========================================
+
+async function calculatePrice() {
+    const pickupLat = document.getElementById('pickupLat').value;
+    const pickupLng = document.getElementById('pickupLng').value;
+    const deliveryLat = document.getElementById('deliveryLat').value;
+    const deliveryLng = document.getElementById('deliveryLng').value;
+    const vehicleType = document.getElementById('vehicleType').value;
+    
+    if (!pickupLat || !pickupLng || !deliveryLat || !deliveryLng) {
+        console.log('⚠️ חסרים נתוני מיקום');
+        return;
+    }
+    
     try {
-        const response = await fetch('/api/calculate-price', {
+        const response = await fetch('/api/orders/calculate', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${adminToken}`
             },
             body: JSON.stringify({
-                pickupLat: selectedPickupLocation.lat,
-                pickupLng: selectedPickupLocation.lng,
-                deliveryLat: selectedDeliveryLocation.lat,
-                deliveryLng: selectedDeliveryLocation.lng,
-                vehicleType: vehicleType
+                pickupLat: parseFloat(pickupLat),
+                pickupLng: parseFloat(pickupLng),
+                deliveryLat: parseFloat(deliveryLat),
+                deliveryLng: parseFloat(deliveryLng),
+                vehicleType
             })
         });
         
         if (response.ok) {
-            const data = await response.json();
-            displayPrice(data);
+            const pricing = await response.json();
+            console.log('💰 Pricing:', pricing);
+            
+            // הצג מחיר
+            document.getElementById('estimatedPrice').textContent = `₪${pricing.totalPrice}`;
+            document.getElementById('estimatedDistance').textContent = `${pricing.distanceKm} ק"מ`;
+            document.getElementById('courierPayout').textContent = `₪${pricing.courierPayout}`;
+            document.getElementById('pricingDisplay').classList.remove('hidden');
         } else {
-            const error = await response.json();
-            console.error('❌ Price calc error:', error);
-            showNotification('❌ שגיאה בחישוב מחיר', 'error');
+            console.error('❌ שגיאה בחישוב מחיר');
         }
     } catch (error) {
-        console.error('❌ Price calc exception:', error);
-        showNotification('❌ שגיאה בחישוב מחיר', 'error');
+        console.error('❌ Calculate price error:', error);
     }
 }
 
-function displayPrice(data) {
-    const priceDisplay = document.getElementById('priceDisplay');
-    const distanceDisplay = document.getElementById('distanceDisplay');
-    const basePriceDisplay = document.getElementById('basePriceDisplay');
-    const vatDisplay = document.getElementById('vatDisplay');
-    const totalPriceDisplay = document.getElementById('totalPriceDisplay');
-    
-    if (priceDisplay && distanceDisplay && basePriceDisplay && vatDisplay && totalPriceDisplay) {
-        priceDisplay.classList.remove('hidden');
-        distanceDisplay.textContent = `${data.distanceKm} ק"מ`;
-        basePriceDisplay.textContent = `₪${data.basePrice}`;
-        vatDisplay.textContent = `₪${data.vat}`;
-        totalPriceDisplay.textContent = `₪${data.totalPrice}`;
-        
-        console.log('✅ Price displayed:', data);
-    } else {
-        console.error('❌ Price display elements not found');
-    }
-}
+// ==========================================
+// SUBMIT NEW ORDER
+// ==========================================
 
-async function handleCreateOrder(event) {
+async function submitNewOrder(event) {
     event.preventDefault();
     
-    if (!adminToken) {
-        showNotification('❌ אין טוקן - התחבר מחדש', 'error');
-        logout();
-        return;
-    }
-
-    const formData = new FormData(event.target);
+    const pickupLat = document.getElementById('pickupLat').value;
+    const pickupLng = document.getElementById('pickupLng').value;
+    const deliveryLat = document.getElementById('deliveryLat').value;
+    const deliveryLng = document.getElementById('deliveryLng').value;
     
-    if (!selectedPickupLocation || !selectedDeliveryLocation) {
-        showNotification('❌ יש לבחור כתובות מהרשימה המוצעת', 'error');
+    if (!pickupLat || !pickupLng) {
+        showNotification('❌ נא לבחור כתובת איסוף מהרשימה', 'error');
         return;
     }
     
-    const vehicleType = formData.get('vehicleType');
-    if (!vehicleType) {
-        showNotification('❌ יש לבחור סוג רכב', 'error');
+    if (!deliveryLat || !deliveryLng) {
+        showNotification('❌ נא לבחור כתובת מסירה מהרשימה', 'error');
         return;
     }
     
-    const data = {
-        senderName: formData.get('senderName'),
-        senderPhone: formData.get('senderPhone'),
-        pickupAddress: selectedPickupLocation.address,
-        pickupLat: selectedPickupLocation.lat,
-        pickupLng: selectedPickupLocation.lng,
-        pickupNotes: formData.get('pickupNotes') || '',
-        receiverName: formData.get('receiverName'),
-        receiverPhone: formData.get('receiverPhone'),
-        deliveryAddress: selectedDeliveryLocation.address,
-        deliveryLat: selectedDeliveryLocation.lat,
-        deliveryLng: selectedDeliveryLocation.lng,
-        deliveryNotes: formData.get('deliveryNotes') || '',
-        packageDescription: formData.get('packageDescription') || '',
-        vehicleType: vehicleType,
-        notes: formData.get('notes') || '',
-        priority: 'normal'
+    const orderData = {
+        senderName: document.getElementById('senderName').value,
+        senderPhone: document.getElementById('senderPhone').value,
+        pickupAddress: document.getElementById('pickupAddress').value,
+        pickupLat: parseFloat(pickupLat),
+        pickupLng: parseFloat(pickupLng),
+        pickupNotes: document.getElementById('pickupNotes').value,
+        receiverName: document.getElementById('receiverName').value,
+        receiverPhone: document.getElementById('receiverPhone').value,
+        deliveryAddress: document.getElementById('deliveryAddress').value,
+        deliveryLat: parseFloat(deliveryLat),
+        deliveryLng: parseFloat(deliveryLng),
+        deliveryNotes: document.getElementById('deliveryNotes').value,
+        packageDescription: document.getElementById('packageDescription').value,
+        notes: document.getElementById('orderNotes').value,
+        vehicleType: document.getElementById('vehicleType').value,
+        priority: document.getElementById('priority').value
     };
-
-    console.log('📤 Sending order:', data);
     
-    const submitBtn = document.getElementById('submitBtn');
-    submitBtn.disabled = true;
-    submitBtn.textContent = '⏳ שולח...';
+    console.log('📦 Creating order:', orderData);
     
     try {
         const response = await fetch('/api/orders', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${adminToken}`
             },
-            body: JSON.stringify(data)
+            body: JSON.stringify(orderData)
         });
         
-        const result = await response.json();
+        const data = await response.json();
         
         if (response.ok) {
-            showNotification(`✅ הזמנה ${result.order.order_number} נוצרה!`);
+            showNotification('✅ ההזמנה נוצרה בהצלחה!');
             closeCreateOrderModal();
             loadOrders();
             loadStatistics();
         } else {
-            showNotification('❌ ' + (result.error || 'שגיאה ביצירת הזמנה'), 'error');
-            submitBtn.disabled = false;
-            submitBtn.textContent = '✅ צור הזמנה';
+            showNotification(`❌ ${data.error || 'שגיאה ביצירת הזמנה'}`, 'error');
         }
     } catch (error) {
         console.error('Create order error:', error);
-        showNotification('❌ שגיאת תקשורת: ' + error.message, 'error');
-        submitBtn.disabled = false;
-        submitBtn.textContent = '✅ צור הזמנה';
+        showNotification('❌ שגיאת תקשורת', 'error');
     }
 }
 
 // ==========================================
-// FILTERS
+// ORDER ACTIONS
 // ==========================================
 
-function filterOrders(status) {
-    currentFilter = status;
+async function publishOrder(orderId) {
+    if (!confirm('האם לפרסם את ההזמנה לשליחים?')) return;
     
-    console.log('🔍 Filtering orders by:', status);
-    
-    // Update all filter buttons
-    document.querySelectorAll('.filter-btn, .filter-btn-active').forEach(btn => {
-        btn.className = 'filter-btn px-4 py-2 rounded-lg';
-    });
-    
-    // Highlight active button
-    const btnId = 'filter' + status.charAt(0).toUpperCase() + status.slice(1);
-    const activeBtn = document.getElementById(btnId);
-    if (activeBtn) {
-        activeBtn.className = 'filter-btn-active px-4 py-2 rounded-lg';
+    try {
+        const response = await fetch(`/api/orders/${orderId}/publish`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification('✅ ההזמנה פורסמה בהצלחה!');
+            loadOrders(currentFilter === 'all' ? null : currentFilter);
+        } else {
+            showNotification(`❌ ${data.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Publish order error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
     }
-    
-    // Load orders with filter
-    loadOrders(status === 'all' ? null : status);
 }
 
-// ==========================================
-// TABS
-// ==========================================
+async function deleteOrderConfirm(orderId, orderNumber) {
+    if (!confirm(`האם למחוק את ההזמנה ${orderNumber}?`)) return;
+    
+    try {
+        const response = await fetch(`/api/admin/orders/${orderId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification('✅ ההזמנה נמחקה');
+            loadOrders(currentFilter === 'all' ? null : currentFilter);
+            loadStatistics();
+        } else {
+            showNotification(`❌ ${data.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Delete order error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
 
-function switchTab(tab) {
-    document.querySelectorAll('[id^="tab"]').forEach(t => t.className = 'tab-inactive px-6 py-3');
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
-    
-    document.getElementById(`tab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).className = 'tab-active px-6 py-3 font-bold';
-    document.getElementById(`${tab}Tab`).classList.remove('hidden');
-    
-    if (tab === 'orders') loadOrders();
-    if (tab === 'couriers') loadCouriers();
-    if (tab === 'payments') loadPayments();
+async function viewOrderDetails(orderId) {
+    try {
+        const response = await fetch(`/api/orders/${orderId}`, {
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const order = data.order;
+            
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-2xl border border-slate-700 overflow-y-auto" style="max-height: 90vh;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">פרטי הזמנה #${order.order_number}</h2>
+                        <button onclick="this.closest('.fixed').remove()" class="text-3xl hover:text-red-500">✕</button>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-slate-700 rounded-lg p-4">
+                            <h3 class="font-bold mb-2 text-emerald-400">📤 שולח</h3>
+                            <p>שם: ${order.sender_name}</p>
+                            <p>טלפון: ${order.sender_phone}</p>
+                            <p>כתובת: ${order.pickup_address}</p>
+                            ${order.pickup_notes ? `<p>הערות: ${order.pickup_notes}</p>` : ''}
+                        </div>
+                        
+                        <div class="bg-slate-700 rounded-lg p-4">
+                            <h3 class="font-bold mb-2 text-blue-400">📥 מקבל</h3>
+                            <p>שם: ${order.receiver_name}</p>
+                            <p>טלפון: ${order.receiver_phone}</p>
+                            <p>כתובת: ${order.delivery_address}</p>
+                            ${order.delivery_notes ? `<p>הערות: ${order.delivery_notes}</p>` : ''}
+                        </div>
+                        
+                        <div class="bg-slate-700 rounded-lg p-4">
+                            <h3 class="font-bold mb-2 text-purple-400">📦 פרטי משלוח</h3>
+                            <p>סטטוס: ${getStatusBadge(order.status)}</p>
+                            <p>רכב: ${getVehicleNameHebrew(order.vehicle_type)}</p>
+                            <p>מרחק: ${order.distance_km} ק"מ</p>
+                            <p>מחיר: ₪${order.price}</p>
+                            <p>לשליח: ₪${order.courier_payout}</p>
+                            ${order.package_description ? `<p>תיאור: ${order.package_description}</p>` : ''}
+                            ${order.notes ? `<p>הערות: ${order.notes}</p>` : ''}
+                        </div>
+                        
+                        ${order.courier_first_name ? `
+                            <div class="bg-slate-700 rounded-lg p-4">
+                                <h3 class="font-bold mb-2 text-yellow-400">🚚 שליח</h3>
+                                <p>${order.courier_first_name} ${order.courier_last_name}</p>
+                                <p>${order.courier_phone}</p>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="bg-slate-700 rounded-lg p-4 text-sm text-slate-400">
+                            <p>נוצר: ${new Date(order.created_at).toLocaleString('he-IL')}</p>
+                            ${order.published_at ? `<p>פורסם: ${new Date(order.published_at).toLocaleString('he-IL')}</p>` : ''}
+                            ${order.taken_at ? `<p>נתפס: ${new Date(order.taken_at).toLocaleString('he-IL')}</p>` : ''}
+                            ${order.picked_at ? `<p>נאסף: ${new Date(order.picked_at).toLocaleString('he-IL')}</p>` : ''}
+                            ${order.delivered_at ? `<p>נמסר: ${new Date(order.delivered_at).toLocaleString('he-IL')}</p>` : ''}
+                        </div>
+                    </div>
+                    
+                    <button onclick="this.closest('.fixed').remove()" 
+                            class="w-full mt-6 bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
+                        סגור
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+    } catch (error) {
+        console.error('View order error:', error);
+        showNotification('❌ שגיאה בטעינת פרטי הזמנה', 'error');
+    }
 }
 
 // ==========================================
@@ -989,36 +894,46 @@ async function loadCouriers() {
 function displayCouriers(couriers) {
     const container = document.getElementById('couriersList');
     
-    if (!couriers || couriers.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-12 text-slate-400">
-                <div class="text-6xl mb-4">🏍️</div>
-                <p>אין שליחים רשומים</p>
-            </div>
-        `;
+    if (couriers.length === 0) {
+        container.innerHTML = '<p class="text-center text-slate-400 py-8">אין שליחים</p>';
         return;
     }
     
     container.innerHTML = couriers.map(courier => `
         <div class="bg-slate-700 rounded-lg p-4 border border-slate-600">
-            <div class="flex justify-between items-start">
+            <div class="flex justify-between items-start mb-3">
                 <div>
-                    <p class="font-bold text-lg">${courier.first_name} ${courier.last_name}</p>
-                    <p class="text-sm text-slate-400">📞 ${courier.phone}</p>
-                    <p class="text-sm text-slate-400">🚗 ${getVehicleNameHebrew(courier.vehicle_type)}</p>
-                    <div class="mt-2 flex items-center gap-2">
-                        ${getCourierStatusBadge(courier.status)}
-                        <span class="text-xs text-slate-400">⭐ ${courier.rating} • ${courier.total_deliveries} משלוחים</span>
-                    </div>
+                    <span class="text-lg font-bold">${courier.first_name} ${courier.last_name}</span>
+                    <span class="mr-2">${getCourierStatusBadge(courier.status)}</span>
+                    ${courier.is_online ? '<span class="bg-green-500 px-2 py-1 rounded text-xs">🟢 מחובר</span>' : ''}
                 </div>
-                <div class="text-left">
-                    <p class="text-lg font-bold text-emerald-400">₪${parseFloat(courier.balance).toLocaleString()}</p>
-                    <p class="text-xs text-slate-400">יתרה</p>
-                    <button onclick="toggleCourierStatus(${courier.id}, '${courier.status}')" 
-                            class="mt-2 px-3 py-1 rounded text-xs ${courier.status === 'active' ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}">
-                        ${courier.status === 'active' ? '🔴 השהה' : '✅ הפעל'}
+                <div class="text-right">
+                    <p class="text-sm text-slate-400">⭐ ${courier.rating || 5.0}</p>
+                    <p class="text-emerald-400 font-bold">₪${courier.balance || 0}</p>
+                </div>
+            </div>
+            <div class="text-sm space-y-1 mb-3">
+                <p>📞 ${courier.phone}</p>
+                <p>🏍️ ${getVehicleNameHebrew(courier.vehicle_type)}</p>
+                <p>📦 ${courier.total_deliveries || 0} משלוחים | 💰 ₪${courier.total_earned || 0} הרוויח</p>
+                ${courier.work_area ? `<p>📍 ${getWorkAreaName(courier.work_area)}</p>` : ''}
+            </div>
+            <div class="flex gap-2">
+                <button onclick="viewCourierDetails(${courier.id})" 
+                        class="flex-1 bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded text-sm">
+                    👁️ פרטים
+                </button>
+                ${courier.status === 'active' ? `
+                    <button onclick="toggleCourierStatus(${courier.id}, 'blocked')" 
+                            class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded text-sm">
+                        🚫 חסום
                     </button>
-                </div>
+                ` : `
+                    <button onclick="toggleCourierStatus(${courier.id}, 'active')" 
+                            class="bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded text-sm">
+                        ✅ אפשר
+                    </button>
+                `}
             </div>
         </div>
     `).join('');
@@ -1026,16 +941,24 @@ function displayCouriers(couriers) {
 
 function getCourierStatusBadge(status) {
     const badges = {
-        'active': '<span class="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">פעיל</span>',
-        'inactive': '<span class="px-2 py-1 rounded-full text-xs bg-slate-500/20 text-slate-400 border border-slate-500/50">לא פעיל</span>',
-        'blocked': '<span class="px-2 py-1 rounded-full text-xs bg-red-500/20 text-red-400 border border-red-500/50">חסום</span>'
+        'active': '<span class="bg-emerald-500 px-2 py-1 rounded text-xs">✅ פעיל</span>',
+        'inactive': '<span class="bg-slate-500 px-2 py-1 rounded text-xs">⭕ לא פעיל</span>',
+        'blocked': '<span class="bg-red-500 px-2 py-1 rounded text-xs">🚫 חסום</span>'
     };
-    return badges[status] || '';
+    return badges[status] || status;
 }
 
-async function toggleCourierStatus(courierId, currentStatus) {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    
+function getWorkAreaName(area) {
+    const areas = {
+        'center': 'מרכז',
+        'north': 'צפון',
+        'south': 'דרום',
+        'jerusalem': 'ירושלים'
+    };
+    return areas[area] || area;
+}
+
+async function toggleCourierStatus(courierId, newStatus) {
     try {
         const response = await fetch(`/api/couriers/${courierId}/status`, {
             method: 'PUT',
@@ -1047,13 +970,77 @@ async function toggleCourierStatus(courierId, currentStatus) {
         });
         
         if (response.ok) {
-            showNotification('✅ סטטוס שונה בהצלחה');
+            showNotification('✅ סטטוס עודכן');
             loadCouriers();
-        } else {
-            showNotification('❌ שגיאה בשינוי סטטוס', 'error');
         }
     } catch (error) {
-        console.error('Toggle status error:', error);
+        console.error('Toggle courier status error:', error);
+        showNotification('❌ שגיאה בעדכון סטטוס', 'error');
+    }
+}
+
+async function viewCourierDetails(courierId) {
+    try {
+        const response = await fetch(`/api/couriers/${courierId}`, {
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const courier = data.courier;
+            
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+            modal.innerHTML = `
+                <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-2xl border border-slate-700">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">פרטי שליח</h2>
+                        <button onclick="this.closest('.fixed').remove()" class="text-3xl hover:text-red-500">✕</button>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div class="bg-slate-700 rounded-lg p-4">
+                            <h3 class="font-bold mb-2">פרטים אישיים</h3>
+                            <p>שם: ${courier.first_name} ${courier.last_name}</p>
+                            <p>ת.ז: ${courier.id_number}</p>
+                            <p>טלפון: ${courier.phone}</p>
+                            ${courier.email ? `<p>אימייל: ${courier.email}</p>` : ''}
+                            ${courier.age ? `<p>גיל: ${courier.age}</p>` : ''}
+                            ${courier.gender ? `<p>מגדר: ${courier.gender === 'male' ? 'זכר' : 'נקבה'}</p>` : ''}
+                        </div>
+                        
+                        <div class="bg-slate-700 rounded-lg p-4">
+                            <h3 class="font-bold mb-2">פרטי רכב</h3>
+                            <p>סוג: ${getVehicleNameHebrew(courier.vehicle_type)}</p>
+                            ${courier.vehicle_plate ? `<p>מספר רכב: ${courier.vehicle_plate}</p>` : ''}
+                            ${courier.work_area ? `<p>אזור: ${getWorkAreaName(courier.work_area)}</p>` : ''}
+                        </div>
+                        
+                        <div class="bg-slate-700 rounded-lg p-4">
+                            <h3 class="font-bold mb-2">סטטיסטיקות</h3>
+                            <p>סטטוס: ${getCourierStatusBadge(courier.status)}</p>
+                            <p>דירוג: ⭐ ${courier.rating || 5.0}</p>
+                            <p>משלוחים: ${courier.total_deliveries || 0}</p>
+                            <p>סה"כ הרוויח: ₪${courier.total_earned || 0}</p>
+                            <p>יתרה נוכחית: ₪${courier.balance || 0}</p>
+                        </div>
+                        
+                        <div class="bg-slate-700 rounded-lg p-4 text-sm text-slate-400">
+                            <p>נוצר: ${new Date(courier.created_at).toLocaleString('he-IL')}</p>
+                        </div>
+                    </div>
+                    
+                    <button onclick="this.closest('.fixed').remove()" 
+                            class="w-full mt-6 bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
+                        סגור
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+    } catch (error) {
+        console.error('View courier error:', error);
+        showNotification('❌ שגיאה בטעינת פרטי שליח', 'error');
     }
 }
 
@@ -1079,13 +1066,8 @@ async function loadPayments() {
 function displayPayments(requests) {
     const container = document.getElementById('paymentsList');
     
-    if (!requests || requests.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-12 text-slate-400">
-                <div class="text-6xl mb-4">💰</div>
-                <p>אין בקשות משיכה</p>
-            </div>
-        `;
+    if (requests.length === 0) {
+        container.innerHTML = '<p class="text-center text-slate-400 py-8">אין בקשות משיכה</p>';
         return;
     }
     
@@ -1093,24 +1075,33 @@ function displayPayments(requests) {
         <div class="bg-slate-700 rounded-lg p-4 border border-slate-600">
             <div class="flex justify-between items-start mb-3">
                 <div>
-                    <p class="font-bold text-lg">${req.courier_name}</p>
-                    <p class="text-sm text-slate-400">📞 ${req.courier_phone}</p>
-                    <p class="text-sm text-slate-400">📅 ${new Date(req.created_at).toLocaleDateString('he-IL')}</p>
+                    <span class="text-lg font-bold">${req.courier_name}</span>
+                    <span class="mr-2">${getPaymentStatusBadge(req.status)}</span>
                 </div>
-                <div class="text-left">
-                    <p class="text-2xl font-bold text-emerald-400">₪${parseFloat(req.amount).toLocaleString()}</p>
-                    ${getPaymentStatusBadge(req.status)}
-                </div>
+                <span class="text-emerald-400 font-bold text-xl">₪${req.amount}</span>
+            </div>
+            <div class="text-sm space-y-1 mb-3">
+                <p>📞 ${req.courier_phone}</p>
+                <p>💳 ${getPaymentMethodName(req.payment_method)}</p>
+                <p>📅 ${new Date(req.created_at).toLocaleString('he-IL')}</p>
+                ${req.admin_notes ? `<p class="text-yellow-400">📝 ${req.admin_notes}</p>` : ''}
             </div>
             ${req.status === 'pending' ? `
                 <div class="flex gap-2">
-                    <button onclick="approvePayoutRequest(${req.id})" class="flex-1 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg font-bold">
+                    <button onclick="approvePayment(${req.id})" 
+                            class="flex-1 bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded text-sm">
                         ✅ אשר
                     </button>
-                    <button onclick="rejectPayoutRequest(${req.id})" class="flex-1 bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg font-bold">
+                    <button onclick="rejectPayment(${req.id})" 
+                            class="flex-1 bg-red-500 hover:bg-red-600 px-4 py-2 rounded text-sm">
                         ❌ דחה
                     </button>
                 </div>
+            ` : req.status === 'approved' ? `
+                <button onclick="completePayment(${req.id})" 
+                        class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded text-sm">
+                    💰 סמן כשולם
+                </button>
             ` : ''}
         </div>
     `).join('');
@@ -1118,36 +1109,49 @@ function displayPayments(requests) {
 
 function getPaymentStatusBadge(status) {
     const badges = {
-        'pending': '<span class="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/50">ממתין</span>',
-        'approved': '<span class="px-3 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 border border-blue-500/50">אושר</span>',
-        'rejected': '<span class="px-3 py-1 rounded-full text-xs bg-red-500/20 text-red-400 border border-red-500/50">נדחה</span>',
-        'completed': '<span class="px-3 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/50">הושלם</span>'
+        'pending': '<span class="bg-yellow-500 px-2 py-1 rounded text-xs">⏳ ממתין</span>',
+        'approved': '<span class="bg-blue-500 px-2 py-1 rounded text-xs">✅ אושר</span>',
+        'rejected': '<span class="bg-red-500 px-2 py-1 rounded text-xs">❌ נדחה</span>',
+        'completed': '<span class="bg-emerald-500 px-2 py-1 rounded text-xs">💰 שולם</span>'
     };
-    return badges[status] || '';
+    return badges[status] || status;
 }
 
-async function approvePayoutRequest(requestId) {
-    if (!confirm('האם לאשר את בקשת המשיכה?')) return;
+function getPaymentMethodName(method) {
+    const methods = {
+        'bank_transfer': 'העברה בנקאית',
+        'bit': 'ביט',
+        'cash': 'מזומן'
+    };
+    return methods[method] || method;
+}
+
+async function approvePayment(requestId) {
+    const notes = prompt('הערות (אופציונלי):');
     
     try {
         const response = await fetch(`/api/payments/requests/${requestId}/approve`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${adminToken}` }
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ notes: notes || '' })
         });
         
         if (response.ok) {
-            showNotification('✅ בקשה אושרה');
+            showNotification('✅ בקשת המשיכה אושרה');
             loadPayments();
-        } else {
-            showNotification('❌ שגיאה באישור', 'error');
+            loadStatistics();
         }
     } catch (error) {
-        console.error('Approve error:', error);
+        console.error('Approve payment error:', error);
+        showNotification('❌ שגיאה באישור', 'error');
     }
 }
 
-async function rejectPayoutRequest(requestId) {
-    const reason = prompt('סיבת דחייה:');
+async function rejectPayment(requestId) {
+    const reason = prompt('סיבת הדחייה:');
     if (!reason) return;
     
     try {
@@ -1161,13 +1165,31 @@ async function rejectPayoutRequest(requestId) {
         });
         
         if (response.ok) {
-            showNotification('✅ בקשה נדחתה');
+            showNotification('✅ בקשת המשיכה נדחתה');
             loadPayments();
-        } else {
-            showNotification('❌ שגיאה בדחייה', 'error');
         }
     } catch (error) {
-        console.error('Reject error:', error);
+        console.error('Reject payment error:', error);
+        showNotification('❌ שגיאה בדחייה', 'error');
+    }
+}
+
+async function completePayment(requestId) {
+    if (!confirm('האם התשלום בוצע בפועל?')) return;
+    
+    try {
+        const response = await fetch(`/api/payments/requests/${requestId}/complete`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${adminToken}` }
+        });
+        
+        if (response.ok) {
+            showNotification('✅ התשלום סומן כשולם');
+            loadPayments();
+        }
+    } catch (error) {
+        console.error('Complete payment error:', error);
+        showNotification('❌ שגיאה בסימון', 'error');
     }
 }
 
@@ -1175,226 +1197,68 @@ async function rejectPayoutRequest(requestId) {
 // SETTINGS
 // ==========================================
 
-function showSettings() {
+async function showSettings() {
     const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+    modal.id = 'settingsModal';
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto';
     modal.innerHTML = `
-        <div class="bg-slate-800 rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+        <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-3xl border border-slate-700 my-8">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-2xl font-bold">⚙️ הגדרות מערכת</h2>
-                <button onclick="this.closest('.fixed').remove()" class="text-4xl hover:text-red-500">&times;</button>
+                <button onclick="closeSettings()" class="text-3xl hover:text-red-500">✕</button>
             </div>
             
-            <div class="space-y-4">
-                <!-- Statistics Management -->
+            <div class="space-y-6">
+                <!-- ניהול נציגים -->
                 <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold text-lg mb-3">📊 ניהול סטטיסטיקות</h3>
-                    <div class="space-y-3">
-                        <button onclick="resetStatistics('today')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-right">
-                            🔄 איפוס סטטיסטיקות יומיות
+                    <h3 class="font-bold mb-3 text-emerald-400">👥 ניהול נציגים</h3>
+                    <button onclick="manageAgents()" class="w-full bg-emerald-500 hover:bg-emerald-600 py-3 rounded-lg">
+                        👥 נהל נציגים
+                    </button>
+                </div>
+                
+                <!-- ניהול שליחים -->
+                <div class="bg-slate-700 rounded-lg p-4">
+                    <h3 class="font-bold mb-3 text-blue-400">🏍️ ניהול שליחים</h3>
+                    <div class="space-y-2">
+                        <button onclick="resetCourierEarnings()" class="w-full bg-yellow-500 hover:bg-yellow-600 py-2 rounded text-sm">
+                            💰 אפס רווחי שליחים
                         </button>
-                        <button onclick="resetStatistics('week')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-right">
-                            🔄 איפוס סטטיסטיקות שבועיות
+                        <button onclick="resetCourierRatings()" class="w-full bg-orange-500 hover:bg-orange-600 py-2 rounded text-sm">
+                            ⭐ אפס דירוגי שליחים
                         </button>
-                        <button onclick="resetStatistics('month')" class="w-full bg-blue-500 hover:bg-blue-600 px-4 py-3 rounded-lg text-right">
-                            🔄 איפוס סטטיסטיקות חודשיות
-                        </button>
-                        <button onclick="resetStatistics('all')" class="w-full bg-red-500 hover:bg-red-600 px-4 py-3 rounded-lg text-right font-bold">
-                            ⚠️ איפוס כל הסטטיסטיקות
+                        <button onclick="resetAllCouriers()" class="w-full bg-red-500 hover:bg-red-600 py-2 rounded text-sm">
+                            🗑️ מחק את כל השליחים
                         </button>
                     </div>
                 </div>
                 
-                <!-- User Management -->
+                <!-- ניקוי נתונים -->
                 <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold text-lg mb-3">👥 ניהול משתמשים</h3>
-                    <div class="space-y-3">
-                        <button onclick="showAddAgent()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-right">
-                            ➕ הוסף נציג חדש
+                    <h3 class="font-bold mb-3 text-purple-400">🧹 ניקוי נתונים</h3>
+                    <div class="space-y-2">
+                        <button onclick="deleteOldOrders()" class="w-full bg-slate-600 hover:bg-slate-500 py-2 rounded text-sm">
+                            🗄️ מחק הזמנות ישנות
                         </button>
-                        <button onclick="manageAgents()" class="w-full bg-purple-500 hover:bg-purple-600 px-4 py-3 rounded-lg text-right">
-                            📋 ניהול נציגים
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Courier Management -->
-                <div class="bg-slate-700 rounded-lg p-4">
-                    <h3 class="font-bold text-lg mb-3">🏍️ ניהול שליחים</h3>
-                    <div class="space-y-3">
-                        <button onclick="resetCourierEarnings()" class="w-full bg-amber-500 hover:bg-amber-600 px-4 py-3 rounded-lg text-right">
-                            💰 איפוס רווחים של שליחים
-                        </button>
-                        <button onclick="resetCourierRatings()" class="w-full bg-amber-500 hover:bg-amber-600 px-4 py-3 rounded-lg text-right">
-                            ⭐ איפוס דירוגים וסטטיסטיקות
-                        </button>
-                        <button onclick="resetAllCouriers()" class="w-full bg-red-500 hover:bg-red-600 px-4 py-3 rounded-lg text-right font-bold">
-                            ⚠️ מחק את כל השליחים
+                        <button onclick="resetStatistics()" class="w-full bg-slate-600 hover:bg-slate-500 py-2 rounded text-sm">
+                            📊 אפס סטטיסטיקות
                         </button>
                     </div>
                 </div>
             </div>
             
-            <button onclick="this.closest('.fixed').remove()" class="w-full mt-6 bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+            <button onclick="closeSettings()" 
+                    class="w-full mt-6 bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
                 סגור
             </button>
         </div>
     `;
-    
     document.body.appendChild(modal);
 }
 
-async function resetStatistics(period) {
-    const messages = {
-        'today': 'האם לאפס את הסטטיסטיקות של היום?',
-        'week': 'האם לאפס את הסטטיסטיקות של השבוע?',
-        'month': 'האם לאפס את הסטטיסטיקות של החודש?',
-        'all': 'האם לאפס את כל הסטטיסטיקות? (פעולה בלתי הפיכה!)'
-    };
-    
-    if (!confirm(messages[period])) return;
-    
-    const periodMap = {
-        'today': 'daily',
-        'week': 'weekly',
-        'month': 'monthly',
-        'all': 'all'
-    };
-    
-    const backendPeriod = periodMap[period] || period;
-    
-    try {
-        const response = await fetch(`/api/admin/reset-statistics`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ period: backendPeriod })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'סטטיסטיקות אופסו בהצלחה!'}`);
-            loadStatistics();
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
-        }
-    } catch (error) {
-        console.error('Reset statistics error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
-// ==========================================
-// USER MANAGEMENT
-// ==========================================
-
-async function showAddAgent() {
-    const modal = document.createElement('div');
-    modal.id = 'addAgentModal';
-    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
-    modal.innerHTML = `
-        <div class="bg-slate-800 rounded-2xl p-6 max-w-md w-full border border-slate-700">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-2xl font-bold">➕ הוסף נציג חדש</h2>
-                <button onclick="closeAddAgent()" class="text-slate-400 hover:text-white text-3xl">×</button>
-            </div>
-            
-            <form id="addAgentForm" onsubmit="handleAddAgent(event)" class="space-y-4">
-                <div>
-                    <label class="block text-sm mb-2">שם מלא *</label>
-                    <input type="text" id="agentName" required minlength="2"
-                           placeholder="שם פרטי ושם משפחה"
-                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
-                </div>
-                
-                <div>
-                    <label class="block text-sm mb-2">שם משתמש *</label>
-                    <input type="text" id="agentUsername" required minlength="3"
-                           placeholder="לדוגמה: agent123"
-                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
-                </div>
-                
-                <div>
-                    <label class="block text-sm mb-2">סיסמה *</label>
-                    <input type="password" id="agentPassword" required minlength="6"
-                           placeholder="לפחות 6 תווים"
-                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
-                </div>
-                
-                <div>
-                    <label class="block text-sm mb-2">תפקיד *</label>
-                    <select id="agentRole" required
-                            class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
-                        <option value="agent">נציג</option>
-                        <option value="admin">מנהל</option>
-                    </select>
-                </div>
-                
-                <div class="flex gap-3 mt-6">
-                    <button type="submit" class="flex-1 bg-emerald-500 hover:bg-emerald-600 py-3 rounded-lg font-bold">
-                        ✅ הוסף נציג
-                    </button>
-                    <button type="button" onclick="closeAddAgent()" 
-                            class="flex-1 bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
-                        ביטול
-                    </button>
-                </div>
-            </form>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) closeAddAgent();
-    });
-}
-
-function closeAddAgent() {
-    const modal = document.getElementById('addAgentModal');
+function closeSettings() {
+    const modal = document.getElementById('settingsModal');
     if (modal) modal.remove();
-}
-
-async function handleAddAgent(event) {
-    event.preventDefault();
-    
-    const name = document.getElementById('agentName').value.trim();
-    const username = document.getElementById('agentUsername').value.trim();
-    const password = document.getElementById('agentPassword').value;
-    const role = document.getElementById('agentRole').value;
-    
-    if (!name || !username || !password) {
-        showNotification('❌ יש למלא את כל השדות', 'error');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/admin/users', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ name, username, password, role })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ נציג ${name} (${username}) נוסף בהצלחה!`);
-            closeAddAgent();
-            if (document.getElementById('manageAgentsModal')) {
-                manageAgents();
-            }
-        } else {
-            showNotification(`❌ ${data.error || 'שגיאה בהוספת נציג'}`, 'error');
-        }
-    } catch (error) {
-        console.error('Add agent error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
 }
 
 async function manageAgents() {
@@ -1403,91 +1267,68 @@ async function manageAgents() {
             headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
-        const data = await response.json();
-        
-        if (!response.ok) {
-            showNotification('❌ שגיאה בטעינת נציגים', 'error');
-            return;
-        }
-        
-        const users = data.users || [];
-        
-        let currentUserId = null;
-        try {
-            const tokenData = JSON.parse(atob(adminToken.split('.')[1]));
-            currentUserId = tokenData.id;
-        } catch (e) {
-            console.error('Error parsing token:', e);
-        }
-        
-        const modal = document.createElement('div');
-        modal.id = 'manageAgentsModal';
-        modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
-        modal.innerHTML = `
-            <div class="bg-slate-800 rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
-                <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold">👥 ניהול נציגים</h2>
-                    <button onclick="closeManageAgents()" class="text-slate-400 hover:text-white text-3xl">×</button>
-                </div>
-                
-                ${users.length === 0 ? `
-                    <div class="text-center py-12 text-slate-400">
-                        <p class="text-xl mb-4">אין נציגים במערכת</p>
-                        <button onclick="closeManageAgents(); showAddAgent();" 
-                                class="bg-emerald-500 hover:bg-emerald-600 px-6 py-3 rounded-lg font-bold">
-                            ➕ הוסף נציג ראשון
-                        </button>
-                    </div>
-                ` : `
-                    <div class="space-y-3">
-                        ${users.map(user => `
-                            <div class="bg-slate-700 rounded-lg p-4 flex items-center justify-between">
-                                <div>
-                                    <p class="font-bold text-lg">${user.name || user.username}</p>
-                                    <p class="text-sm text-slate-400">
-                                        ${user.role === 'admin' ? '👑 מנהל' : '👤 נציג'} • 
-                                        משתמש: ${user.username} • 
-                                        נוצר: ${new Date(user.created_at).toLocaleDateString('he-IL')}
-                                    </p>
-                                </div>
-                                <div class="flex gap-2">
-                                    <button onclick="changeUserPassword(${user.id}, '${user.username}')"
-                                            class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded text-sm">
-                                        🔑 שנה סיסמה
-                                    </button>
-                                    ${user.id !== currentUserId ? `
-                                        <button onclick="deleteUserConfirm(${user.id}, '${user.name || user.username}')"
-                                                class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded text-sm">
-                                            🗑️ מחק
-                                        </button>
-                                    ` : `
-                                        <span class="text-emerald-400 px-4 py-2 text-sm">
-                                            אתה 🔒
-                                        </span>
-                                    `}
-                                </div>
-                            </div>
-                        `).join('')}
+        if (response.ok) {
+            const data = await response.json();
+            const users = data.users;
+            
+            closeSettings();
+            
+            const modal = document.createElement('div');
+            modal.id = 'manageAgentsModal';
+            modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto';
+            modal.innerHTML = `
+                <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-3xl border border-slate-700 my-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-2xl font-bold">👥 ניהול נציגים</h2>
+                        <button onclick="closeManageAgents()" class="text-3xl hover:text-red-500">✕</button>
                     </div>
                     
+                    ${users.length === 0 ? `
+                        <p class="text-center text-slate-400 py-8">אין נציגים במערכת</p>
+                    ` : `
+                        <div class="space-y-3 mb-6">
+                            ${users.map(user => `
+                                <div class="bg-slate-700 rounded-lg p-4 flex justify-between items-center">
+                                    <div>
+                                        <p class="font-bold">${user.name}</p>
+                                        <p class="text-sm text-slate-400">${user.username} | ${getRoleNameHebrew(user.role)}</p>
+                                        <p class="text-xs text-slate-500">${user.active ? '✅ פעיל' : '❌ לא פעיל'}</p>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button onclick="changeUserPassword(${user.id}, '${user.username}')"
+                                                class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded text-sm">
+                                            🔑 שנה סיסמה
+                                        </button>
+                                        ${user.id !== userData.id ? `
+                                            <button onclick="deleteUserConfirm(${user.id}, '${user.name || user.username}')"
+                                                    class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded text-sm">
+                                                🗑️ מחק
+                                            </button>
+                                        ` : `
+                                            <span class="text-emerald-400 px-4 py-2 text-sm">
+                                                אתה 🔒
+                                            </span>
+                                        `}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                    
                     <button onclick="closeManageAgents(); showAddAgent();" 
-                            class="w-full mt-6 bg-emerald-500 hover:bg-emerald-600 py-3 rounded-lg font-bold">
+                            class="w-full mb-3 bg-emerald-500 hover:bg-emerald-600 py-3 rounded-lg font-bold">
                         ➕ הוסף נציג נוסף
                     </button>
-                `}
-                
-                <button onclick="closeManageAgents()" 
-                        class="w-full mt-3 bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
-                    סגור
-                </button>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) closeManageAgents();
-        });
-        
+                    
+                    <button onclick="closeManageAgents()" 
+                            class="w-full bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
+                        סגור
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
     } catch (error) {
         console.error('Manage agents error:', error);
         showNotification('❌ שגיאה בטעינת נציגים', 'error');
@@ -1497,6 +1338,90 @@ async function manageAgents() {
 function closeManageAgents() {
     const modal = document.getElementById('manageAgentsModal');
     if (modal) modal.remove();
+}
+
+async function showAddAgent() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+    modal.innerHTML = `
+        <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700">
+            <h2 class="text-2xl font-bold mb-6">➕ הוסף נציג חדש</h2>
+            
+            <form id="addAgentForm" onsubmit="submitNewAgent(event)" class="space-y-4">
+                <div>
+                    <label class="block text-sm mb-2">שם מלא *</label>
+                    <input type="text" id="agentName" required
+                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                </div>
+                <div>
+                    <label class="block text-sm mb-2">שם משתמש *</label>
+                    <input type="text" id="agentUsername" required
+                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                </div>
+                <div>
+                    <label class="block text-sm mb-2">סיסמה *</label>
+                    <input type="password" id="agentPassword" required minlength="6"
+                           class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                </div>
+                <div>
+                    <label class="block text-sm mb-2">תפקיד</label>
+                    <select id="agentRole"
+                            class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                        <option value="agent">נציג</option>
+                        <option value="manager">מנהל</option>
+                        <option value="admin">מנהל ראשי</option>
+                    </select>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button type="button" onclick="this.closest('.fixed').remove()"
+                            class="flex-1 bg-slate-600 hover:bg-slate-500 py-3 rounded-lg font-bold">
+                        ביטול
+                    </button>
+                    <button type="submit"
+                            class="flex-1 bg-emerald-500 hover:bg-emerald-600 py-3 rounded-lg font-bold">
+                        ✅ הוסף
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function submitNewAgent(event) {
+    event.preventDefault();
+    
+    const agentData = {
+        name: document.getElementById('agentName').value,
+        username: document.getElementById('agentUsername').value,
+        password: document.getElementById('agentPassword').value,
+        role: document.getElementById('agentRole').value
+    };
+    
+    try {
+        const response = await fetch('/api/admin/users', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(agentData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification('✅ נציג נוסף בהצלחה!');
+            event.target.closest('.fixed').remove();
+            manageAgents();
+        } else {
+            showNotification(`❌ ${data.error || 'שגיאה'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Add agent error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
 }
 
 async function changeUserPassword(userId, username) {
@@ -1554,6 +1479,143 @@ async function deleteUserConfirm(userId, username) {
     }
 }
 
+async function resetCourierEarnings() {
+    if (!confirm('האם לאפס את כל הרווחים של השליחים?')) return;
+    
+    try {
+        const response = await fetch('/api/admin/reset-courier-earnings', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'רווחי שליחים אופסו בהצלחה!'}`);
+            loadCouriers();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset courier earnings error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function resetCourierRatings() {
+    if (!confirm('האם לאפס את כל הדירוגים של השליחים?')) return;
+    
+    try {
+        const response = await fetch('/api/admin/reset-courier-ratings', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'דירוגי שליחים אופסו בהצלחה!'}`);
+            loadCouriers();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset courier ratings error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function resetAllCouriers() {
+    if (!confirm('⚠️ אזהרה! פעולה זו תמחק את כל השליחים ממערכת!\n\nהאם אתה בטוח?')) return;
+    if (!confirm('אישור נוסף: פעולה זו בלתי הפיכה! האם להמשיך?')) return;
+    
+    try {
+        const response = await fetch('/api/admin/reset-all-couriers', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message || 'כל השליחים נמחקו בהצלחה!'}`);
+            loadCouriers();
+            loadStatistics();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset all couriers error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function deleteOldOrders() {
+    const months = prompt('מחק הזמנות ישנות מ- X חודשים:', '6');
+    if (!months) return;
+    
+    try {
+        const response = await fetch('/api/admin/delete-old-orders', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ months: parseInt(months) })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.deleted} הזמנות ישנות נמחקו`);
+            loadOrders();
+            loadStatistics();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+        }
+    } catch (error) {
+        console.error('Delete old orders error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
+async function resetStatistics() {
+    if (!confirm('האם לאפס את כל הסטטיסטיקות? (ימחק את כל ההזמנות!)')) return;
+    
+    try {
+        const response = await fetch('/api/admin/reset-statistics', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ period: 'all' })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showNotification(`✅ ${data.message}`);
+            loadOrders();
+            loadStatistics();
+        } else {
+            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
+        }
+    } catch (error) {
+        console.error('Reset statistics error:', error);
+        showNotification('❌ שגיאת תקשורת', 'error');
+    }
+}
+
 // ==========================================
 // HELPERS
 // ==========================================
@@ -1591,103 +1653,3 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
-
-
-
-
-
-
-
-// ==========================================
-// COURIER MANAGEMENT
-// ==========================================
-
-async function resetCourierEarnings() {
-    if (!confirm('האם לאפס את כל הרווחים של השליחים? (total_earnings + pending_payout = 0)')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/admin/reset-courier-earnings', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'רווחי שליחים אופסו בהצלחה!'}`);
-            loadCouriers(); // Refresh courier list if visible
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
-        }
-    } catch (error) {
-        console.error('Reset courier earnings error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
-async function resetCourierRatings() {
-    if (!confirm('האם לאפס את כל הדירוגים והסטטיסטיקות של השליחים? (rating, total_deliveries, successful_deliveries = 0)')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/admin/reset-courier-ratings', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'דירוגי שליחים אופסו בהצלחה!'}`);
-            loadCouriers(); // Refresh courier list if visible
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
-        }
-    } catch (error) {
-        console.error('Reset courier ratings error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
-
-async function resetAllCouriers() {
-    if (!confirm('⚠️ אזהרה! פעולה זו תמחק את כל השליחים ממערכת!\n\nהאם אתה בטוח?')) {
-        return;
-    }
-    
-    // Second confirmation for destructive action
-    if (!confirm('אישור נוסף: פעולה זו בלתי הפיכה! האם להמשיך?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/admin/reset-all-couriers', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showNotification(`✅ ${data.message || 'כל השליחים נמחקו בהצלחה!'}`);
-            loadCouriers(); // Refresh courier list if visible
-            loadStatistics(); // Update dashboard stats
-        } else {
-            showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
-        }
-    } catch (error) {
-        console.error('Reset all couriers error:', error);
-        showNotification('❌ שגיאת תקשורת', 'error');
-    }
-}
