@@ -207,6 +207,104 @@ class WhatsAppService {
     return this.sendToGroup(message);
   }
 
+  // ==========================================
+  // VIP CUSTOMER NOTIFICATIONS (CURresponse)
+  // ==========================================
+  
+  /**
+   * Send VIP order updates to CURresponse customer (Malka)
+   * @param {string} phone - Customer phone number
+   * @param {object} order - Order object
+   * @param {string} updateType - Type of update (created, published, taken, picked, delivered, waiting_fee_updated)
+   */
+  async sendVIPOrderUpdate(phone, order, updateType) {
+    let message = '';
+    
+    switch (updateType) {
+      case 'created':
+        message = `✅ *הזמנה נוצרה בהצלחה!*\n\n`;
+        message += `📦 מספר הזמנה: *${order.order_number}*\n`;
+        message += `${order.order_type === 'planned' ? '📅 הזמנה מתוכננת' : '⚡ הזמנה מיידית'}\n\n`;
+        message += `🏥 איסוף: ${order.pickup_address}\n`;
+        if (order.intermediate_stop_address) {
+          message += `🔄 עצירת ביניים: ${order.intermediate_stop_address}\n`;
+        }
+        message += `📍 מסירה: ${order.delivery_address}\n\n`;
+        if (order.scheduled_pickup_time) {
+          message += `⏰ שעת איסוף: ${new Date(order.scheduled_pickup_time).toLocaleString('he-IL')}\n\n`;
+        }
+        message += `תקבלי עדכונים בכל שלב!`;
+        break;
+        
+      case 'published':
+        message = `📢 *ההזמנה פורסמה לשליחים*\n\n`;
+        message += `📦 ${order.order_number}\n`;
+        message += `מחכים לשליח שיתפוס את המשלוח...`;
+        break;
+        
+      case 'taken':
+        message = `🚗 *שליח תפס את המשלוח!*\n\n`;
+        message += `📦 ${order.order_number}\n`;
+        message += `🏍️ שליח: ${order.courier_name}\n`;
+        message += `📞 טלפון: ${order.courier_phone}\n\n`;
+        message += order.order_type === 'planned' 
+          ? `השליח בדרך למשרד M.M.H לאיסוף תיק הקירור`
+          : `השליח בדרך לבית החולים`;
+        break;
+        
+      case 'picked':
+        message = `📦 *החבילה נאספה!*\n\n`;
+        message += `📦 ${order.order_number}\n`;
+        message += `השליח בדרך למסירה ברחובות 🚀`;
+        break;
+        
+      case 'delivered':
+        message = `✅ *המשלוח הושלם בהצלחה!*\n\n`;
+        message += `📦 ${order.order_number}\n`;
+        message += `המבחנות נמסרו לאופנהיימר 4, רחובות\n\n`;
+        message += `תודה שבחרת ב-M.M.H Delivery! 🙏`;
+        break;
+        
+      case 'waiting_fee_updated':
+        message = `💰 *עדכון מחיר סופי*\n\n`;
+        message += `📦 ${order.order_number}\n`;
+        message += `⏱️ זמן המתנה: ${order.waiting_time_minutes} דקות\n`;
+        message += `➕ תוספת המתנה: ₪${order.waiting_fee}\n\n`;
+        message += `💵 מחיר סופי: *₪${order.price}*`;
+        break;
+    }
+    
+    return this.sendMessage(phone, message);
+  }
+
+  /**
+   * Send order update to admin about VIP order
+   * @param {object} order - Order object
+   * @param {string} event - Event type (created, waiting)
+   */
+  async notifyAdminVIPOrder(order, event) {
+    // Get admin phone from environment or use default
+    const adminPhone = process.env.ADMIN_PHONE || '0545025254';
+    
+    let message = `🏥 *עדכון הזמנה VIP - קיוריספונס*\n\n`;
+    message += `📦 ${order.order_number}\n`;
+    
+    switch (event) {
+      case 'created':
+        message += `✅ הזמנה חדשה נוצרה!\n`;
+        message += `${order.order_type === 'planned' ? '📅 מתוכנן' : '⚡ מיידי'}\n`;
+        message += `🏥 ${order.pickup_address}`;
+        break;
+        
+      case 'waiting':
+        message += `⏱️ השליח מדווח על המתנה בבית החולים\n`;
+        message += `יש לעדכן זמן המתנה במערכת`;
+        break;
+    }
+    
+    return this.sendMessage(adminPhone, message);
+  }
+
   // Helper functions
   getVehicleEmoji(type) {
     const emojis = {
