@@ -17,6 +17,7 @@ const couriersRoutes = require('./routes/couriers.routes');
 const paymentsRoutes = require('./routes/payments.routes');
 const adminRoutes = require('./routes/admin.routes');
 const customersRoutes = require('./routes/customers.routes');
+const curresponseRoutes = require('./routes/curresponse.routes'); // ✅ NEW - VIP Routes
 
 // Import middleware
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
@@ -49,7 +50,7 @@ app.use((req, res, next) => {
 });
 
 // ==========================================
-// CONFIG ENDPOINT FOR GOOGLE MAPS - ✅ ADDED!
+// CONFIG ENDPOINT FOR GOOGLE MAPS
 // ==========================================
 app.get('/api/config/google-maps-key', (req, res) => {
   res.json({ 
@@ -67,13 +68,16 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes
+// ==========================================
+// API ROUTES
+// ==========================================
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/couriers', couriersRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/curresponse', curresponseRoutes); // ✅ NEW - VIP API
 
 // ==========================================
 // FRONTEND ROUTES
@@ -116,6 +120,21 @@ app.get('/customer/dashboard.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'customer', 'dashboard.html'));
 });
 
+// ==========================================
+// CURRESPONSE VIP ROUTES - ✅ NEW!
+// ==========================================
+app.get('/customer/curresponse/login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer', 'curresponse', 'login.html'));
+});
+
+app.get('/customer/curresponse/order.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer', 'curresponse', 'order.html'));
+});
+
+app.get('/customer/curresponse/history.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'customer', 'curresponse', 'history.html'));
+});
+
 // Track order by number
 app.get('/track/:orderNumber', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'customer', 'track.html'));
@@ -150,6 +169,7 @@ server.listen(PORT, () => {
   console.log('🔗 Customer Order:', `${PUBLIC_URL}/customer/order.html`);
   console.log('🔗 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
   console.log('🔗 Price Calculator:', `${PUBLIC_URL}/calculator`);
+  console.log('🔗 CURresponse VIP:', `${PUBLIC_URL}/customer/curresponse/login.html`); // ✅ NEW
   console.log('');
 });
 
@@ -171,4 +191,3 @@ process.on('SIGINT', () => {
 });
 
 module.exports = app;
-
