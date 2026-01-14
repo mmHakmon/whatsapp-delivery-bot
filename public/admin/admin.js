@@ -402,15 +402,16 @@ async function showCreateOrderModal() {
     
     const modal = document.createElement('div');
     modal.id = 'createOrderModal';
-    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 overflow-y-auto p-4';
+    modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
+    modal.style.overflowY = 'auto';
     modal.innerHTML = `
-        <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-4xl border border-slate-700 my-8">
-            <div class="flex justify-between items-center mb-6">
+        <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-3xl border border-slate-700 my-8" style="max-height: 90vh; overflow-y: auto;">
+            <div class="flex justify-between items-center mb-6 sticky top-0 bg-slate-800 z-10 pb-4">
                 <h2 class="text-2xl font-bold">📦 יצירת הזמנה חדשה</h2>
                 <button onclick="closeCreateOrderModal()" class="text-3xl hover:text-red-500">✕</button>
             </div>
             
-            <form id="createOrderForm" onsubmit="submitNewOrder(event)" class="space-y-6">
+            <form id="createOrderForm" onsubmit="submitNewOrder(event)" class="space-y-4">
                 <!-- פרטי שולח -->
                 <div class="bg-slate-700/50 rounded-lg p-4">
                     <h3 class="font-bold mb-3 text-emerald-400">📤 פרטי שולח</h3>
@@ -513,18 +514,36 @@ async function showCreateOrderModal() {
 
                 <!-- מחיר משוער -->
                 <div id="pricingDisplay" class="hidden bg-gradient-to-r from-emerald-600 to-blue-600 rounded-lg p-4">
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <p class="text-sm opacity-80">מחיר משוער</p>
-                            <p class="text-3xl font-bold" id="estimatedPrice">₪0</p>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-sm opacity-80">מחיר מחושב</p>
+                                <p class="text-3xl font-bold" id="estimatedPrice">₪0</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm opacity-80">מרחק</p>
+                                <p class="text-xl font-bold" id="estimatedDistance">0 ק"מ</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm opacity-80">לשליח</p>
+                                <p class="text-xl font-bold" id="courierPayout">₪0</p>
+                            </div>
                         </div>
-                        <div class="text-right">
-                            <p class="text-sm opacity-80">מרחק</p>
-                            <p class="text-xl font-bold" id="estimatedDistance">0 ק"מ</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-sm opacity-80">לשליח</p>
-                            <p class="text-xl font-bold" id="courierPayout">₪0</p>
+                        
+                        <!-- ✅ עריכת מחיר ידנית -->
+                        <div class="border-t border-white/20 pt-3">
+                            <label class="flex items-center gap-2 mb-2">
+                                <input type="checkbox" id="manualPriceToggle" onchange="toggleManualPrice()" class="w-4 h-4">
+                                <span class="text-sm">ערוך מחיר ידנית</span>
+                            </label>
+                            <div id="manualPriceInput" class="hidden">
+                                <div class="flex gap-2 items-center">
+                                    <input type="number" id="manualPrice" min="0" step="1" placeholder="הכנס מחיר"
+                                           class="flex-1 bg-white/20 border border-white/30 rounded-lg px-4 py-2 text-white">
+                                    <span class="text-sm opacity-80">₪</span>
+                                </div>
+                                <p class="text-xs opacity-70 mt-1">* המחיר היד ני יעקוף את החישוב האוטומטי</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -626,6 +645,25 @@ function initializeAutocomplete() {
 }
 
 // ==========================================
+// TOGGLE MANUAL PRICE
+// ==========================================
+
+function toggleManualPrice() {
+    const toggle = document.getElementById('manualPriceToggle');
+    const manualInput = document.getElementById('manualPriceInput');
+    
+    if (toggle.checked) {
+        manualInput.classList.remove('hidden');
+        // מילוי אוטומטי של המחיר המחושב
+        const estimatedPrice = document.getElementById('estimatedPrice').textContent.replace('₪', '');
+        document.getElementById('manualPrice').value = estimatedPrice;
+    } else {
+        manualInput.classList.add('hidden');
+        document.getElementById('manualPrice').value = '';
+    }
+}
+
+// ==========================================
 // CALCULATE PRICING
 // ==========================================
 
@@ -696,6 +734,10 @@ async function submitNewOrder(event) {
         return;
     }
     
+    // ✅ בדוק אם יש מחיר ידני
+    const manualPriceToggle = document.getElementById('manualPriceToggle');
+    const manualPrice = document.getElementById('manualPrice').value;
+    
     const orderData = {
         senderName: document.getElementById('senderName').value,
         senderPhone: document.getElementById('senderPhone').value,
@@ -714,6 +756,11 @@ async function submitNewOrder(event) {
         vehicleType: document.getElementById('vehicleType').value,
         priority: document.getElementById('priority').value
     };
+    
+    // ✅ אם יש מחיר ידני - הוסף אותו
+    if (manualPriceToggle.checked && manualPrice) {
+        orderData.manualPrice = parseFloat(manualPrice);
+    }
     
     console.log('📦 Creating order:', orderData);
     
