@@ -8,7 +8,7 @@ const { generateOrderNumber } = require('../utils/helpers');
 
 class OrdersController {
   // ==========================================
-  // CREATE ORDER (ADMIN/AGENT) - ✅ FIXED!
+  // CREATE ORDER (ADMIN/AGENT) - ✅ WITH MANUAL PRICE SUPPORT!
   // ==========================================
   async createOrder(req, res, next) {
     try {
@@ -28,7 +28,8 @@ class OrdersController {
         packageDescription,
         notes,
         vehicleType = 'motorcycle',
-        priority = 'normal'
+        priority = 'normal',
+        manualPrice  // ✅ NEW: Manual price override
       } = req.body;
 
       console.log('📦 Creating order:', {
@@ -38,7 +39,8 @@ class OrdersController {
         hasPickupCoords: !!(pickupLat && pickupLng),
         deliveryAddress,
         hasDeliveryCoords: !!(deliveryLat && deliveryLng),
-        vehicleType
+        vehicleType,
+        manualPrice: manualPrice || 'auto'
       });
 
       let distanceKm;
@@ -83,13 +85,42 @@ class OrdersController {
         }
       }
 
-      // Calculate pricing
-      const pricing = calculatePricing(distanceKm, vehicleType);
+      // ✅ Calculate pricing (or use manual price)
+      let pricing;
+      if (manualPrice && manualPrice > 0) {
+        // Manual price provided - calculate commission and courier payout
+        console.log('💰 Using manual price:', manualPrice);
+        const commissionRate = parseFloat(process.env.COMMISSION_RATE || 0.25);
+        const vatRate = parseFloat(process.env.VAT_RATE || 0.18);
+        
+        // Calculate backwards: totalPrice includes VAT
+        const priceBeforeVat = manualPrice / (1 + vatRate);
+        const vat = manualPrice - priceBeforeVat;
+        const commission = Math.floor(manualPrice * commissionRate);
+        const courierPayout = manualPrice - commission;
+        
+        pricing = {
+          distanceKm: parseFloat(distanceKm.toFixed(2)),
+          vehicleType,
+          basePrice: 0, // N/A for manual price
+          pricePerKm: 0, // N/A for manual price
+          billableKm: parseFloat(distanceKm.toFixed(2)),
+          priceBeforeVat: parseFloat(priceBeforeVat.toFixed(2)),
+          vat: parseFloat(vat.toFixed(2)),
+          totalPrice: Math.ceil(manualPrice),
+          commissionRate: commissionRate * 100,
+          commission,
+          courierPayout
+        };
+      } else {
+        // Auto calculate pricing
+        pricing = calculatePricing(distanceKm, vehicleType);
+      }
 
       // Generate order number
       const orderNumber = generateOrderNumber();
 
-      console.log('💰 Pricing:', pricing);
+      console.log('💰 Final Pricing:', pricing);
 
       // Insert order
       const result = await pool.query(`
@@ -229,12 +260,13 @@ class OrdersController {
       `;
 
       const params = [];
+
       if (status) {
         query += ' WHERE o.status = $1';
         params.push(status);
       }
 
-      query += ' ORDER BY o.created_at DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+      query += ` ORDER BY o.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
       params.push(limit, offset);
 
       const result = await pool.query(query, params);
@@ -245,7 +277,9 @@ class OrdersController {
     }
   }
 
-  // Get order by ID
+  // ==========================================
+  // GET ORDER BY ID
+  // ==========================================
   async getOrderById(req, res, next) {
     try {
       const { id } = req.params;
@@ -256,7 +290,6 @@ class OrdersController {
                c.last_name as courier_last_name,
                c.phone as courier_phone,
                c.vehicle_type as courier_vehicle_type,
-               c.rating as courier_rating,
                u.name as created_by_name
         FROM orders o
         LEFT JOIN couriers c ON o.courier_id = c.id
@@ -274,7 +307,9 @@ class OrdersController {
     }
   }
 
-  // Get order by number
+  // ==========================================
+  // GET ORDER BY NUMBER (PUBLIC)
+  // ==========================================
   async getOrderByNumber(req, res, next) {
     try {
       const { orderNumber } = req.params;
@@ -300,7 +335,7 @@ class OrdersController {
   }
 
   // ==========================================
-  // PUBLISH ORDER
+  // PUBLISH ORDER TO WHATSAPP
   // ==========================================
   async publishOrder(req, res, next) {
     try {
@@ -318,13 +353,16 @@ class OrdersController {
         return res.status(400).json({ error: 'ההזמנה כבר פורסמה' });
       }
 
+      // Update status to published
       await pool.query(
         'UPDATE orders SET status = $1, published_at = NOW() WHERE id = $2',
         [ORDER_STATUS.PUBLISHED, id]
       );
 
+      // Send to WhatsApp group
       await whatsappService.publishOrderToGroup(order);
 
+      // Notify via WebSocket
       websocketService.broadcast({ type: 'order_published', order });
 
       res.json({ message: 'ההזמנה פורסמה בהצלחה' });
@@ -334,75 +372,32 @@ class OrdersController {
   }
 
   // ==========================================
-  // CANCEL ORDER - ✅ FIXED!
+  // CANCEL ORDER
   // ==========================================
   async cancelOrder(req, res, next) {
-    const client = await pool.connect();
     try {
       const { id } = req.params;
-      const { cancelReason, reason } = req.body;
-      
-      const finalReason = cancelReason || reason || 'ביטול ללא סיבה';
-      
-      await client.query('BEGIN');
-      
-      const orderResult = await client.query('SELECT * FROM orders WHERE id = $1', [id]);
-      
-      if (orderResult.rows.length === 0) {
-        await client.query('ROLLBACK');
+      const { reason } = req.body;
+
+      const result = await pool.query(
+        'UPDATE orders SET status = $1, cancelled_at = NOW(), cancellation_reason = $2 WHERE id = $3 RETURNING *',
+        [ORDER_STATUS.CANCELLED, reason, id]
+      );
+
+      if (result.rows.length === 0) {
         return res.status(404).json({ error: 'הזמנה לא נמצאה' });
       }
-      
-      const order = orderResult.rows[0];
-      
-      if (order.status === 'delivered') {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'לא ניתן לבטל הזמנה שכבר נמסרה' });
-      }
-      
-      if (order.status === 'cancelled') {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'ההזמנה כבר בוטלה' });
-      }
-      
-      await client.query(
-        `UPDATE orders SET status = 'cancelled', cancel_reason = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`,
-        [finalReason, id]
-      );
-      
-      if (order.courier_id && order.courier_payout) {
-        await client.query('UPDATE couriers SET balance = balance - $1 WHERE id = $2', 
-          [order.courier_payout, order.courier_id]);
-      }
-      
-      await client.query('COMMIT');
-      
-      if (order.courier_id) {
-        const courierResult = await pool.query('SELECT phone FROM couriers WHERE id = $1', [order.courier_id]);
-        if (courierResult.rows.length > 0) {
-          await whatsappService.sendMessage(courierResult.rows[0].phone, 
-            `❌ *משלוח בוטל*\n\nמספר הזמנה: ${order.order_number}\nסיבה: ${finalReason}`);
-        }
-      }
-      
-      websocketService.broadcast({ type: 'order_cancelled', order });
-      
-      res.json({ 
-        message: 'ההזמנה בוטלה בהצלחה', 
-        order: { id, status: 'cancelled', cancel_reason: finalReason } 
-      });
-      
+
+      websocketService.broadcast({ type: 'order_cancelled', order: result.rows[0] });
+
+      res.json({ message: 'ההזמנה בוטלה' });
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('❌ Cancel order error:', error);
       next(error);
-    } finally {
-      client.release();
     }
   }
 
   // ==========================================
-  // TAKE ORDER
+  // TAKE ORDER (COURIER)
   // ==========================================
   async takeOrder(req, res, next) {
     const client = await pool.connect();
@@ -412,10 +407,7 @@ class OrdersController {
       const { id } = req.params;
       const courierId = req.courier.id;
 
-      const orderResult = await client.query(
-        'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
-        [id]
-      );
+      const orderResult = await client.query('SELECT * FROM orders WHERE id = $1', [id]);
 
       if (orderResult.rows.length === 0) {
         await client.query('ROLLBACK');
@@ -426,45 +418,25 @@ class OrdersController {
 
       if (order.status !== ORDER_STATUS.PUBLISHED) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'ההזמנה לא זמינה' });
+        return res.status(400).json({ error: 'לא ניתן לתפוס הזמנה זו' });
       }
 
-      // Update order status
       await client.query(
         'UPDATE orders SET status = $1, courier_id = $2, taken_at = NOW() WHERE id = $3',
         [ORDER_STATUS.TAKEN, courierId, id]
       );
 
-      // ✅ UPDATE BALANCE IMMEDIATELY when taking order!
-      await client.query(
-        'UPDATE couriers SET balance = balance + $1 WHERE id = $2',
-        [order.courier_payout, courierId]
-      );
-
       await client.query('COMMIT');
 
-      // Get updated courier info
       const courierResult = await pool.query('SELECT * FROM couriers WHERE id = $1', [courierId]);
       const courier = courierResult.rows[0];
 
-      // ✅ Send WhatsApp to CUSTOMER that courier was assigned
-      await whatsappService.notifyCourierAssigned(order.sender_phone, order, courier);
-      
-      // Send WhatsApp to courier with pickup details
       await whatsappService.sendOrderToCourier(courier.phone, order, 'pickup');
-      
-      // Announce to group
       await whatsappService.announceOrderTaken(order, courier);
 
-      // Notify via WebSocket
       websocketService.broadcast({ type: 'order_taken', order });
 
-      res.json({ 
-        message: 'ההזמנה נתפסה בהצלחה',
-        earned: order.courier_payout,
-        balance: courier.balance,
-        order 
-      });
+      res.json({ message: 'תפסת את המשלוח!' });
     } catch (error) {
       await client.query('ROLLBACK');
       next(error);
@@ -473,7 +445,9 @@ class OrdersController {
     }
   }
 
-  // Quick take (from WhatsApp link)
+  // ==========================================
+  // QUICK TAKE ORDER (FROM WHATSAPP LINK)
+  // ==========================================
   async quickTakeOrder(req, res, next) {
     const client = await pool.connect();
     try {
@@ -482,10 +456,7 @@ class OrdersController {
       const { orderId } = req.params;
       const { courierId } = req.body;
 
-      const orderResult = await client.query(
-        'SELECT * FROM orders WHERE id = $1 FOR UPDATE',
-        [orderId]
-      );
+      const orderResult = await client.query('SELECT * FROM orders WHERE id = $1', [orderId]);
 
       if (orderResult.rows.length === 0) {
         await client.query('ROLLBACK');
@@ -502,11 +473,6 @@ class OrdersController {
       await client.query(
         'UPDATE orders SET status = $1, courier_id = $2, taken_at = NOW() WHERE id = $3',
         [ORDER_STATUS.TAKEN, courierId, orderId]
-      );
-
-      await client.query(
-        'UPDATE couriers SET balance = balance + $1, total_deliveries = total_deliveries + 1 WHERE id = $2',
-        [order.courier_payout, courierId]
       );
 
       await client.query('COMMIT');
@@ -604,11 +570,12 @@ class OrdersController {
         [ORDER_STATUS.DELIVERED, id]
       );
 
-      // ✅ Update courier stats (total_deliveries & total_earned)
+      // ✅ Update courier stats (total_deliveries & total_earned) + Add to balance
       await client.query(`
         UPDATE couriers 
         SET total_deliveries = total_deliveries + 1,
-            total_earned = total_earned + $1
+            total_earned = total_earned + $1,
+            balance = balance + $1
         WHERE id = $2
       `, [order.courier_payout, courierId]);
 
@@ -623,7 +590,7 @@ class OrdersController {
       websocketService.broadcast({ type: 'order_delivered', order });
 
       res.json({ 
-        message: '✅ המשלוח הושלם! הכסף כבר נוסף ליתרה שלך',
+        message: '✅ המשלוח הושלם! הכסף נוסף ליתרה שלך',
         balance: courierResult.rows[0].balance,
         earned: order.courier_payout
       });
@@ -654,9 +621,10 @@ class OrdersController {
 
       const order = orderResult.rows[0];
 
-      if (order.courier_id && order.status !== ORDER_STATUS.CANCELLED) {
+      // If order was delivered, deduct from courier balance
+      if (order.courier_id && order.status === ORDER_STATUS.DELIVERED) {
         await client.query(
-          'UPDATE couriers SET balance = balance - $1 WHERE id = $2',
+          'UPDATE couriers SET balance = balance - $1, total_earned = total_earned - $1 WHERE id = $2',
           [order.courier_payout, order.courier_id]
         );
       }
