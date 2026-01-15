@@ -43,7 +43,10 @@ class CurresponseController {
       const deliveryAddress = customer.default_delivery_address; // אופנהיימר 4, רחובות
 
       let distanceKm, totalPrice, finalPickupAddress;
-      let intermediateStopLat, intermediateStopLng, distanceLeg1, distanceLeg2;
+      let intermediateStopLat = null;
+      let intermediateStopLng = null;
+      let distanceLeg1 = null;
+      let distanceLeg2 = null;
 
       if (orderType === 'planned') {
         // ==========================================
@@ -179,7 +182,23 @@ class CurresponseController {
       console.log('✅ VIP order created:', order.order_number);
 
       // Send WhatsApp to customer (Malka)
-      const whatsappMessage = this.buildCustomerWhatsAppMessage(order, orderType, hospitalAddress);
+      let whatsappMessage = `✅ *הזמנה חדשה נוצרה!*\n\n`;
+      whatsappMessage += `📦 מספר הזמנה: *${order.order_number}*\n`;
+      whatsappMessage += `🏥 בית חולים: ${hospitalAddress}\n`;
+      whatsappMessage += `📍 מסירה: ${order.delivery_address}\n\n`;
+      
+      if (orderType === 'immediate') {
+        whatsappMessage += `⚡ *הזמנה מיידית*\n`;
+        whatsappMessage += `שליח ייצא בקרוב לאיסוף מבית החולים\n\n`;
+      } else {
+        whatsappMessage += `📅 *הזמנה מתוכננת*\n`;
+        whatsappMessage += `שעת איסוף: ${new Date(order.scheduled_pickup_time).toLocaleString('he-IL')}\n`;
+        whatsappMessage += `המסלול: משרד M.M.H → בית החולים → רחובות\n\n`;
+      }
+      
+      whatsappMessage += `📱 תקבלי עדכונים בכל שלב!\n`;
+      whatsappMessage += `🔗 מעקב: ${process.env.PUBLIC_URL}/track/${order.order_number}`;
+      
       await whatsappService.sendMessage(customer.phone, whatsappMessage);
 
       // Notify admin
