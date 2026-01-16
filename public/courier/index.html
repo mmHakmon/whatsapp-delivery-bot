@@ -54,6 +54,14 @@
         .orders-container::-webkit-scrollbar-thumb:hover {
             background: #64748b;
         }
+        
+        /* ✅ הוספה: מונע הבהוב */
+        #loginScreen, #mainApp {
+            transition: opacity 0.3s ease;
+        }
+        #loginScreen.hidden, #mainApp.hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-white">
@@ -98,28 +106,39 @@
     })();
     </script>
     
-    <!-- Header -->
-    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-20">
-        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
-            <div class="flex items-center gap-2">
-                <img src="/assets/logo.png" alt="M.M.H Logo" class="h-10">
-                <div>
-                    <h1 class="text-lg font-bold" id="courierName">שליח</h1>
-                    <p class="text-xs text-slate-400" id="courierPhone"></p>
-                </div>
-            </div>
-            <div class="flex items-center gap-3">
-                <div class="text-left">
-                    <p class="text-2xl font-bold text-emerald-400" id="courierBalance">₪0</p>
-                    <p class="text-xs text-slate-400">יתרה</p>
-                </div>
-                <button onclick="logoutCourier()" class="bg-red-500 hover:bg-red-600 px-3 py-2 rounded-lg text-sm">
-                    🚪
-                </button>
-            </div>
-        </div>
-    </header>
-
+    <!-- ✅ NEW: Pre-check auth before showing anything -->
+    <script>
+    // ✅ בדיקה מוקדמת לפני שמציגים משהו
+    (function() {
+        const token = localStorage.getItem('courierToken');
+        const data = localStorage.getItem('courierData');
+        
+        console.log('🔍 Pre-check auth:', { hasToken: !!token, hasData: !!data });
+        
+        // אם יש token ו-data, הסתר את מסך הכניסה מראש
+        if (token && data) {
+            try {
+                const parsed = JSON.parse(data);
+                if (parsed && parsed.id) {
+                    console.log('✅ Pre-check passed, hiding login');
+                    // הסתר מסך כניסה מראש
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const loginScreen = document.getElementById('loginScreen');
+                        const mainApp = document.getElementById('mainApp');
+                        if (loginScreen && mainApp) {
+                            loginScreen.style.display = 'none';
+                            mainApp.style.display = 'block';
+                        }
+                    });
+                }
+            } catch (e) {
+                console.error('❌ Pre-check parse error:', e);
+                localStorage.clear();
+            }
+        }
+    })();
+    </script>
+    
     <!-- Login Screen -->
     <div id="loginScreen" class="container mx-auto px-4 py-8">
         <div class="max-w-md mx-auto">
@@ -146,11 +165,31 @@
         </div>
     </div>
 
-    <!-- Main App -->
-    <main id="mainApp" class="hidden">
-        <!-- ========================================== -->
+    <!-- Main App - ✅ מוסתר בברירת מחדל -->
+    <main id="mainApp" class="hidden" style="display: none;">
+        <!-- Header -->
+        <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-20">
+            <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <img src="/assets/logo.png" alt="M.M.H Logo" class="h-10">
+                    <div>
+                        <h1 class="text-lg font-bold" id="courierName">שליח</h1>
+                        <p class="text-xs text-slate-400" id="courierPhone"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="text-left">
+                        <p class="text-2xl font-bold text-emerald-400" id="courierBalance">₪0</p>
+                        <p class="text-xs text-slate-400">יתרה</p>
+                    </div>
+                    <button onclick="logoutCourier()" class="bg-red-500 hover:bg-red-600 px-3 py-2 rounded-lg text-sm">
+                        🚪
+                    </button>
+                </div>
+            </div>
+        </header>
+
         <!-- סטטיסטיקות מהירות -->
-        <!-- ========================================== -->
         <div class="bg-slate-800 border-b border-slate-700 px-4 py-3">
             <div class="container mx-auto">
                 <div class="grid grid-cols-3 gap-3">
@@ -170,19 +209,15 @@
             </div>
         </div>
 
-        <!-- ========================================== -->
-        <!-- חלון המשלוחים הקבוע - תמיד נראה! -->
-        <!-- ========================================== -->
+        <!-- חלון המשלוחים הקבוע -->
         <div class="bg-slate-800 border-b-4 border-emerald-500">
             <div class="container mx-auto px-4 py-3">
-                <!-- כותרת + מתג -->
                 <div class="flex justify-between items-center mb-3">
                     <h2 class="text-xl font-bold flex items-center gap-2">
                         <span id="ordersTitle">📦 משלוחים זמינים</span>
                         <span id="ordersCount" class="px-2 py-1 bg-emerald-500 rounded-full text-xs">0</span>
                     </h2>
                     
-                    <!-- מתג בין זמינים לפעילים -->
                     <div class="flex gap-2">
                         <button onclick="switchOrdersView('available')" id="btnAvailable" 
                                 class="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-500 text-white">
@@ -195,9 +230,7 @@
                     </div>
                 </div>
                 
-                <!-- רשימת משלוחים - חלון גלילה קבוע -->
                 <div id="ordersContainer" class="orders-container space-y-3">
-                    <!-- זמינים -->
                     <div id="availableOrdersList">
                         <div class="text-center py-12 text-slate-400">
                             <div class="text-6xl mb-4">⏳</div>
@@ -205,7 +238,6 @@
                         </div>
                     </div>
                     
-                    <!-- פעילים (מוסתר בהתחלה) -->
                     <div id="activeOrdersList" class="hidden">
                         <div class="text-center py-12 text-slate-400">
                             <div class="text-6xl mb-4">⏳</div>
@@ -216,9 +248,7 @@
             </div>
         </div>
 
-        <!-- ========================================== -->
-        <!-- טאבים למטה - ללא משלוחים! -->
-        <!-- ========================================== -->
+        <!-- טאבים -->
         <div class="bg-slate-800 border-b border-slate-700 px-4 py-2 sticky top-[73px] z-10">
             <div class="container mx-auto">
                 <div class="grid grid-cols-3 gap-2">
@@ -237,12 +267,9 @@
 
         <div class="container mx-auto px-4 py-4">
             
-            <!-- ========================================== -->
             <!-- Stats Tab -->
-            <!-- ========================================== -->
             <div id="statsTab" class="courier-tab-content">
                 
-                <!-- כרטיסי סטטיסטיקות -->
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                     <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-lg">
                         <p class="text-blue-100 text-xs mb-1">📦 היום</p>
@@ -266,7 +293,6 @@
                     </div>
                 </div>
 
-                <!-- גרפים -->
                 <div class="grid md:grid-cols-2 gap-4 mb-4">
                     <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
                         <h3 class="text-sm font-bold mb-3 flex items-center gap-2">
@@ -288,7 +314,6 @@
                     </div>
                 </div>
 
-                <!-- יעדים -->
                 <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
                     <h3 class="text-lg font-bold mb-4">🎯 יעדים</h3>
                     
@@ -324,7 +349,6 @@
                     </div>
                 </div>
 
-                <!-- דירוג וביצועים -->
                 <div class="grid md:grid-cols-2 gap-4 mb-4">
                     <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
                         <h3 class="text-lg font-bold mb-3">🏆 דירוג</h3>
@@ -358,7 +382,6 @@
                     </div>
                 </div>
 
-                <!-- ניתוח הכנסות -->
                 <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-4">
                     <h3 class="text-lg font-bold mb-3">💰 ניתוח הכנסות</h3>
                     <div class="grid grid-cols-3 gap-3 mb-3">
@@ -392,7 +415,6 @@
                     </div>
                 </div>
 
-                <!-- פיצול שעות -->
                 <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
                     <h3 class="text-lg font-bold mb-3">🕐 פיצול שעות</h3>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -424,9 +446,7 @@
                 </div>
             </div>
 
-            <!-- ========================================== -->
             <!-- History Tab -->
-            <!-- ========================================== -->
             <div id="historyTab" class="courier-tab-content hidden">
                 <div id="historyOrdersList" class="space-y-3">
                     <div class="text-center py-12 text-slate-400">
@@ -436,9 +456,7 @@
                 </div>
             </div>
 
-            <!-- ========================================== -->
             <!-- Earnings Tab -->
-            <!-- ========================================== -->
             <div id="earningsTab" class="courier-tab-content hidden">
                 <div class="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-4">
                     <div class="flex justify-between items-center mb-4">
@@ -458,7 +476,7 @@
         </div>
     </main>
 
-    <!-- ✅ CACHE BUSTING: Load script with timestamp to prevent caching -->
+    <!-- ✅ CACHE BUSTING: Load script with timestamp -->
     <script>
         (function() {
             const timestamp = new Date().getTime();
