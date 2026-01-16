@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#10b981">
+    <link rel="icon" href="/assets/logo.png">
+    <title>M.M.H Delivery - Dashboard שליחים</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
+        * { 
+            font-family: 'Heebo', sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #0f172a;
+            color: white;
+            overflow-x: hidden;
+        }
+        
+        /* Tabs */
+        .courier-tab-active {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        .courier-tab-inactive {
+            background: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+        }
+        
+        /* Orders Container */
+        .orders-container {
+            height: 45vh;
+            overflow-y: auto;
+        }
+        
+        .orders-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .orders-container::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .orders-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+        .orders-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        
+        /* Tab Content */
+        .courier-tab-content {
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        /* Charts */
+        .chart-container {
+            position: relative;
+            height: 250px;
+            margin-bottom: 1rem;
+        }
+        
+        /* Goal Bars */
+        .goal-bar {
+            height: 8px;
+            background: #1e293b;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .goal-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #10b981, #059669);
+            transition: width 0.5s ease;
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- ==================== HEADER ==================== -->
+    <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-20">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <img src="/assets/logo.png" alt="M.M.H Logo" class="h-10">
+                <div>
+                    <h1 class="text-lg font-bold" id="courierName">טוען...</h1>
+                    <p class="text-xs text-slate-400" id="courierPhone"></p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-left">
+                    <p class="text-2xl font-bold text-emerald-400" id="courierBalance">₪0</p>
+                    <p class="text-xs text-slate-400">יתרה</p>
+                </div>
+                <button onclick="logout()" class="bg-red-500 hover:bg-red-600 px-3 py-2 rounded-lg text-sm font-bold">
+                    🚪 יציאה
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== QUICK STATS ==================== -->
+    <div class="bg-slate-800 border-b border-slate-700 px-4 py-3">
+        <div class="container mx-auto">
+            <div class="grid grid-cols-3 gap-3">
+                <div class="text-center">
+                    <p class="text-2xl font-bold text-blue-400" id="statToday">0</p>
+                    <p class="text-xs text-slate-400">היום</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-2xl font-bold text-emerald-400" id="statWeek">0</p>
+                    <p class="text-xs text-slate-400">שבוע</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-2xl font-bold text-purple-400" id="statMonth">0</p>
+                    <p class="text-xs text-slate-400">חודש</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== ORDERS WINDOW ==================== -->
+    <div class="bg-slate-800 border-b-4 border-emerald-500">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-xl font-bold flex items-center gap-2">
+                    <span id="ordersTitle">📦 משלוחים זמינים</span>
+                </h2>
+                
+                <div class="flex gap-2">
+                    <button onclick="switchOrdersView('available')" id="btnAvailable" 
+                            class="px-4 py-2 rounded-lg text-sm font-bold bg-emerald-500 text-white">
+                        📦 זמינים
+                    </button>
+                    <button onclick="switchOrdersView('active')" id="btnActive"
+                            class="px-4 py-2 rounded-lg text-sm font-bold bg-slate-700 text-slate-300">
+                        🔵 פעילים
+                    </button>
+                </div>
+            </div>
+            
+            <div class="orders-container space-y-3">
+                <div id="availableOrdersList">
+                    <div class="text-center py-12 text-slate-400">
+                        <div class="text-6xl mb-4">⏳</div>
+                        <p>טוען משלוחים זמינים...</p>
+                    </div>
+                </div>
+                
+                <div id="activeOrdersList" class="hidden">
+                    <div class="text-center py-12 text-slate-400">
+                        <div class="text-6xl mb-4">⏳</div>
+                        <p>טוען משלוחים פעילים...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TABS NAVIGATION ==================== -->
+    <div class="bg-slate-800 border-b border-slate-700 px-4 py-2 sticky top-[73px] z-10">
+        <div class="container mx-auto">
+            <div class="grid grid-cols-3 gap-2">
+                <button onclick="switchCourierTab('stats')" id="tabStats" 
+                        class="courier-tab-active px-3 py-3 rounded-lg text-sm font-bold transition-all">
+                    📊 סטטיסטיקות
+                </button>
+                <button onclick="switchCourierTab('history')" id="tabHistory" 
+                        class="courier-tab-inactive px-3 py-3 rounded-lg text-sm font-bold transition-all">
+                    📋 היסטוריה
+                </button>
+                <button onclick="switchCourierTab('earnings')" id="tabEarnings" 
+                        class="courier-tab-inactive px-3 py-3 rounded-lg text-sm font-bold transition-all">
+                    💰 רווחים
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB CONTENT CONTAINER ==================== -->
+    <div class="container mx-auto px-4 py-4 pb-20">
+        
+        <!-- ==================== STATS TAB ==================== -->
+        <div id="statsTab" class="courier-tab-content space-y-4">
+            
+            <!-- רווחים -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3 flex items-center gap-2">
+                    💰 רווחים
+                </h3>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="text-center">
+                        <p class="text-xs text-slate-400 mb-1">היום</p>
+                        <p class="text-xl font-bold text-emerald-400" id="todayEarnings">₪0</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-xs text-slate-400 mb-1">שבוע</p>
+                        <p class="text-xl font-bold text-blue-400" id="weekEarnings">₪0</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-xs text-slate-400 mb-1">חודש</p>
+                        <p class="text-xl font-bold text-purple-400" id="monthEarnings">₪0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- גרף רווחים שבועי -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3">📈 רווחים שבועיים</h3>
+                <div class="chart-container">
+                    <canvas id="earningsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- גרף משלוחים לפי שעה -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3">⏰ משלוחים לפי שעה</h3>
+                <div class="chart-container">
+                    <canvas id="hourlyChart"></canvas>
+                </div>
+            </div>
+
+            <!-- יעדים יומיים -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3">🎯 יעדים יומיים</h3>
+                
+                <!-- יעד משלוחים -->
+                <div class="mb-4">
+                    <div class="flex justify-between mb-2">
+                        <span class="text-sm">משלוחים</span>
+                        <span class="text-sm font-bold" id="dailyGoalText">0 / 20</span>
+                    </div>
+                    <div class="goal-bar">
+                        <div class="goal-bar-fill" id="dailyGoalBar" style="width: 0%"></div>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-1" id="dailyGoalRemaining">עוד 20 משלוחים!</p>
+                </div>
+
+                <!-- יעד רווחים -->
+                <div>
+                    <div class="flex justify-between mb-2">
+                        <span class="text-sm">רווחים</span>
+                        <span class="text-sm font-bold" id="dailyEarningsGoalText">₪0 / ₪500</span>
+                    </div>
+                    <div class="goal-bar">
+                        <div class="goal-bar-fill bg-gradient-to-r from-emerald-500 to-emerald-600" id="dailyEarningsGoalBar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- יעד שבועי -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3">📅 יעד שבועי</h3>
+                <div class="flex justify-between mb-2">
+                    <span class="text-sm">משלוחים השבוע</span>
+                    <span class="text-sm font-bold" id="weeklyGoalText">0 / 100</span>
+                </div>
+                <div class="goal-bar">
+                    <div class="goal-bar-fill bg-gradient-to-r from-blue-500 to-blue-600" id="weeklyGoalBar" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- דירוג -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3">🏆 דירוג חודשי</h3>
+                <div class="flex justify-between items-center mb-4 bg-slate-700/50 rounded-lg p-3">
+                    <div>
+                        <p class="text-sm text-slate-400">המקום שלך</p>
+                        <p class="text-3xl font-bold text-emerald-400">
+                            <span id="rankMedal">🏅</span>
+                            <span id="myRank">-</span>
+                        </p>
+                    </div>
+                    <div class="text-left">
+                        <p class="text-sm text-slate-400">מתוך</p>
+                        <p class="text-2xl font-bold" id="totalCouriers">-</p>
+                    </div>
+                </div>
+                <h4 class="text-sm font-bold mb-2 text-slate-400">🥇 טופ 5</h4>
+                <div id="topCouriersList" class="space-y-2 text-sm">
+                    <p class="text-slate-400">טוען...</p>
+                </div>
+            </div>
+
+            <!-- תחזית רווחים -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3">🔮 תחזית חודשית</h3>
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="bg-slate-700/50 rounded-lg p-3">
+                        <p class="text-xs text-slate-400 mb-1">רווחים עד כה</p>
+                        <p class="text-xl font-bold text-emerald-400" id="currentMonthEarnings">₪0</p>
+                        <p class="text-xs text-slate-400" id="currentMonthDays">0 ימים</p>
+                    </div>
+                    <div class="bg-slate-700/50 rounded-lg p-3">
+                        <p class="text-xs text-slate-400 mb-1">תחזית לסוף חודש</p>
+                        <p class="text-xl font-bold text-blue-400" id="projectedEarnings">₪0</p>
+                        <p class="text-xs text-slate-400" id="dailyRate">₪0/יום</p>
+                    </div>
+                </div>
+                <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                    <p class="text-xs font-bold text-amber-400 mb-1">⭐ יום הכי טוב</p>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-lg font-bold" id="bestDayEarnings">₪0</p>
+                            <p class="text-xs text-slate-400" id="bestDayDate">-</p>
+                        </div>
+                        <p class="text-sm text-slate-400" id="bestDayDeliveries">0 משלוחים</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- מדדי ביצועים -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3">⚡ מדדי ביצועים</h3>
+                
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+                        <p class="text-xs text-slate-400 mb-1">זמן ממוצע</p>
+                        <p class="text-2xl font-bold text-blue-400" id="avgTime">0</p>
+                        <p class="text-xs text-slate-400">דקות</p>
+                    </div>
+                    <div class="bg-slate-700/50 rounded-lg p-3 text-center">
+                        <p class="text-xs text-slate-400 mb-1">הכי מהיר</p>
+                        <p class="text-2xl font-bold text-emerald-400" id="fastestTime">0</p>
+                        <p class="text-xs text-slate-400">דקות</p>
+                    </div>
+                </div>
+
+                <h4 class="text-sm font-bold mb-2 text-slate-400">התפלגות לפי שעות</h4>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm">🌅 בוקר (6-12)</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold" id="morningDeliveries">0</span>
+                            <span class="text-xs text-slate-400" id="morningPercentage">0%</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm">☀️ צהריים (12-17)</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold" id="noonDeliveries">0</span>
+                            <span class="text-xs text-slate-400" id="noonPercentage">0%</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm">🌆 ערב (17-22)</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold" id="eveningDeliveries">0</span>
+                            <span class="text-xs text-slate-400" id="eveningPercentage">0%</span>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm">🌙 לילה (22-6)</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-bold" id="nightDeliveries">0</span>
+                            <span class="text-xs text-slate-400" id="nightPercentage">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- סטטיסטיקות נוספות -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3">📊 עוד מספרים</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="text-center">
+                        <p class="text-xs text-slate-400 mb-1">היום</p>
+                        <p class="text-2xl font-bold text-blue-400" id="statToday2">0</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-xs text-slate-400 mb-1">ממוצע למשלוח</p>
+                        <p class="text-2xl font-bold text-emerald-400" id="avgPerDelivery">₪0</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-xs text-slate-400 mb-1">שבוע</p>
+                        <p class="text-2xl font-bold text-purple-400" id="statWeek2">0</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-xs text-slate-400 mb-1">% השלמה</p>
+                        <p class="text-2xl font-bold text-amber-400" id="completionRate">0%</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ==================== HISTORY TAB ==================== -->
+        <div id="historyTab" class="courier-tab-content hidden space-y-3">
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-3">
+                <h3 class="text-lg font-bold">📋 היסטוריית משלוחים</h3>
+                <p class="text-sm text-slate-400">לחץ על משלוח לפרטים מלאים</p>
+            </div>
+            <div id="historyOrdersList" class="space-y-3">
+                <div class="text-center py-12 text-slate-400">
+                    <div class="text-6xl mb-4">⏳</div>
+                    <p>טוען היסטוריה...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== EARNINGS TAB ==================== -->
+        <div id="earningsTab" class="courier-tab-content hidden space-y-4">
+            
+            <!-- יתרה -->
+            <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-6 border border-emerald-400 shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <p class="text-sm opacity-90">💰 יתרה זמינה למשיכה</p>
+                        <p class="text-4xl font-bold mt-1" id="earningsBalance">₪0</p>
+                    </div>
+                </div>
+                <button onclick="requestPayout()" 
+                        class="w-full bg-white text-emerald-600 hover:bg-emerald-50 font-bold py-3 rounded-lg shadow-md">
+                    💸 בקש משיכת כסף
+                </button>
+            </div>
+
+            <!-- בקשות משיכה -->
+            <div class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                <h3 class="text-lg font-bold mb-3">📝 בקשות משיכה שלי</h3>
+                <div id="payoutRequestsList" class="space-y-3">
+                    <p class="text-center text-slate-400 py-4">טוען...</p>
+                </div>
+            </div>
+
+            <!-- מידע -->
+            <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+                <p class="text-sm text-blue-400 font-bold mb-2">ℹ️ איך זה עובד?</p>
+                <ul class="text-xs text-slate-300 space-y-1">
+                    <li>• בקש משיכה מהיתרה הזמינה</li>
+                    <li>• הבקשה תאושר תוך 24 שעות</li>
+                    <li>• הכסף יועבר תוך 1-3 ימי עסקים</li>
+                </ul>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Load JS -->
+    <script>
+        const timestamp = new Date().getTime();
+        const script = document.createElement('script');
+        script.src = '/courier/courier.js?v=' + timestamp;
+        script.onerror = function() {
+            alert('❌ שגיאה בטעינת הסקריפט! רענן את הדף.');
+        };
+        document.body.appendChild(script);
+    </script>
+
+</body>
+</html>
