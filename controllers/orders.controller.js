@@ -743,5 +743,127 @@ websocketService.broadcast({ type: 'order_delivered', order });
   }
 }
 
-module.exports = new OrdersController();
+// ==========================================
+  // ✅ NEW: CHECK RATING STATUS
+  // ==========================================
+  async checkRatingStatus(req, res, next) {
+    try {
+      const { id } = req.params;
 
+      const result = await pool.query(
+        'SELECT id FROM order_ratings WHERE order_id = $1',
+        [id]
+      );
+
+      res.json({
+        hasRating: result.rows.length > 0
+      });
+    } catch (error) {
+      console.error('Check rating status error:', error);
+      next(error);
+    }
+  }
+
+  // ==========================================
+  // ✅ NEW: RATE ORDER (PUBLIC - NO AUTH!)
+  // ==========================================
+  async rateOrder(req, res, next) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { id } = req.params;
+      const {
+        rating,
+        speedRating,
+        courtesyRating,
+        professionalismRating,
+        comment
+      } = req.body;
+
+      // Validate rating
+      if (!rating || rating < 1 || rating > 5) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'דירוג לא תקין' });
+      }
+
+      // Get order details
+      const orderResult = await client.query(
+        `SELECT o.*, c.id as courier_id
+         FROM orders o
+         LEFT JOIN couriers c ON o.courier_id = c.id
+         WHERE o.id = $1 AND o.status = 'delivered'`,
+        [id]
+      );
+
+      if (orderResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'הזמנה לא נמצאה או לא הושלמה' });
+      }
+
+      const order = orderResult.rows[0];
+
+      // Check if already rated
+      const existingRating = await client.query(
+        'SELECT id FROM order_ratings WHERE order_id = $1',
+        [id]
+      );
+
+      if (existingRating.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'הזמנה זו כבר דורגה' });
+      }
+
+      // Insert rating
+      await client.query(
+        `INSERT INTO order_ratings (
+          order_id, courier_id, customer_phone, rating,
+          speed_rating, courtesy_rating, professionalism_rating, comment
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          id,
+          order.courier_id,
+          order.sender_phone,
+          rating,
+          speedRating,
+          courtesyRating,
+          professionalismRating,
+          comment
+        ]
+      );
+
+      // Update courier's average rating
+      if (order.courier_id) {
+        const ratingsResult = await client.query(
+          'SELECT AVG(rating) as avg_rating FROM order_ratings WHERE courier_id = $1',
+          [order.courier_id]
+        );
+
+        const newAvgRating = parseFloat(ratingsResult.rows[0].avg_rating).toFixed(2);
+
+        await client.query(
+          'UPDATE couriers SET rating = $1 WHERE id = $2',
+          [newAvgRating, order.courier_id]
+        );
+
+        console.log(`✅ Updated courier ${order.courier_id} rating to ${newAvgRating}`);
+      }
+
+      await client.query('COMMIT');
+
+      res.json({
+        message: 'הדירוג נשמר בהצלחה!',
+        success: true
+      });
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('Rate order error:', error);
+      next(error);
+    } finally {
+      client.release();
+    }
+  }
+}
+
+module.exports = new OrdersController();
