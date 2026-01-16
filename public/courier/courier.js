@@ -1,115 +1,61 @@
 // ==========================================
-// M.M.H DELIVERY - COURIER APP - FINAL VERSION ✅
+// M.M.H DELIVERY - COURIER APP - FULL VERSION
 // ==========================================
 
 let courierToken = localStorage.getItem('courierToken');
 let courierData = null;
 let ws = null;
 let locationInterval = null;
-
-// ✅ משתנים חדשים לגרפים
 let earningsChart = null;
 let hourlyChart = null;
 
 // ==========================================
-// AUTHENTICATION - ✅ COMPLETE FIX!
+// AUTH CHECK - בדיקה שהשליח מחובר
 // ==========================================
 
-async function courierLoginById(event) {
-    event.preventDefault();
-    
-    const idNumber = document.getElementById('loginId').value;
-    
-    try {
-        const response = await fetch('/api/auth/courier-login-id', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idNumber })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            courierToken = data.token;
-            courierData = data.courier;
-            localStorage.setItem('courierToken', courierToken);
-            localStorage.setItem('courierData', JSON.stringify(courierData));
-            
-            console.log('✅ Login successful, courier:', courierData.firstName);
-            showMainApp();
-        } else if (data.needsRegistration) {
-            window.location.href = '/courier/register.html';
-        } else {
-            showLoginError(data.error || 'שגיאה בהתחברות');
-        }
-    } catch (error) {
-        showLoginError('שגיאת תקשורת');
-        console.error('Login error:', error);
-    }
-}
-
-function showLoginError(message) {
-    alert(message);
-}
-
-// ✅ FIXED: Auth check with body class management
-function checkAuth() {
+(function checkAuth() {
     courierToken = localStorage.getItem('courierToken');
     const savedData = localStorage.getItem('courierData');
     
     console.log('🔍 Auth check:', { hasToken: !!courierToken, hasData: !!savedData });
     
-    if (courierToken && savedData) {
-        try {
-            courierData = JSON.parse(savedData);
-            // בדוק שהטוקן תקף
-            if (courierData && courierData.id) {
-                console.log('✅ Auth valid, courier ID:', courierData.id);
-                showMainApp();
-                return;
-            }
-        } catch (error) {
-            console.error('❌ Parse error:', error);
-        }
+    if (!courierToken || !savedData) {
+        console.log('❌ Not logged in, redirecting to login');
+        window.location.href = '/courier/login.html';
+        return;
     }
     
-    // ✅ הוסף class showing-login כשמציג התחברות
-    console.log('❌ No valid auth, showing login');
-    document.body.classList.add('showing-login');
-    localStorage.clear();
-    document.getElementById('loginScreen').classList.remove('hidden');
-    document.getElementById('mainApp').classList.add('hidden');
-}
+    try {
+        courierData = JSON.parse(savedData);
+        if (!courierData || !courierData.id) {
+            throw new Error('Invalid courier data');
+        }
+        console.log('✅ Auth valid, courier ID:', courierData.id);
+    } catch (error) {
+        console.error('❌ Parse error:', error);
+        localStorage.clear();
+        window.location.href = '/courier/login.html';
+        return;
+    }
+    
+    // אתחול האפליקציה
+    document.addEventListener('DOMContentLoaded', initCourierApp);
+})();
 
-function logoutCourier() {
+// ==========================================
+// LOGOUT
+// ==========================================
+
+function logout() {
     if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
         localStorage.removeItem('courierToken');
         localStorage.removeItem('courierData');
         
-        if (ws) {
-            ws.close();
-        }
+        if (ws) ws.close();
+        if (locationInterval) clearInterval(locationInterval);
         
-        if (locationInterval) {
-            clearInterval(locationInterval);
-        }
-        
-        window.location.reload();
+        window.location.href = '/courier/login.html';
     }
-}
-
-// ✅ FIXED: Remove showing-login class when showing app
-function showMainApp() {
-    // ✅ הסר class showing-login מה-body
-    document.body.classList.remove('showing-login');
-    
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('mainApp').classList.remove('hidden');
-    
-    document.getElementById('courierName').textContent = `${courierData.firstName} ${courierData.lastName}`;
-    document.getElementById('courierPhone').textContent = courierData.phone;
-    
-    initCourierApp();
 }
 
 // ==========================================
@@ -117,6 +63,11 @@ function showMainApp() {
 // ==========================================
 
 function initCourierApp() {
+    console.log('🚀 Initializing courier app...');
+    
+    document.getElementById('courierName').textContent = `${courierData.firstName} ${courierData.lastName}`;
+    document.getElementById('courierPhone').textContent = courierData.phone;
+    
     connectWebSocket();
     startLocationTracking();
     loadCourierStatistics();
@@ -150,7 +101,6 @@ function connectWebSocket() {
         handleWebSocketMessage(data);
     };
     
-    // ✅ FIXED: Reconnect with token validation
     ws.onclose = () => {
         console.log('❌ WebSocket disconnected, reconnecting in 5s...');
         setTimeout(() => {
@@ -1134,12 +1084,3 @@ function showNotification(message, type = 'success') {
         notification.remove();
     }, 3000);
 }
-
-// ==========================================
-// INIT
-// ==========================================
-
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 Courier app starting...');
-    checkAuth();
-});
