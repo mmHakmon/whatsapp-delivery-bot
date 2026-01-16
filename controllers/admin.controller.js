@@ -626,20 +626,32 @@ async resetStatistics(req, res, next) {
             rating = 5.0,
             total_deliveries = 0
       `);
-    }
-    
-    await pool.query('COMMIT');
-    
-    res.json({ 
-      success: true, 
-      message: 'כל הסטטיסטיקות אופסו בהצלחה'
-    });
-  } catch (error) {
-    await pool.query('ROLLBACK');
-    next(error);
-  }
-}
-
+      
+      await pool.query('COMMIT');
+      
+      res.json({ 
+        success: true, 
+        message: 'כל הסטטיסטיקות אופסו בהצלחה'
+      });
+    } else {
+      // מחק לפי תקופה
+      let dateCondition = '';
+      let periodText = '';
+      
+      if (period === 'today') {
+        dateCondition = "AND DATE(created_at) = CURRENT_DATE";
+        periodText = 'היום';
+      } else if (period === 'week') {
+        dateCondition = "AND created_at >= DATE_TRUNC('week', CURRENT_DATE)";
+        periodText = 'השבוע';
+      } else if (period === 'month') {
+        dateCondition = "AND created_at >= DATE_TRUNC('month', CURRENT_DATE)";
+        periodText = 'החודש';
+      } else if (period === 'year') {
+        dateCondition = "AND created_at >= DATE_TRUNC('year', CURRENT_DATE)";
+        periodText = 'השנה';
+      }
+      
       // Delete orders for the period
       const ordersResult = await pool.query(`
         DELETE FROM orders 
@@ -647,15 +659,19 @@ async resetStatistics(req, res, next) {
         RETURNING id
       `);
 
+      await pool.query('COMMIT');
+
       res.json({ 
         success: true, 
         message: `סטטיסטיקות ${periodText} אופסו - ${ordersResult.rowCount} הזמנות נמחקו`,
         deleted: ordersResult.rowCount
       });
-    } catch (error) {
-      next(error);
     }
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    next(error);
   }
+}
 
   async deleteOldOrders(req, res, next) {
     try {
@@ -844,4 +860,3 @@ async resetStatistics(req, res, next) {
 }
 
 module.exports = new AdminController();
-
