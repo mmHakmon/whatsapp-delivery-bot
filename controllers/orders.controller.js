@@ -741,7 +741,6 @@ websocketService.broadcast({ type: 'order_delivered', order });
       next(error);
     }
   }
-}
 
 // ==========================================
   // ✅ NEW: CHECK RATING STATUS
@@ -864,6 +863,5 @@ websocketService.broadcast({ type: 'order_delivered', order });
       client.release();
     }
   }
-}
 
 module.exports = new OrdersController();
