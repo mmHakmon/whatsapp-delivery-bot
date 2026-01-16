@@ -1557,41 +1557,21 @@ async function deleteUserConfirm(userId, username) {
     }
 }
 
-async resetCourierEarnings(req, res, next) {
-  try {
-    // התחל transaction
-    await pool.query('BEGIN');
+
+// ==========================================
+// RESET FUNCTIONS - FRONTEND
+// ==========================================
+
+async function resetCourierEarnings() {
+    if (!confirm('⚠️ אזהרה! פעולה זו תאפס את כל רווחי השליחים!')) return;
     
-    // 1. מחק כל ה-payments
-    await pool.query('DELETE FROM payments');
-    
-    // 2. אפס רווחים של שליחים
-    const result = await pool.query(`
-      UPDATE couriers 
-      SET total_earned = 0, 
-          balance = 0
-      RETURNING id
-    `);
-    
-    // 3. אפס courier_payout בהזמנות
-    await pool.query(`
-      UPDATE orders 
-      SET courier_payout = 0 
-      WHERE status = 'delivered'
-    `);
-    
-    await pool.query('COMMIT');
-    
-    res.json({ 
-      success: true, 
-      message: `רווחים אופסו עבור ${result.rowCount} שליחים (כולל payments)`,
-      updated: result.rowCount
-    });
-  } catch (error) {
-    await pool.query('ROLLBACK');
-    next(error);
-  }
-}
+    try {
+        const response = await fetch('/api/admin/reset-courier-earnings', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
         });
         
         const data = await response.json();
@@ -1599,6 +1579,7 @@ async resetCourierEarnings(req, res, next) {
         if (response.ok) {
             showNotification(`✅ ${data.message || 'רווחי שליחים אופסו בהצלחה!'}`);
             loadCouriers();
+            loadStatistics();
         } else {
             showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
         }
@@ -1608,38 +1589,16 @@ async resetCourierEarnings(req, res, next) {
     }
 }
 
-async resetCourierRatings(req, res, next) {
-  try {
-    await pool.query('BEGIN');
+async function resetCourierRatings() {
+    if (!confirm('⚠️ אזהרה! פעולה זו תאפס את כל דירוגי השליחים!')) return;
     
-    // 1. אפס דירוגים
-    const result = await pool.query(`
-      UPDATE couriers 
-      SET rating = 5.0, 
-          total_deliveries = 0
-      RETURNING id
-    `);
-    
-    // 2. מחק הזמנות מושלמות (אופציונלי)
-    // אם רוצים - אפשר למחוק רק delivered
-    await pool.query(`
-      UPDATE orders 
-      SET status = 'cancelled'
-      WHERE status = 'delivered' AND courier_id IS NOT NULL
-    `);
-    
-    await pool.query('COMMIT');
-    
-    res.json({ 
-      success: true, 
-      message: `דירוגים אופסו עבור ${result.rowCount} שליחים`,
-      updated: result.rowCount
-    });
-  } catch (error) {
-    await pool.query('ROLLBACK');
-    next(error);
-  }
-}
+    try {
+        const response = await fetch('/api/admin/reset-courier-ratings', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${adminToken}`,
+                'Content-Type': 'application/json'
+            }
         });
         
         const data = await response.json();
@@ -1647,6 +1606,7 @@ async resetCourierRatings(req, res, next) {
         if (response.ok) {
             showNotification(`✅ ${data.message || 'דירוגי שליחים אופסו בהצלחה!'}`);
             loadCouriers();
+            loadStatistics();
         } else {
             showNotification('❌ ' + (data.error || 'שגיאה'), 'error');
         }
@@ -1778,5 +1738,3 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
-
-
