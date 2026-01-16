@@ -145,6 +145,20 @@ app.get('/take/:orderId', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'take.html'));
 });
 
+// ==========================================
+// QUICK ACTIONS - ✅ NEW!
+// ==========================================
+
+// Quick confirmation (pickup/delivery)
+app.get('/confirm.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'confirm.html'));
+});
+
+// Rating page
+app.get('/rate.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'rate.html'));
+});
+
 // Error handlers
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -169,7 +183,9 @@ server.listen(PORT, () => {
   console.log('🔗 Customer Order:', `${PUBLIC_URL}/customer/order.html`);
   console.log('🔗 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
   console.log('🔗 Price Calculator:', `${PUBLIC_URL}/calculator`);
-  console.log('🔗 CURresponse VIP:', `${PUBLIC_URL}/customer/curresponse/login.html`); // ✅ NEW
+  console.log('🔗 CURresponse VIP:', `${PUBLIC_URL}/customer/curresponse/login.html`);
+  console.log('🔗 Quick Confirm:', `${PUBLIC_URL}/confirm.html`); // ✅ NEW
+  console.log('🔗 Rating:', `${PUBLIC_URL}/rate.html`); // ✅ NEW
   console.log('');
 });
 
