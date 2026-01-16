@@ -609,28 +609,36 @@ class AdminController {
   // SETTINGS PANEL FUNCTIONS
   // ==========================================
 
-  async resetStatistics(req, res, next) {
-    try {
-      const { period } = req.body;
-      
-      let dateCondition = '';
-      let periodText = '';
-
-      if (period === 'daily') {
-        dateCondition = "AND DATE(created_at) = CURRENT_DATE";
-        periodText = 'יומיות';
-      } else if (period === 'weekly') {
-        dateCondition = "AND created_at >= date_trunc('week', CURRENT_DATE)";
-        periodText = 'שבועיות';
-      } else if (period === 'monthly') {
-        dateCondition = "AND created_at >= date_trunc('month', CURRENT_DATE)";
-        periodText = 'חודשיות';
-      } else {
-        return res.json({ 
-          success: false, 
-          message: 'נא לבחור תקופה (daily/weekly/monthly)'
-        });
-      }
+async resetStatistics(req, res, next) {
+  try {
+    const { period } = req.body;
+    
+    await pool.query('BEGIN');
+    
+    if (period === 'all') {
+      // מחק הכל
+      await pool.query('DELETE FROM orders');
+      await pool.query('DELETE FROM payments');
+      await pool.query(`
+        UPDATE couriers 
+        SET total_earned = 0, 
+            balance = 0,
+            rating = 5.0,
+            total_deliveries = 0
+      `);
+    }
+    
+    await pool.query('COMMIT');
+    
+    res.json({ 
+      success: true, 
+      message: 'כל הסטטיסטיקות אופסו בהצלחה'
+    });
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    next(error);
+  }
+}
 
       // Delete orders for the period
       const ordersResult = await pool.query(`
@@ -836,3 +844,4 @@ class AdminController {
 }
 
 module.exports = new AdminController();
+
