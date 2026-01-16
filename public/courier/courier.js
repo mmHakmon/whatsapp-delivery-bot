@@ -1,5 +1,5 @@
 // ==========================================
-// M.M.H DELIVERY - COURIER APP - FIXED VERSION
+// M.M.H DELIVERY - COURIER APP - FINAL VERSION ✅
 // ==========================================
 
 let courierToken = localStorage.getItem('courierToken');
@@ -12,7 +12,7 @@ let earningsChart = null;
 let hourlyChart = null;
 
 // ==========================================
-// AUTHENTICATION - ✅ FIXED!
+// AUTHENTICATION - ✅ COMPLETE FIX!
 // ==========================================
 
 async function courierLoginById(event) {
@@ -52,7 +52,7 @@ function showLoginError(message) {
     alert(message);
 }
 
-// ✅ FIXED: בדיקת Auth מתוקנת
+// ✅ FIXED: Auth check with body class management
 function checkAuth() {
     courierToken = localStorage.getItem('courierToken');
     const savedData = localStorage.getItem('courierData');
@@ -73,7 +73,9 @@ function checkAuth() {
         }
     }
     
+    // ✅ הוסף class showing-login כשמציג התחברות
     console.log('❌ No valid auth, showing login');
+    document.body.classList.add('showing-login');
     localStorage.clear();
     document.getElementById('loginScreen').classList.remove('hidden');
     document.getElementById('mainApp').classList.add('hidden');
@@ -96,7 +98,11 @@ function logoutCourier() {
     }
 }
 
+// ✅ FIXED: Remove showing-login class when showing app
 function showMainApp() {
+    // ✅ הסר class showing-login מה-body
+    document.body.classList.remove('showing-login');
+    
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('mainApp').classList.remove('hidden');
     
@@ -144,7 +150,7 @@ function connectWebSocket() {
         handleWebSocketMessage(data);
     };
     
-    // ✅ FIXED: Reconnect logic
+    // ✅ FIXED: Reconnect with token validation
     ws.onclose = () => {
         console.log('❌ WebSocket disconnected, reconnecting in 5s...');
         setTimeout(() => {
