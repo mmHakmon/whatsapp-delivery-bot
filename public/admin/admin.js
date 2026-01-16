@@ -1557,16 +1557,41 @@ async function deleteUserConfirm(userId, username) {
     }
 }
 
-async function resetCourierEarnings() {
-    if (!confirm('האם לאפס את כל הרווחים של השליחים?')) return;
+async resetCourierEarnings(req, res, next) {
+  try {
+    // התחל transaction
+    await pool.query('BEGIN');
     
-    try {
-        const response = await fetch('/api/admin/reset-courier-earnings', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            }
+    // 1. מחק כל ה-payments
+    await pool.query('DELETE FROM payments');
+    
+    // 2. אפס רווחים של שליחים
+    const result = await pool.query(`
+      UPDATE couriers 
+      SET total_earned = 0, 
+          balance = 0
+      RETURNING id
+    `);
+    
+    // 3. אפס courier_payout בהזמנות
+    await pool.query(`
+      UPDATE orders 
+      SET courier_payout = 0 
+      WHERE status = 'delivered'
+    `);
+    
+    await pool.query('COMMIT');
+    
+    res.json({ 
+      success: true, 
+      message: `רווחים אופסו עבור ${result.rowCount} שליחים (כולל payments)`,
+      updated: result.rowCount
+    });
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    next(error);
+  }
+}
         });
         
         const data = await response.json();
@@ -1583,16 +1608,38 @@ async function resetCourierEarnings() {
     }
 }
 
-async function resetCourierRatings() {
-    if (!confirm('האם לאפס את כל הדירוגים של השליחים?')) return;
+async resetCourierRatings(req, res, next) {
+  try {
+    await pool.query('BEGIN');
     
-    try {
-        const response = await fetch('/api/admin/reset-courier-ratings', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-            }
+    // 1. אפס דירוגים
+    const result = await pool.query(`
+      UPDATE couriers 
+      SET rating = 5.0, 
+          total_deliveries = 0
+      RETURNING id
+    `);
+    
+    // 2. מחק הזמנות מושלמות (אופציונלי)
+    // אם רוצים - אפשר למחוק רק delivered
+    await pool.query(`
+      UPDATE orders 
+      SET status = 'cancelled'
+      WHERE status = 'delivered' AND courier_id IS NOT NULL
+    `);
+    
+    await pool.query('COMMIT');
+    
+    res.json({ 
+      success: true, 
+      message: `דירוגים אופסו עבור ${result.rowCount} שליחים`,
+      updated: result.rowCount
+    });
+  } catch (error) {
+    await pool.query('ROLLBACK');
+    next(error);
+  }
+}
         });
         
         const data = await response.json();
@@ -1731,4 +1778,5 @@ function showNotification(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     checkAuth();
 });
+
 
