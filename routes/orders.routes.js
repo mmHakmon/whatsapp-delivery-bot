@@ -21,6 +21,12 @@ router.post('/public', validateOrderCreation, ordersController.createOrderPublic
 router.post('/quick-take/:orderId', ordersController.quickTakeOrder);
 
 // ==========================================
+// ✅ NEW: RATING ROUTES (PUBLIC - NO AUTH!)
+// ==========================================
+router.get('/:id/rating-status', ordersController.checkRatingStatus);
+router.post('/:id/rate', ordersController.rateOrder);
+
+// ==========================================
 // ADMIN ROUTES
 // ==========================================
 
