@@ -770,7 +770,6 @@ websocketService.broadcast({ type: 'order_delivered', order });
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-
       const { id } = req.params;
       const {
         rating,
@@ -779,13 +778,11 @@ websocketService.broadcast({ type: 'order_delivered', order });
         professionalismRating,
         comment
       } = req.body;
-
       // Validate rating
       if (!rating || rating < 1 || rating > 5) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'דירוג לא תקין' });
       }
-
       // Get order details
       const orderResult = await client.query(
         `SELECT o.*, c.id as courier_id
@@ -794,25 +791,20 @@ websocketService.broadcast({ type: 'order_delivered', order });
          WHERE o.id = $1 AND o.status = 'delivered'`,
         [id]
       );
-
       if (orderResult.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'הזמנה לא נמצאה או לא הושלמה' });
       }
-
       const order = orderResult.rows[0];
-
       // Check if already rated
       const existingRating = await client.query(
         'SELECT id FROM order_ratings WHERE order_id = $1',
         [id]
       );
-
       if (existingRating.rows.length > 0) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: 'הזמנה זו כבר דורגה' });
       }
-
       // Insert rating
       await client.query(
         `INSERT INTO order_ratings (
@@ -830,31 +822,24 @@ websocketService.broadcast({ type: 'order_delivered', order });
           comment
         ]
       );
-
       // Update courier's average rating
       if (order.courier_id) {
         const ratingsResult = await client.query(
           'SELECT AVG(rating) as avg_rating FROM order_ratings WHERE courier_id = $1',
           [order.courier_id]
         );
-
         const newAvgRating = parseFloat(ratingsResult.rows[0].avg_rating).toFixed(2);
-
         await client.query(
           'UPDATE couriers SET rating = $1 WHERE id = $2',
           [newAvgRating, order.courier_id]
         );
-
         console.log(`✅ Updated courier ${order.courier_id} rating to ${newAvgRating}`);
       }
-
       await client.query('COMMIT');
-
       res.json({
         message: 'הדירוג נשמר בהצלחה!',
         success: true
       });
-
     } catch (error) {
       await client.query('ROLLBACK');
       console.error('Rate order error:', error);
@@ -863,5 +848,6 @@ websocketService.broadcast({ type: 'order_delivered', order });
       client.release();
     }
   }
+}
 
 module.exports = new OrdersController();
