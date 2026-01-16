@@ -451,15 +451,7 @@
     </div>
 
     <!-- Load JS -->
-    <script>
-        const timestamp = new Date().getTime();
-        const script = document.createElement('script');
-        script.src = '/courier/courier.js?v=' + timestamp;
-        script.onerror = function() {
-            alert('❌ שגיאה בטעינת הסקריפט! רענן את הדף.');
-        };
-        document.body.appendChild(script);
-    </script>
+    <script src="/courier/courier.js"></script>
 
 </body>
 </html>
