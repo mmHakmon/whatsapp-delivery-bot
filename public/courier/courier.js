@@ -21,7 +21,7 @@ let hourlyChart = null;
     
     if (!courierToken || !savedData) {
         console.log('❌ Not logged in, redirecting to login');
-        window.location.href = '/courier/login.html';
+        window.location.href = '/courier/';
         return;
     }
     
@@ -34,7 +34,7 @@ let hourlyChart = null;
     } catch (error) {
         console.error('❌ Parse error:', error);
         localStorage.clear();
-        window.location.href = '/courier/login.html';
+        window.location.href = '/courier/';
         return;
     }
     
@@ -54,7 +54,7 @@ function logout() {
         if (ws) ws.close();
         if (locationInterval) clearInterval(locationInterval);
         
-        window.location.href = '/courier/login.html';
+        window.location.href = '/courier/';
     }
 }
 
