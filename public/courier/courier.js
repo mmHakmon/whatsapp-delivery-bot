@@ -1,5 +1,5 @@
 // ==========================================
-// M.M.H DELIVERY - COURIER APP
+// M.M.H DELIVERY - COURIER APP - FIXED VERSION
 // ==========================================
 
 let courierToken = localStorage.getItem('courierToken');
@@ -7,12 +7,12 @@ let courierData = null;
 let ws = null;
 let locationInterval = null;
 
-// ✅ הוסף משתנים חדשים לגרפים
+// ✅ משתנים חדשים לגרפים
 let earningsChart = null;
 let hourlyChart = null;
 
 // ==========================================
-// AUTHENTICATION
+// AUTHENTICATION - ✅ FIXED!
 // ==========================================
 
 async function courierLoginById(event) {
@@ -35,6 +35,7 @@ async function courierLoginById(event) {
             localStorage.setItem('courierToken', courierToken);
             localStorage.setItem('courierData', JSON.stringify(courierData));
             
+            console.log('✅ Login successful, courier:', courierData.firstName);
             showMainApp();
         } else if (data.needsRegistration) {
             window.location.href = '/courier/register.html';
@@ -51,17 +52,31 @@ function showLoginError(message) {
     alert(message);
 }
 
+// ✅ FIXED: בדיקת Auth מתוקנת
 function checkAuth() {
     courierToken = localStorage.getItem('courierToken');
     const savedData = localStorage.getItem('courierData');
     
+    console.log('🔍 Auth check:', { hasToken: !!courierToken, hasData: !!savedData });
+    
     if (courierToken && savedData) {
-        courierData = JSON.parse(savedData);
-        showMainApp();
-    } else {
-        document.getElementById('loginScreen').classList.remove('hidden');
-        document.getElementById('mainApp').classList.add('hidden');
+        try {
+            courierData = JSON.parse(savedData);
+            // בדוק שהטוקן תקף
+            if (courierData && courierData.id) {
+                console.log('✅ Auth valid, courier ID:', courierData.id);
+                showMainApp();
+                return;
+            }
+        } catch (error) {
+            console.error('❌ Parse error:', error);
+        }
     }
+    
+    console.log('❌ No valid auth, showing login');
+    localStorage.clear();
+    document.getElementById('loginScreen').classList.remove('hidden');
+    document.getElementById('mainApp').classList.add('hidden');
 }
 
 function logoutCourier() {
@@ -105,7 +120,7 @@ function initCourierApp() {
 }
 
 // ==========================================
-// WEBSOCKET
+// WEBSOCKET - ✅ FIXED!
 // ==========================================
 
 function connectWebSocket() {
@@ -129,9 +144,19 @@ function connectWebSocket() {
         handleWebSocketMessage(data);
     };
     
+    // ✅ FIXED: Reconnect logic
     ws.onclose = () => {
-        console.log('❌ WebSocket disconnected');
-        setTimeout(connectWebSocket, 3000);
+        console.log('❌ WebSocket disconnected, reconnecting in 5s...');
+        setTimeout(() => {
+            if (courierToken && courierData) {
+                console.log('🔄 Attempting reconnect...');
+                connectWebSocket();
+            }
+        }, 5000);
+    };
+    
+    ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
     };
 }
 
@@ -204,7 +229,6 @@ function switchOrdersView(view) {
     const btnAvailable = document.getElementById('btnAvailable');
     const btnActive = document.getElementById('btnActive');
     const ordersTitle = document.getElementById('ordersTitle');
-    const ordersCount = document.getElementById('ordersCount');
     
     if (view === 'available') {
         availableList.classList.remove('hidden');
@@ -276,7 +300,6 @@ async function loadAdvancedStatistics() {
         const data = await response.json();
         const stats = data.statistics || {};
         
-        // עדכן סטטיסטיקות בטאב סטטיסטיקות (עם 2)
         const statToday2 = document.getElementById('statToday2');
         const statWeek2 = document.getElementById('statWeek2');
         const statMonth2 = document.getElementById('statMonth2');
@@ -285,7 +308,6 @@ async function loadAdvancedStatistics() {
         if (statWeek2) statWeek2.textContent = stats.week_deliveries || 0;
         if (statMonth2) statMonth2.textContent = stats.month_deliveries || 0;
         
-        // עדכן הכנסות
         const todayEarningsElem = document.getElementById('todayEarnings');
         const weekEarningsElem = document.getElementById('weekEarnings');
         const monthEarningsElem = document.getElementById('monthEarnings');
@@ -300,7 +322,6 @@ async function loadAdvancedStatistics() {
         const completionElem = document.getElementById('completionRate');
         if (completionElem) completionElem.textContent = `${stats.completion_percentage || 0}%`;
         
-        // צור גרפים רק אם יש נתונים תקינים
         if (data.dailyEarnings && Array.isArray(data.dailyEarnings)) {
             createEarningsChart(data.dailyEarnings);
         }
@@ -318,13 +339,11 @@ function createEarningsChart(data) {
     const ctx = document.getElementById('earningsChart');
     if (!ctx || typeof Chart === 'undefined') return;
     
-    // הרוס גרף קודם אם קיים
     if (earningsChart) {
         earningsChart.destroy();
         earningsChart = null;
     }
     
-    // בדיקת תקינות נתונים
     if (!data || !Array.isArray(data)) {
         console.log('No valid earnings data');
         return;
@@ -375,13 +394,11 @@ function createHourlyChart(data) {
     const ctx = document.getElementById('hourlyChart');
     if (!ctx || typeof Chart === 'undefined') return;
     
-    // הרוס גרף קודם אם קיים
     if (hourlyChart) {
         hourlyChart.destroy();
         hourlyChart = null;
     }
     
-    // בדיקת תקינות נתונים
     if (!data || !Array.isArray(data)) {
         console.log('No valid hourly data');
         return;
@@ -397,7 +414,6 @@ function createHourlyChart(data) {
         }
     });
     
-    // אם אין נתונים, צור דוגמה ריקה
     if (hours.length === 0) {
         hours.push('8:00', '12:00', '16:00', '20:00');
         deliveries.push(0, 0, 0, 0);
@@ -859,13 +875,6 @@ async function loadOrderHistory() {
     }
 }
 
-// ==========================================
-// COURIER.JS - HISTORY POPUP FIX
-// Add these functions to courier.js
-// ==========================================
-
-// ✅ REPLACE the displayOrderHistory function (around line 862):
-
 function displayOrderHistory(orders) {
     const container = document.getElementById('historyOrdersList');
     
@@ -893,8 +902,6 @@ function displayOrderHistory(orders) {
     `).join('');
 }
 
-// ✅ ADD this NEW function after displayOrderHistory:
-
 function showOrderHistoryDetails(order) {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4';
@@ -918,25 +925,21 @@ function showOrderHistoryDetails(order) {
             </div>
             
             <div class="space-y-4">
-                <!-- Pickup Address -->
                 <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                     <p class="font-bold text-blue-400 mb-2">📤 כתובת איסוף</p>
                     <p class="text-slate-200">${order.pickup_address}</p>
                 </div>
                 
-                <!-- Delivery Address -->
                 <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4">
                     <p class="font-bold text-emerald-400 mb-2">📥 כתובת מסירה</p>
                     <p class="text-slate-200">${order.delivery_address}</p>
                 </div>
                 
-                <!-- Distance -->
                 <div class="bg-slate-700 rounded-lg p-4">
                     <p class="font-bold mb-2">📏 מרחק</p>
                     <p class="text-2xl font-bold text-blue-400">${order.distance_km} ק"מ</p>
                 </div>
                 
-                <!-- Money Breakdown -->
                 <div class="bg-slate-700 rounded-lg p-4">
                     <p class="font-bold mb-3">💰 פירוט כספי</p>
                     <div class="space-y-2 text-sm">
@@ -956,7 +959,6 @@ function showOrderHistoryDetails(order) {
                     </div>
                 </div>
                 
-                <!-- Dates -->
                 <div class="bg-slate-700 rounded-lg p-4">
                     <p class="font-bold mb-2">📅 תאריכים</p>
                     <div class="space-y-1 text-sm">
@@ -977,15 +979,6 @@ function showOrderHistoryDetails(order) {
     `;
     
     document.body.appendChild(modal);
-}
-
-// ✅ REPLACE the logout function (search for "function logout"):
-
-function logout() {
-    if (confirm('האם אתה בטוח שברצונך להתנתק?')) {
-        localStorage.clear();
-        window.location.href = '/';  // ✅ Redirect to home page!
-    }
 }
 
 // ==========================================
@@ -1075,7 +1068,7 @@ async function requestPayout() {
 }
 
 // ==========================================
-// TABS - ✅ עדכון!
+// TABS
 // ==========================================
 
 function switchCourierTab(tab) {
@@ -1141,7 +1134,6 @@ function showNotification(message, type = 'success') {
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Courier app starting...');
     checkAuth();
 });
-
-
