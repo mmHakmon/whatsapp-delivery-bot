@@ -114,8 +114,10 @@ class WhatsAppService {
       message += `\n🗺️ [פתח ב-Waze](https://waze.com/ul?q=${encodeURIComponent(order.pickup_address)})\n\n`;
       
       // הוסף קישור לאישור איסוף!
-      message += `📲 *אחרי שאספת את החבילה:*\n`;
-      message += `${this.publicUrl}/courier?action=pickup&order=${order.id}`;
+message += `─────────────────────\n`;
+message += `✅ *אחרי שאספת - לחץ כאן:*\n`;
+message += `${this.publicUrl}/confirm.html?action=pickup&order=${order.id}\n\n`;
+message += `💡 אישור מהיר בלי להיכנס לאפליקציה!`;
       
     } else {
       message = `✅ *חבילה נאספה!*\n\n`;
@@ -129,8 +131,10 @@ class WhatsAppService {
       message += `\n🗺️ [פתח ב-Waze](https://waze.com/ul?q=${encodeURIComponent(order.delivery_address)})\n\n`;
       
       // הוסף קישור לאישור מסירה!
-      message += `📲 *אחרי שמסרת את החבילה:*\n`;
-      message += `${this.publicUrl}/courier?action=deliver&order=${order.id}`;
+message += `─────────────────────\n`;
+message += `✅ *אחרי שמסרת - לחץ כאן:*\n`;
+message += `${this.publicUrl}/confirm.html?action=deliver&order=${order.id}\n\n`;
+message += `💡 אישור מהיר בלי להיכנס לאפליקציה!`;
     }
 
     return this.sendMessage(phone, message);
@@ -170,14 +174,20 @@ class WhatsAppService {
   }
 
   // Notify customer package delivered
-  async notifyDelivered(phone, order) {
-    const message = `✅ *החבילה נמסרה בהצלחה!*\n\n` +
-      `📦 הזמנה: *${order.order_number}*\n\n` +
-      `תודה שבחרת ב-M.M.H Delivery! 🙏\n` +
-      `נשמח אם תדרג את השליח שלנו ⭐`;
+async notifyDelivered(phone, order) {
+  const ratingUrl = `${this.publicUrl}/rate.html?order=${order.id}`;
+  
+  const message = `✅ *החבילה נמסרה בהצלחה!*\n\n` +
+    `📦 הזמנה: *${order.order_number}*\n\n` +
+    `תודה שבחרת ב-M.M.H Delivery! 🙏\n\n` +
+    `─────────────────────\n` +
+    `⭐ *דרג את השליח שלנו:*\n` +
+    `${ratingUrl}\n\n` +
+    `💡 פחות מ-30 שניות - עוזר לנו להשתפר!`;
+    // ⬆️ עכשיו יש קישור ישיר לדירוג!
 
-    return this.sendMessage(phone, message);
-  }
+  return this.sendMessage(phone, message);
+}
 
   // Publish order to couriers group
   async publishOrderToGroup(order) {
@@ -328,3 +338,4 @@ class WhatsAppService {
 }
 
 module.exports = new WhatsAppService();
+
