@@ -7,8 +7,6 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio",
     "prisma:push": "prisma db push"
   },
   "dependencies": {
@@ -23,16 +21,11 @@
     "moment-timezone": "^0.5.43",
     "node-cron": "^3.0.3",
     "express-validator": "^7.0.1",
-    "exceljs": "^4.4.0"
+    "exceljs": "^4.4.0",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
     "prisma": "^5.20.0"
-  }
-}
-{
-  "dependencies": {
-    "pg": "^8.11.3",
-    ...
   }
 }
