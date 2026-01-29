@@ -143,6 +143,24 @@ app.use((err, req, res, next) => {
   });
 });
 
+if (process.env.NODE_ENV === 'production') {
+  const path = require('path');
+  const frontendPath = path.join(__dirname, '../../frontend/dist');
+  
+  console.log('📦 Serving frontend from:', frontendPath);
+  
+  // Serve static files
+  app.use(express.static(frontendPath));
+  
+  // Catch all routes and serve index.html (except API routes)
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api')) {
+      return res.status(404).json({ error: 'API endpoint not found' });
+    }
+    res.sendFile(path.join(frontendPath, 'index.html'));
+  });
+}
+
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, () => {
