@@ -10,14 +10,14 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
-    proxy: {
-      '/api': {
-        target: 'https://mmh-delivery.onrender.com',
-        changeOrigin: true,
-      }
+  port: 3000,
+  proxy: {
+    '/api': {
+      target: 'http://localhost:10000',
+      changeOrigin: true,
     }
-  },
+  }
+},
   preview: {
     port: process.env.PORT || 4173,
     host: '0.0.0.0',
