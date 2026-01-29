@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "prisma:push": "prisma db push"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
@@ -21,7 +22,8 @@
     "socket.io": "^4.7.2",
     "moment-timezone": "^0.5.43",
     "node-cron": "^3.0.3",
-    "express-validator": "^7.0.1"
+    "express-validator": "^7.0.1",
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1",
