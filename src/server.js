@@ -15,6 +15,7 @@ const calculatorRoutes = require('./routes/calculator.routes');
 const zoneRoutes = require('./routes/zone.routes');
 const chatRoutes = require('./routes/chat.routes');
 const webhookRoutes = require('./routes/webhook.routes');
+const alertRoutes = require('./routes/alert.routes');
 
 // Services
 const alertService = require('./services/alert.service');
@@ -55,6 +56,7 @@ app.use('/api/zones', zoneRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/calculator', calculatorRoutes);
+app.use('/api/alerts', alertRoutes);
 
 // Socket.io connection
 io.on('connection', (socket) => {
