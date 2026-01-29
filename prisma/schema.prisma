@@ -11,7 +11,7 @@ model User {
   id            Int       @id @default(autoincrement())
   phone         String    @unique
   name          String
-  role          String    @default("admin") // admin, manager, agent
+  role          String    @default("admin")
   password      String
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
@@ -19,27 +19,24 @@ model User {
   
   deliveries    Delivery[]
   chatMessages  Chat[]
-  alertsCreated Alert[]   @relation("AlertCreator")
+  blacklistsCreated CourierBlacklist[]
 }
 
 model Courier {
   id                Int       @id @default(autoincrement())
   phone             String    @unique
   name              String
-  vehicleType       String    // motorcycle, car, van, truck
+  vehicleType       String
   isActive          Boolean   @default(true)
   isAvailable       Boolean   @default(true)
   currentLat        Float?
   currentLng        Float?
   lastLocationUpdate DateTime?
-  
-  // ביצועים
   totalDeliveries   Int       @default(0)
   completedDeliveries Int     @default(0)
   cancelledDeliveries Int     @default(0)
   rating            Float     @default(5.0)
   totalEarnings     Float     @default(0)
-  
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   
@@ -55,7 +52,6 @@ model Customer {
   name          String
   email         String?
   address       String?
-  
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   
@@ -65,13 +61,10 @@ model Customer {
 
 model Delivery {
   id                Int       @id @default(autoincrement())
-  
-  // מידע בסיסי
   orderNumber       String    @unique @default(uuid())
-  vehicleType       String    // motorcycle, car, van, truck
-  packageType       String?   // document, package, food, other
+  vehicleType       String
+  packageType       String?
   
-  // כתובות
   pickupAddress     String
   pickupLat         Float?
   pickupLng         Float?
@@ -84,8 +77,7 @@ model Delivery {
   deliveryCity      String?
   deliveryZone      String?
   
-  // מחיר
-  distance          Float?    // km
+  distance          Float?
   basePrice         Float
   pricePerKm        Float
   totalPrice        Float
@@ -94,7 +86,6 @@ model Delivery {
   courierEarnings   Float?
   companyEarnings   Float?
   
-  // לקוחות
   customerFromId    Int?
   customerFrom      Customer? @relation("CustomerFrom", fields: [customerFromId], references: [id])
   customerFromPhone String?
@@ -105,36 +96,28 @@ model Delivery {
   customerToPhone   String?
   customerToName    String?
   
-  // שליח
   courierId         Int?
   courier           Courier?  @relation(fields: [courierId], references: [id])
   
-  // סטטוס
-  status            String    @default("pending") 
-  // pending -> published -> claimed -> picked_up -> in_transit -> delivered -> completed
+  status            String    @default("pending")
   
-  // זמנים
   publishedAt       DateTime?
   claimedAt         DateTime?
   pickedUpAt        DateTime?
   deliveredAt       DateTime?
   completedAt       DateTime?
   
-  // זמנים משוערים
-  estimatedPickupTime   Int?  // דקות
-  estimatedDeliveryTime Int?  // דקות
+  estimatedPickupTime   Int?
+  estimatedDeliveryTime Int?
   
-  // מידע נוסף
   notes             String?
-  priority          Int       @default(0) // 0=normal, 1=high, 2=urgent
+  priority          Int       @default(0)
   isNightDelivery   Boolean   @default(false)
   nightSurcharge    Float     @default(0)
   
-  // תמונות
   pickupPhotoUrl    String?
   deliveryPhotoUrl  String?
   
-  // מי יצר
   createdById       Int?
   createdBy         User?     @relation(fields: [createdById], references: [id])
   
@@ -149,7 +132,7 @@ model Delivery {
 model PricingZone {
   id                    Int       @id @default(autoincrement())
   name                  String
-  polygon               Json      // [{lat, lng}, ...]
+  polygon               Json
   
   motorcycleBase        Float
   motorcyclePerKm       Float
@@ -160,7 +143,7 @@ model PricingZone {
   truckBase             Float
   truckPerKm            Float
   
-  nightSurcharge        Float     @default(1.5) // 150%
+  nightSurcharge        Float     @default(1.5)
   isActive              Boolean   @default(true)
   
   createdAt             DateTime  @default(now())
@@ -177,8 +160,8 @@ model CourierPerformance {
   completedDeliveries   Int       @default(0)
   cancelledDeliveries   Int       @default(0)
   
-  avgPickupTime         Int?      // דקות
-  avgDeliveryTime       Int?      // דקות
+  avgPickupTime         Int?
+  avgDeliveryTime       Int?
   totalEarnings         Float     @default(0)
   ratingAverage         Float?
   
@@ -194,11 +177,12 @@ model CourierBlacklist {
   
   reason            String
   startDate         DateTime  @default(now())
-  endDate           DateTime? // NULL = permanent
-  createdById       Int
-  createdBy         User      @relation("AlertCreator", fields: [createdById], references: [id])
-  isActive          Boolean   @default(true)
+  endDate           DateTime?
   
+  createdById       Int
+  createdBy         User      @relation(fields: [createdById], references: [id])
+  
+  isActive          Boolean   @default(true)
   createdAt         DateTime  @default(now())
 }
 
@@ -209,7 +193,7 @@ model Chat {
   
   senderId          Int
   sender            User      @relation(fields: [senderId], references: [id])
-  senderType        String    // admin, manager, agent
+  senderType        String
   
   message           String
   isRead            Boolean   @default(false)
@@ -227,9 +211,9 @@ model DeliveryTimeLearning {
   distanceKm        Float
   actualTimeMinutes Int
   
-  trafficLevel      String    // low, medium, high
-  dayOfWeek         Int       // 0-6
-  hourOfDay         Int       // 0-23
+  trafficLevel      String
+  dayOfWeek         Int
+  hourOfDay         Int
   weather           String?
   
   createdAt         DateTime  @default(now())
@@ -237,8 +221,7 @@ model DeliveryTimeLearning {
 
 model Alert {
   id                Int       @id @default(autoincrement())
-  alertType         String    
-  // delivery_not_claimed, courier_stuck, payment_pending, courier_cancelled_multiple
+  alertType         String
   
   deliveryId        Int?
   delivery          Delivery? @relation(fields: [deliveryId], references: [id])
