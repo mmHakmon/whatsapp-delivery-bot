@@ -2,38 +2,48 @@ const { Client } = require('pg');
 
 async function cleanupDatabase() {
   const client = new Client({
-    connectionString: process.env.DATABASE_URL
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
   });
 
   try {
     await client.connect();
-    console.log('Connected to database');
+    console.log('🔗 Connected to database');
 
-    // Drop all views
-    console.log('Dropping views...');
+    // Drop all views first
+    console.log('🗑️  Dropping views...');
     await client.query('DROP VIEW IF EXISTS curresponse_orders CASCADE;');
-    
-    // Drop all tables with CASCADE
-    console.log('Dropping tables...');
+    console.log('✅ Views dropped');
+
+    // Drop all old tables with CASCADE
+    console.log('🗑️  Dropping old tables...');
     const tables = [
       'courier_locations',
-      'couriers', 
+      'couriers',
       'customers',
+      'deliveries',
       'payout_requests',
       'push_subscriptions',
       'settings',
       'users',
-      'deliveries'
+      '_prisma_migrations'
     ];
 
     for (const table of tables) {
-      await client.query(`DROP TABLE IF EXISTS ${table} CASCADE;`);
-      console.log(`Dropped table: ${table}`);
+      try {
+        await client.query(`DROP TABLE IF EXISTS "${table}" CASCADE;`);
+        console.log(`   ✓ Dropped: ${table}`);
+      } catch (err) {
+        console.log(`   ⚠ Could not drop ${table}: ${err.message}`);
+      }
     }
 
-    console.log('✅ Database cleaned successfully');
+    console.log('✅ Database cleanup completed');
   } catch (error) {
-    console.error('❌ Error cleaning database:', error);
+    console.error('❌ Error:', error.message);
+    process.exit(1);
   } finally {
     await client.end();
   }
