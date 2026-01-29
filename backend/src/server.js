@@ -22,15 +22,38 @@ const alertService = require('./services/alert.service');
 
 const app = express();
 const server = http.createServer(app);
+
+// Socket.io with CORS
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
+    origin: [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'https://mmh-delivery.onrender.com',
+      'https://mmh-delivery-frontend.onrender.com'
+    ],
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
-// Middleware
-app.use(cors());
+// CORS Middleware - חייב להיות לפני כל ה-routes!
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'https://mmh-delivery.onrender.com',
+    'https://mmh-delivery-frontend.onrender.com'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Handle preflight requests
+app.options('*', cors());
+
+// Body parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -46,7 +69,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Routes
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/deliveries', deliveryRoutes);
 app.use('/api/couriers', courierRoutes);
@@ -69,9 +92,6 @@ io.on('connection', (socket) => {
 
   socket.on('courier-location', async (data) => {
     const { courierId, lat, lng } = data;
-    // Update courier location in DB
-    const courierService = require('./services/courier.service');
-    await courierService.updateLocation(courierId, lat, lng);
     
     // Broadcast to dashboard
     io.emit('courier-moved', { courierId, lat, lng });
@@ -86,20 +106,32 @@ io.on('connection', (socket) => {
 // בדיקת משלוחים שלא נתפסו כל 5 דקות
 cron.schedule('*/5 * * * *', async () => {
   console.log('Running: Check unclaimed deliveries');
-  await alertService.checkUnclaimedDeliveries();
+  try {
+    await alertService.checkUnclaimedDeliveries();
+  } catch (error) {
+    console.error('Error checking unclaimed deliveries:', error);
+  }
 });
 
 // בדיקת שליחים תקועים כל 10 דקות
 cron.schedule('*/10 * * * *', async () => {
   console.log('Running: Check stuck couriers');
-  await alertService.checkStuckCouriers();
+  try {
+    await alertService.checkStuckCouriers();
+  } catch (error) {
+    console.error('Error checking stuck couriers:', error);
+  }
 });
 
 // דוח יומי אוטומטי ב-23:00
 cron.schedule('0 23 * * *', async () => {
   console.log('Running: Daily report generation');
-  const reportService = require('./services/report.service');
-  await reportService.generateDailyReport();
+  try {
+    const reportService = require('./services/report.service');
+    await reportService.generateDailyReport();
+  } catch (error) {
+    console.error('Error generating daily report:', error);
+  }
 });
 
 // Error handling
@@ -107,7 +139,7 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 
     error: 'משהו השתבש!', 
-    message: err.message 
+    message: process.env.NODE_ENV === 'production' ? 'Internal Server Error' : err.message 
   });
 });
 
@@ -118,7 +150,7 @@ server.listen(PORT, () => {
   ╔═══════════════════════════════════════╗
   ║   M.M.H Delivery System V2 Started   ║
   ║   Port: ${PORT}                         ║
-  ║   Environment: ${process.env.NODE_ENV}           ║
+  ║   Environment: ${process.env.NODE_ENV || 'production'}           ║
   ╚═══════════════════════════════════════╝
   `);
 });
