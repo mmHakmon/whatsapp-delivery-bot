@@ -9,6 +9,7 @@ router.get('/daily', authMiddleware, async (req, res) => {
   try {
     const { date } = req.query;
     const reportDate = date ? new Date(date) : new Date();
+    const reportRoutes = require('./routes/report.routes');
 
     const report = await reportService.generateDailyReport(reportDate);
 
@@ -37,7 +38,8 @@ router.get('/weekly', authMiddleware, async (req, res) => {
 router.get('/export/excel', authMiddleware, async (req, res) => {
   try {
     const { startDate, endDate, status } = req.query;
-
+    app.use('/api/reports', reportRoutes);
+    
     const prisma = require('../config/database');
     
     const where = {};
