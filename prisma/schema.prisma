@@ -1,0 +1,255 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  phone         String    @unique
+  name          String
+  role          String    @default("admin") // admin, manager, agent
+  password      String
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  deliveries    Delivery[]
+  chatMessages  Chat[]
+  alertsCreated Alert[]   @relation("AlertCreator")
+}
+
+model Courier {
+  id                Int       @id @default(autoincrement())
+  phone             String    @unique
+  name              String
+  vehicleType       String    // motorcycle, car, van, truck
+  isActive          Boolean   @default(true)
+  isAvailable       Boolean   @default(true)
+  currentLat        Float?
+  currentLng        Float?
+  lastLocationUpdate DateTime?
+  
+  // ביצועים
+  totalDeliveries   Int       @default(0)
+  completedDeliveries Int     @default(0)
+  cancelledDeliveries Int     @default(0)
+  rating            Float     @default(5.0)
+  totalEarnings     Float     @default(0)
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  deliveries        Delivery[]
+  performance       CourierPerformance[]
+  blacklistEntries  CourierBlacklist[]
+  alerts            Alert[]
+}
+
+model Customer {
+  id            Int       @id @default(autoincrement())
+  phone         String    @unique
+  name          String
+  email         String?
+  address       String?
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  deliveriesFrom Delivery[] @relation("CustomerFrom")
+  deliveriesTo   Delivery[] @relation("CustomerTo")
+}
+
+model Delivery {
+  id                Int       @id @default(autoincrement())
+  
+  // מידע בסיסי
+  orderNumber       String    @unique @default(uuid())
+  vehicleType       String    // motorcycle, car, van, truck
+  packageType       String?   // document, package, food, other
+  
+  // כתובות
+  pickupAddress     String
+  pickupLat         Float?
+  pickupLng         Float?
+  pickupCity        String?
+  pickupZone        String?
+  
+  deliveryAddress   String
+  deliveryLat       Float?
+  deliveryLng       Float?
+  deliveryCity      String?
+  deliveryZone      String?
+  
+  // מחיר
+  distance          Float?    // km
+  basePrice         Float
+  pricePerKm        Float
+  totalPrice        Float
+  vatAmount         Float
+  finalPrice        Float
+  courierEarnings   Float?
+  companyEarnings   Float?
+  
+  // לקוחות
+  customerFromId    Int?
+  customerFrom      Customer? @relation("CustomerFrom", fields: [customerFromId], references: [id])
+  customerFromPhone String?
+  customerFromName  String?
+  
+  customerToId      Int?
+  customerTo        Customer? @relation("CustomerTo", fields: [customerToId], references: [id])
+  customerToPhone   String?
+  customerToName    String?
+  
+  // שליח
+  courierId         Int?
+  courier           Courier?  @relation(fields: [courierId], references: [id])
+  
+  // סטטוס
+  status            String    @default("pending") 
+  // pending -> published -> claimed -> picked_up -> in_transit -> delivered -> completed
+  
+  // זמנים
+  publishedAt       DateTime?
+  claimedAt         DateTime?
+  pickedUpAt        DateTime?
+  deliveredAt       DateTime?
+  completedAt       DateTime?
+  
+  // זמנים משוערים
+  estimatedPickupTime   Int?  // דקות
+  estimatedDeliveryTime Int?  // דקות
+  
+  // מידע נוסף
+  notes             String?
+  priority          Int       @default(0) // 0=normal, 1=high, 2=urgent
+  isNightDelivery   Boolean   @default(false)
+  nightSurcharge    Float     @default(0)
+  
+  // תמונות
+  pickupPhotoUrl    String?
+  deliveryPhotoUrl  String?
+  
+  // מי יצר
+  createdById       Int?
+  createdBy         User?     @relation(fields: [createdById], references: [id])
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  chats             Chat[]
+  alerts            Alert[]
+  learningData      DeliveryTimeLearning[]
+}
+
+model PricingZone {
+  id                    Int       @id @default(autoincrement())
+  name                  String
+  polygon               Json      // [{lat, lng}, ...]
+  
+  motorcycleBase        Float
+  motorcyclePerKm       Float
+  carBase               Float
+  carPerKm              Float
+  vanBase               Float
+  vanPerKm              Float
+  truckBase             Float
+  truckPerKm            Float
+  
+  nightSurcharge        Float     @default(1.5) // 150%
+  isActive              Boolean   @default(true)
+  
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model CourierPerformance {
+  id                    Int       @id @default(autoincrement())
+  courierId             Int
+  courier               Courier   @relation(fields: [courierId], references: [id])
+  
+  date                  DateTime  @db.Date
+  totalDeliveries       Int       @default(0)
+  completedDeliveries   Int       @default(0)
+  cancelledDeliveries   Int       @default(0)
+  
+  avgPickupTime         Int?      // דקות
+  avgDeliveryTime       Int?      // דקות
+  totalEarnings         Float     @default(0)
+  ratingAverage         Float?
+  
+  createdAt             DateTime  @default(now())
+  
+  @@unique([courierId, date])
+}
+
+model CourierBlacklist {
+  id                Int       @id @default(autoincrement())
+  courierId         Int
+  courier           Courier   @relation(fields: [courierId], references: [id])
+  
+  reason            String
+  startDate         DateTime  @default(now())
+  endDate           DateTime? // NULL = permanent
+  createdById       Int
+  createdBy         User      @relation("AlertCreator", fields: [createdById], references: [id])
+  isActive          Boolean   @default(true)
+  
+  createdAt         DateTime  @default(now())
+}
+
+model Chat {
+  id                Int       @id @default(autoincrement())
+  deliveryId        Int
+  delivery          Delivery  @relation(fields: [deliveryId], references: [id])
+  
+  senderId          Int
+  sender            User      @relation(fields: [senderId], references: [id])
+  senderType        String    // admin, manager, agent
+  
+  message           String
+  isRead            Boolean   @default(false)
+  
+  createdAt         DateTime  @default(now())
+}
+
+model DeliveryTimeLearning {
+  id                Int       @id @default(autoincrement())
+  deliveryId        Int
+  delivery          Delivery  @relation(fields: [deliveryId], references: [id])
+  
+  fromZone          String
+  toZone            String
+  distanceKm        Float
+  actualTimeMinutes Int
+  
+  trafficLevel      String    // low, medium, high
+  dayOfWeek         Int       // 0-6
+  hourOfDay         Int       // 0-23
+  weather           String?
+  
+  createdAt         DateTime  @default(now())
+}
+
+model Alert {
+  id                Int       @id @default(autoincrement())
+  alertType         String    
+  // delivery_not_claimed, courier_stuck, payment_pending, courier_cancelled_multiple
+  
+  deliveryId        Int?
+  delivery          Delivery? @relation(fields: [deliveryId], references: [id])
+  
+  courierId         Int?
+  courier           Courier?  @relation(fields: [courierId], references: [id])
+  
+  message           String
+  isRead            Boolean   @default(false)
+  isResolved        Boolean   @default(false)
+  
+  createdAt         DateTime  @default(now())
+  resolvedAt        DateTime?
+}
