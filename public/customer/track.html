@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M.M.H Delivery - מעקב משלוח</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-2xl">
+        <div class="text-center mb-8">
+            <div class="text-6xl mb-4">🔍</div>
+            <h1 class="text-3xl font-bold mb-2">מעקב משלוח</h1>
+        </div>
+
+        <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+            <label class="block text-sm font-medium mb-2">מספר הזמנה</label>
+            <input type="text" id="trackingNumber" placeholder="MMH-123456"
+                   class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-purple-500">
+            <button onclick="trackOrder()" class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-3 rounded-lg">
+                🔍 חפש
+            </button>
+        </div>
+
+        <div id="trackingResult" class="mt-6 hidden">
+            <!-- Results will appear here -->
+        </div>
+    </div>
+
+    <script>
+        async function trackOrder() {
+            const orderNumber = document.getElementById('trackingNumber').value;
+            if (!orderNumber) {
+                alert('נא להזין מספר הזמנה');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/orders/track/${orderNumber}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    displayTracking(data.order);
+                } else {
+                    alert('❌ הזמנה לא נמצאה');
+                }
+            } catch (error) {
+                console.error('Tracking error:', error);
+                alert('❌ שגיאה בחיפוש');
+            }
+        }
+
+        function displayTracking(order) {
+            const result = document.getElementById('trackingResult');
+            result.innerHTML = `
+                <div class="bg-slate-800 rounded-2xl p-6 border border-slate-700">
+                    <h3 class="text-xl font-bold mb-4">סטטוס: ${getStatusText(order.status)}</h3>
+                    <div class="space-y-2 text-sm">
+                        <p>📦 הזמנה: <strong>${order.order_number}</strong></p>
+                        <p>📍 מ: ${order.pickup_address}</p>
+                        <p>🏠 ל: ${order.delivery_address}</p>
+                        <p>💰 מחיר: <strong>₪${order.price}</strong></p>
+                    </div>
+                </div>
+            `;
+            result.classList.remove('hidden');
+        }
+
+        function getStatusText(status) {
+            const statuses = {
+                'new': '🆕 חדש',
+                'published': '📢 מחכה לשליח',
+                'taken': '🔵 בדרך לאיסוף',
+                'picked': '📦 נאסף - בדרך למסירה',
+                'delivered': '✅ נמסר',
+                'cancelled': '❌ בוטל'
+            };
+            return statuses[status] || status;
+        }
+    </script>
+</body>
+</html>

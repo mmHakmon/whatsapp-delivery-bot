@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M.M.H Delivery - דאשבורד לקוח</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+        
+        .tab-active {
+            @apply bg-emerald-500 text-white;
+        }
+        
+        .tab-inactive {
+            @apply text-slate-400 hover:text-white hover:bg-slate-700;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen">
+    
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-slate-800 rounded-2xl p-8 w-full max-w-md border border-slate-700">
+            <div class="text-center mb-8">
+                <img src="/assets/logo.png" alt="M.M.H Logo" class="h-32 w-auto mx-auto mb-4 object-contain">
+                <h1 class="text-3xl font-bold mb-2">M.M.H Delivery</h1>
+                <p class="text-slate-400">פורטל לקוחות</p>
+            </div>
+            
+            <!-- Login/Register Tabs -->
+            <div class="flex gap-2 mb-6">
+                <button onclick="showLoginForm()" id="btnShowLogin" 
+                        class="flex-1 py-3 rounded-lg font-bold bg-emerald-500">
+                    התחברות
+                </button>
+                <button onclick="showRegisterForm()" id="btnShowRegister" 
+                        class="flex-1 py-3 rounded-lg font-bold bg-slate-700 hover:bg-slate-600">
+                    הרשמה
+                </button>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm mb-2">טלפון</label>
+                        <input type="tel" id="loginPhone" required pattern="[0-9]{10}"
+                               placeholder="0501234567"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-2">סיסמה</label>
+                        <input type="password" id="loginPassword" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        🔐 התחבר
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Register Form -->
+            <form id="registerForm" onsubmit="handleRegister(event)" class="hidden">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm mb-2">שם מלא *</label>
+                        <input type="text" id="regName" required
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-2">טלפון *</label>
+                        <input type="tel" id="regPhone" required pattern="[0-9]{10}"
+                               placeholder="0501234567"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-2">אימייל</label>
+                        <input type="email" id="regEmail"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-2">שם עסק (אופציונלי)</label>
+                        <input type="text" id="regBusinessName"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-2">סוג עסק</label>
+                        <select id="regBusinessType"
+                                class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                            <option value="">בחר...</option>
+                            <option value="restaurant">מסעדה</option>
+                            <option value="store">חנות</option>
+                            <option value="office">משרד</option>
+                            <option value="personal">אישי</option>
+                            <option value="other">אחר</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-2">כתובת</label>
+                        <input type="text" id="regAddress"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                    </div>
+                    <div>
+                        <label class="block text-sm mb-2">סיסמה *</label>
+                        <input type="password" id="regPassword" required minlength="6"
+                               class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3">
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                        ✅ הרשם
+                    </button>
+                </div>
+            </form>
+            
+            <div id="authError" class="hidden mt-4 p-3 bg-red-500/20 border border-red-500 rounded-lg text-sm"></div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="dashboard" class="hidden">
+        <!-- Header -->
+        <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+            <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <img src="/assets/logo.png" alt="M.M.H Logo" class="h-12 w-auto object-contain">
+                    <div>
+                        <h1 class="text-xl font-bold">M.M.H Delivery</h1>
+                        <p class="text-sm text-slate-400" id="welcomeName">שלום!</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="createNewOrder()" class="bg-emerald-500 hover:bg-emerald-600 px-4 py-2 rounded-lg font-bold">
+                        ➕ הזמנה חדשה
+                    </button>
+                    <button onclick="logout()" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded-lg">
+                        🚪 יציאה
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="container mx-auto px-4 py-8">
+            <!-- Statistics Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-3xl">📦</span>
+                        <span class="text-emerald-400 text-sm">סה"כ</span>
+                    </div>
+                    <p class="text-3xl font-bold" id="statTotal">0</p>
+                    <p class="text-slate-400 text-sm">הזמנות</p>
+                </div>
+                
+                <div class="bg-slate-800 rounded-xl p-6 border border-blue-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-3xl">🔵</span>
+                        <span class="text-blue-400 text-sm">פעילות</span>
+                    </div>
+                    <p class="text-3xl font-bold text-blue-400" id="statActive">0</p>
+                    <p class="text-slate-400 text-sm">בדרך</p>
+                </div>
+                
+                <div class="bg-slate-800 rounded-xl p-6 border border-emerald-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-3xl">✅</span>
+                        <span class="text-emerald-400 text-sm">הושלמו</span>
+                    </div>
+                    <p class="text-3xl font-bold text-emerald-400" id="statCompleted">0</p>
+                    <p class="text-slate-400 text-sm">נמסרו</p>
+                </div>
+                
+                <div class="bg-slate-800 rounded-xl p-6 border border-amber-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-3xl">💰</span>
+                        <span class="text-amber-400 text-sm">סה"כ</span>
+                    </div>
+                    <p class="text-2xl font-bold text-amber-400" id="statSpent">₪0</p>
+                    <p class="text-slate-400 text-sm">הוצאות</p>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="mb-6 flex gap-2 border-b border-slate-700 overflow-x-auto">
+                <button onclick="switchTab('orders')" id="tabOrders" class="tab-active px-6 py-3 font-bold whitespace-nowrap">
+                    📦 ההזמנות שלי
+                </button>
+                <button onclick="switchTab('history')" id="tabHistory" class="tab-inactive px-6 py-3 whitespace-nowrap">
+                    📊 היסטוריה
+                </button>
+                <button onclick="switchTab('profile')" id="tabProfile" class="tab-inactive px-6 py-3 whitespace-nowrap">
+                    👤 פרופיל
+                </button>
+                <button onclick="switchTab('settings')" id="tabSettings" class="tab-inactive px-6 py-3 whitespace-nowrap">
+                    ⚙️ הגדרות
+                </button>
+                <button onclick="switchTab('support')" id="tabSupport" class="tab-inactive px-6 py-3 whitespace-nowrap">
+                    💬 תמיכה
+                </button>
+            </div>
+
+            <!-- Content Panels -->
+            <div id="contentOrders" class="tab-content">
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-2xl font-bold mb-4">ההזמנות שלי</h2>
+                    <div id="ordersList"></div>
+                </div>
+            </div>
+
+            <div id="contentHistory" class="tab-content hidden">
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-2xl font-bold mb-4">📊 היסטוריה וסטטיסטיקות</h2>
+                    <div id="historyContent"></div>
+                </div>
+            </div>
+
+            <div id="contentProfile" class="tab-content hidden">
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-2xl font-bold mb-4">👤 הפרופיל שלי</h2>
+                    <div id="profileContent"></div>
+                </div>
+            </div>
+
+            <div id="contentSettings" class="tab-content hidden">
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-2xl font-bold mb-4">⚙️ הגדרות</h2>
+                    <div id="settingsContent"></div>
+                </div>
+            </div>
+
+            <div id="contentSupport" class="tab-content hidden">
+                <div class="bg-slate-800 rounded-xl p-6 border border-slate-700">
+                    <h2 class="text-2xl font-bold mb-4">💬 תמיכה ושירות</h2>
+                    <div id="supportContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="hidden fixed top-4 left-1/2 transform -translate-x-1/2 z-50 
+                                   bg-slate-800 border border-emerald-500 rounded-lg px-6 py-4 shadow-xl">
+        <p id="notificationText" class="font-bold"></p>
+    </div>
+
+    <script src="/customer/customer-dashboard.js"></script>
+</body>
+</html>

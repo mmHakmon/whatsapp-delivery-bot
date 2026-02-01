@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>קיוריספונס - כניסה למערכת | M.M.H Delivery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 min-h-screen flex items-center justify-center p-4">
+    
+    <div class="max-w-md w-full">
+        <!-- Logo & Title -->
+        <div class="text-center mb-8">
+            <div class="bg-white rounded-full w-24 h-24 mx-auto mb-4 flex items-center justify-center shadow-2xl">
+                <span class="text-4xl">🏥</span>
+            </div>
+            <h1 class="text-3xl font-bold text-white mb-2">קיוריספונס בע"מ</h1>
+            <p class="text-blue-200">מערכת הזמנת משלוחים רפואיים</p>
+            <p class="text-sm text-blue-300 mt-2">בשיתוף M.M.H Delivery</p>
+        </div>
+
+        <!-- Login Card -->
+        <div class="bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8 border-2 border-blue-500">
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">
+                        <span class="text-blue-600">🔐</span> מספר טלפון
+                    </label>
+                    <input 
+                        type="tel" 
+                        id="phone" 
+                        value="0544974536"
+                        readonly
+                        class="w-full bg-gray-100 border-2 border-gray-300 rounded-lg px-4 py-3 text-lg font-bold text-center cursor-not-allowed"
+                    >
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">
+                        <span class="text-blue-600">🔑</span> סיסמה
+                    </label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        required
+                        placeholder="הזן סיסמה"
+                        class="w-full bg-white border-2 border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition"
+                    >
+                </div>
+
+                <button 
+                    type="submit" 
+                    class="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold py-4 rounded-lg shadow-lg hover:shadow-xl transition transform hover:scale-105"
+                >
+                    🚀 כניסה למערכת
+                </button>
+            </form>
+
+            <!-- Error Message -->
+            <div id="errorMessage" class="hidden mt-4 p-4 bg-red-100 border-2 border-red-500 rounded-lg">
+                <p class="text-red-700 font-bold text-center" id="errorText"></p>
+            </div>
+
+            <!-- Info Box -->
+            <div class="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                <p class="text-sm text-blue-800 text-center">
+                    <span class="font-bold">💡 לקוח VIP</span><br>
+                    גישה ייעודית למערכת הזמנות רפואיות
+                </p>
+            </div>
+        </div>
+
+        <!-- Support -->
+        <div class="text-center mt-6 text-white">
+            <p class="text-sm">תמיכה טכנית:</p>
+            <a href="tel:0545025254" class="text-blue-300 hover:text-blue-200 font-bold">
+                📞 054-502-5254
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const phone = document.getElementById('phone').value;
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+
+            // Hide previous error
+            errorDiv.classList.add('hidden');
+
+            try {
+                const response = await fetch(`${API_URL}/api/customers/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Check if VIP customer
+                    if (!data.customer.isVip) {
+                        errorText.textContent = 'גישה מוגבלת ללקוחות VIP בלבד';
+                        errorDiv.classList.remove('hidden');
+                        return;
+                    }
+
+                    // Save token
+                    localStorage.setItem('curresponseToken', data.token);
+                    localStorage.setItem('curresponseCustomer', JSON.stringify(data.customer));
+
+                    // Redirect to order page
+                    window.location.href = '/customer/curresponse/order.html';
+                } else {
+                    errorText.textContent = data.error || 'שגיאה בהתחברות';
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                errorText.textContent = 'שגיאת תקשורת - נסה שוב';
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        // Check if already logged in
+        window.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('curresponseToken');
+            if (token) {
+                // Verify token is still valid
+                fetch(`${API_URL}/api/customers/profile`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                .then(res => res.ok ? window.location.href = '/customer/curresponse/order.html' : null)
+                .catch(() => {});
+            }
+        });
+    </script>
+</body>
+</html>

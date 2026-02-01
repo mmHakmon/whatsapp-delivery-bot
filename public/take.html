@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>תפוס משלוח - M.M.H Delivery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full">
+        <!-- Loading State -->
+        <div id="loadingState" class="text-center">
+            <div class="text-8xl mb-4 animate-bounce">🏍️</div>
+            <h1 class="text-2xl font-bold mb-2">טוען...</h1>
+            <p class="text-slate-400">מזהה אותך ומאפשר לך לתפוס את המשלוח</p>
+        </div>
+
+        <!-- Login Required -->
+        <div id="loginState" class="hidden bg-slate-800 rounded-2xl p-6 border border-slate-700">
+            <div class="text-center mb-6">
+                <div class="text-6xl mb-4">🔐</div>
+                <h1 class="text-2xl font-bold mb-2">זיהוי נדרש</h1>
+                <p class="text-slate-400">הזן תעודת זהות כדי לתפוס את המשלוח</p>
+            </div>
+            
+            <form id="quickLoginForm" onsubmit="handleQuickLogin(event)">
+                <label class="block text-sm font-medium mb-2">תעודת זהות</label>
+                <input type="text" id="quickLoginId" required pattern="[0-9]{9}"
+                       placeholder="123456789"
+                       class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 mb-4 focus:outline-none focus:border-purple-500">
+                <button type="submit" class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-3 rounded-lg">
+                    ✋ תפוס משלוח
+                </button>
+            </form>
+        </div>
+
+        <!-- Success State -->
+        <div id="successState" class="hidden bg-slate-800 rounded-2xl p-6 border border-emerald-500">
+            <div class="text-center">
+                <div class="text-8xl mb-4">✅</div>
+                <h1 class="text-3xl font-bold mb-4 text-emerald-400">תפסת!</h1>
+                <p class="text-xl mb-4" id="successMessage"></p>
+                <p class="text-slate-400 mb-6">פרטי המשלוח נשלחו אליך בוואטסאפ</p>
+                <a href="/courier" class="block w-full bg-blue-500 hover:bg-blue-600 font-bold py-3 rounded-lg text-center">
+                    📱 פתח אפליקציה
+                </a>
+            </div>
+        </div>
+
+        <!-- Error State -->
+        <div id="errorState" class="hidden bg-slate-800 rounded-2xl p-6 border border-red-500">
+            <div class="text-center">
+                <div class="text-8xl mb-4">❌</div>
+                <h1 class="text-3xl font-bold mb-4 text-red-400">שגיאה</h1>
+                <p class="text-xl mb-6" id="errorMessage"></p>
+                <button onclick="window.location.reload()" class="w-full bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg">
+                    🔄 נסה שוב
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const orderId = window.location.pathname.split('/').pop();
+        let courierToken = localStorage.getItem('courierToken');
+        let courierData = localStorage.getItem('courierData');
+
+        async function initQuickTake() {
+            // Check if courier is already logged in
+            if (courierToken && courierData) {
+                const courier = JSON.parse(courierData);
+                await attemptTakeOrder(courier.id);
+            } else {
+                // Show login form
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('loginState').classList.remove('hidden');
+            }
+        }
+
+        async function handleQuickLogin(event) {
+            event.preventDefault();
+            
+            const idNumber = document.getElementById('quickLoginId').value;
+            
+            try {
+                // Login
+                const loginResponse = await fetch('/api/auth/courier-login-id', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ idNumber })
+                });
+                
+                const loginData = await loginResponse.json();
+                
+                if (loginResponse.ok) {
+                    // Save token
+                    localStorage.setItem('courierToken', loginData.token);
+                    localStorage.setItem('courierData', JSON.stringify(loginData.courier));
+                    
+                    // Attempt take
+                    await attemptTakeOrder(loginData.courier.id);
+                } else {
+                    showError(loginData.error || 'שליח לא נמצא או לא פעיל');
+                }
+            } catch (error) {
+                console.error('Quick login error:', error);
+                showError('שגיאת תקשורת');
+            }
+        }
+
+        async function attemptTakeOrder(courierId) {
+            try {
+                const response = await fetch(`/api/orders/quick-take/${orderId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ courierId })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showSuccess(data.message);
+                } else {
+                    showError(data.error || 'לא הצלחנו לתפוס את המשלוח');
+                }
+            } catch (error) {
+                console.error('Take order error:', error);
+                showError('שגיאת תקשורת');
+            }
+        }
+
+        function showSuccess(message) {
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('loginState').classList.add('hidden');
+            document.getElementById('errorState').classList.add('hidden');
+            
+            document.getElementById('successMessage').textContent = message;
+            document.getElementById('successState').classList.remove('hidden');
+        }
+
+        function showError(message) {
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('loginState').classList.add('hidden');
+            document.getElementById('successState').classList.add('hidden');
+            
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorState').classList.remove('hidden');
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', initQuickTake);
+    </script>
+</body>
+</html>

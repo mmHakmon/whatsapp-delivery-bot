@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>אישור פעולה - M.M.H Delivery</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;700&display=swap');
+        * { font-family: 'Heebo', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center p-4">
+    
+    <!-- Loading State -->
+    <div id="loadingState" class="text-center">
+        <div class="text-8xl mb-4 animate-bounce">🏍️</div>
+        <h1 class="text-2xl font-bold mb-2">טוען...</h1>
+        <p class="text-slate-400">מזהה את הפעולה</p>
+    </div>
+
+    <!-- Confirmation Screen -->
+    <div id="confirmationScreen" class="hidden max-w-md w-full">
+        <div class="bg-slate-800 rounded-2xl p-8 border border-slate-700">
+            
+            <!-- Icon -->
+            <div class="text-center mb-6">
+                <div id="actionIcon" class="text-8xl mb-4">📦</div>
+                <h1 id="actionTitle" class="text-3xl font-bold mb-2">אישור פעולה</h1>
+                <p class="text-slate-400" id="actionDescription">טוען...</p>
+            </div>
+
+            <!-- Order Details -->
+            <div class="bg-slate-700 rounded-xl p-4 mb-6">
+                <p class="text-sm text-slate-400 mb-1">הזמנה</p>
+                <p class="text-xl font-bold mb-3" id="orderNumber">MMH-123456</p>
+                
+                <div id="pickupInfo" class="mb-2">
+                    <p class="text-sm text-slate-400">איסוף מ:</p>
+                    <p class="font-medium" id="pickupAddress"></p>
+                </div>
+                
+                <div id="deliveryInfo">
+                    <p class="text-sm text-slate-400">מסירה ל:</p>
+                    <p class="font-medium" id="deliveryAddress"></p>
+                </div>
+            </div>
+
+            <!-- Courier Info -->
+            <div class="bg-blue-900/30 border border-blue-700 rounded-xl p-4 mb-6">
+                <p class="text-sm text-blue-300 mb-1">שליח</p>
+                <p class="font-bold text-lg" id="courierName"></p>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="space-y-3">
+                <button 
+                    onclick="confirmAction()"
+                    id="confirmBtn"
+                    class="w-full bg-emerald-500 hover:bg-emerald-600 font-bold py-4 rounded-xl text-xl transition shadow-lg"
+                >
+                    ✅ אשר איסוף
+                </button>
+                
+                <button 
+                    onclick="window.close()"
+                    class="w-full bg-slate-700 hover:bg-slate-600 font-bold py-3 rounded-lg transition"
+                >
+                    ביטול
+                </button>
+            </div>
+
+            <p class="text-center text-xs text-slate-400 mt-4">
+                הלקוח יקבל הודעת עדכון אוטומטית
+            </p>
+        </div>
+    </div>
+
+    <!-- Success State -->
+    <div id="successState" class="hidden text-center max-w-md">
+        <div class="bg-slate-800 rounded-2xl p-8 border border-emerald-500">
+            <div class="text-8xl mb-4">✅</div>
+            <h1 class="text-3xl font-bold mb-4 text-emerald-400" id="successTitle">אושר!</h1>
+            <p class="text-xl mb-6" id="successMessage"></p>
+            
+            <!-- Next Action Info -->
+            <div id="nextActionInfo" class="bg-slate-700 rounded-lg p-4 mb-6">
+                <p class="text-sm text-slate-400 mb-2">הצעד הבא:</p>
+                <p class="font-bold text-lg" id="nextAction"></p>
+            </div>
+            
+            <div class="flex gap-3">
+                <a href="/courier/dashboard.html" class="flex-1 bg-blue-500 hover:bg-blue-600 py-3 rounded-lg font-bold text-center">
+                    📱 לאפליקציה
+                </a>
+                <button onclick="window.close()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-bold">
+                    סגור
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="errorState" class="hidden text-center max-w-md">
+        <div class="bg-slate-800 rounded-2xl p-8 border border-red-500">
+            <div class="text-8xl mb-4">❌</div>
+            <h1 class="text-3xl font-bold mb-4 text-red-400">שגיאה</h1>
+            <p class="text-xl mb-6" id="errorMessage"></p>
+            <div class="flex gap-3">
+                <button onclick="window.location.reload()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-3 rounded-lg font-bold">
+                    נסה שוב
+                </button>
+                <a href="/courier/dashboard.html" class="flex-1 bg-blue-500 hover:bg-blue-600 py-3 rounded-lg font-bold text-center">
+                    לאפליקציה
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = window.location.origin;
+        
+        // Get parameters from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const action = urlParams.get('action');    // 'pickup' or 'deliver'
+        const orderId = urlParams.get('order');
+        const courierId = urlParams.get('courier'); // Optional - for verification
+        
+        let orderData = null;
+        let courierToken = localStorage.getItem('courierToken');
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', initConfirmation);
+
+        async function initConfirmation() {
+            if (!action || !orderId) {
+                showError('פרמטרים חסרים בקישור');
+                return;
+            }
+
+            if (!['pickup', 'deliver'].includes(action)) {
+                showError('פעולה לא חוקית');
+                return;
+            }
+
+            // Load order data
+            try {
+                const response = await fetch(`${API_URL}/api/orders/${orderId}`, {
+                    headers: courierToken ? { 'Authorization': `Bearer ${courierToken}` } : {}
+                });
+
+                if (!response.ok) {
+                    throw new Error('לא ניתן לטעון את פרטי ההזמנה');
+                }
+
+                const data = await response.json();
+                orderData = data.order;
+
+                // Validate action based on order status
+                if (action === 'pickup' && orderData.status !== 'taken') {
+                    showError('לא ניתן לאשר איסוף - ההזמנה לא בסטטוס נכון');
+                    return;
+                }
+
+                if (action === 'deliver' && orderData.status !== 'picked') {
+                    showError('לא ניתן לאשר מסירה - ההזמנה לא בסטטוס נכון');
+                    return;
+                }
+
+                // Display confirmation screen
+                displayConfirmation();
+
+            } catch (error) {
+                console.error('Init error:', error);
+                showError(error.message || 'שגיאה בטעינת נתונים');
+            }
+        }
+
+        function displayConfirmation() {
+            // Set action-specific content
+            if (action === 'pickup') {
+                document.getElementById('actionIcon').textContent = '📤';
+                document.getElementById('actionTitle').textContent = 'אישור איסוף חבילה';
+                document.getElementById('actionDescription').textContent = 'אשר שאספת את החבילה מהלקוח';
+                document.getElementById('confirmBtn').innerHTML = '✅ אשר איסוף';
+            } else {
+                document.getElementById('actionIcon').textContent = '📥';
+                document.getElementById('actionTitle').textContent = 'אישור מסירת חבילה';
+                document.getElementById('actionDescription').textContent = 'אשר שמסרת את החבילה ללקוח';
+                document.getElementById('confirmBtn').innerHTML = '✅ אשר מסירה';
+            }
+
+            // Display order details
+            document.getElementById('orderNumber').textContent = orderData.order_number;
+            document.getElementById('pickupAddress').textContent = orderData.pickup_address;
+            document.getElementById('deliveryAddress').textContent = orderData.delivery_address;
+            
+            // Display courier name
+            if (orderData.courier_first_name) {
+                document.getElementById('courierName').textContent = 
+                    `${orderData.courier_first_name} ${orderData.courier_last_name}`;
+            } else {
+                document.getElementById('courierName').textContent = 'לא ידוע';
+            }
+
+            // Show confirmation screen
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('confirmationScreen').classList.remove('hidden');
+        }
+
+        async function confirmAction() {
+            const confirmBtn = document.getElementById('confirmBtn');
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = '⏳ מאשר...';
+
+            try {
+                // Determine endpoint
+                const endpoint = action === 'pickup' 
+                    ? `/api/orders/${orderId}/pickup`
+                    : `/api/orders/${orderId}/deliver`;
+
+                // Make API call
+                const headers = { 'Content-Type': 'application/json' };
+                if (courierToken) {
+                    headers['Authorization'] = `Bearer ${courierToken}`;
+                }
+
+                const response = await fetch(`${API_URL}${endpoint}`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ 
+                        courierId: orderData.courier_id,
+                        quickConfirm: true 
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showSuccess();
+                } else {
+                    throw new Error(result.error || 'שגיאה באישור הפעולה');
+                }
+
+            } catch (error) {
+                console.error('Confirm action error:', error);
+                showError(error.message);
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = action === 'pickup' ? '✅ אשר איסוף' : '✅ אשר מסירה';
+            }
+        }
+
+        function showSuccess() {
+            document.getElementById('confirmationScreen').classList.add('hidden');
+            
+            if (action === 'pickup') {
+                document.getElementById('successTitle').textContent = 'החבילה נאספה!';
+                document.getElementById('successMessage').textContent = 'הלקוח קיבל הודעה שהחבילה בדרך';
+                document.getElementById('nextAction').textContent = '🚗 עכשיו תוכל לנסוע למסירה';
+            } else {
+                document.getElementById('successTitle').textContent = 'החבילה נמסרה!';
+                document.getElementById('successMessage').textContent = 'הכסף זוכה לחשבונך';
+                document.getElementById('nextAction').textContent = '💰 התשלום התווסף ליתרה שלך';
+            }
+            
+            document.getElementById('successState').classList.remove('hidden');
+        }
+
+        function showError(message) {
+            document.getElementById('loadingState').classList.add('hidden');
+            document.getElementById('confirmationScreen').classList.add('hidden');
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorState').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
