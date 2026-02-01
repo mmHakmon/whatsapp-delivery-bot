@@ -174,12 +174,13 @@
     <script>
         const API_URL = window.location.origin;
         
-        // Get order ID from URL
+        // Get order identifier from URL — can be order_number (MMH-xxx) or numeric id
         const urlParams = new URLSearchParams(window.location.search);
-        const orderId = urlParams.get('order');
-        const token = urlParams.get('token'); // Optional token for security
+        const orderParam = urlParams.get('order');
+        const token = urlParams.get('token');
         
         let orderData = null;
+        let resolvedOrderId = null; // numeric ID used for POST rating
         let selectedRating = 0;
         let criteriaRatings = {
             speed: 0,
@@ -191,20 +192,29 @@
         document.addEventListener('DOMContentLoaded', loadOrderData);
 
         async function loadOrderData() {
-            if (!orderId) {
+            if (!orderParam) {
                 showError('מספר הזמנה חסר');
                 return;
             }
 
             try {
-                const response = await fetch(`${API_URL}/api/orders/track/${orderId}`);
-                
+                // 1) Try /api/orders/track/:orderParam  (works for both order_number & id)
+                let response = await fetch(`${API_URL}/api/orders/track/${orderParam}`);
+
+                // 2) If that fails, try /api/orders/:orderParam directly (needs token for auth)
+                if (!response.ok) {
+                    const headers = {};
+                    if (token) headers['Authorization'] = `Bearer ${token}`;
+                    response = await fetch(`${API_URL}/api/orders/${orderParam}`, { headers });
+                }
+
                 if (!response.ok) {
                     throw new Error('הזמנה לא נמצאה');
                 }
 
                 const data = await response.json();
                 orderData = data.order;
+                resolvedOrderId = orderData.id; // save the real numeric ID
 
                 // Check if order is delivered
                 if (orderData.status !== 'delivered') {
@@ -212,20 +222,25 @@
                     return;
                 }
 
-                // Check if already rated
-                const ratingCheck = await fetch(`${API_URL}/api/orders/${orderId}/rating-status`);
-                if (ratingCheck.ok) {
-                    const ratingData = await ratingCheck.json();
-                    if (ratingData.hasRating) {
-                        showError('כבר דירגת הזמנה זו. תודה!');
-                        return;
+                // Check if already rated — non-fatal if endpoint is missing
+                try {
+                    const ratingCheck = await fetch(`${API_URL}/api/orders/${resolvedOrderId}/rating-status`);
+                    if (ratingCheck.ok) {
+                        const ratingData = await ratingCheck.json();
+                        if (ratingData.hasRating) {
+                            showError('כבר דירגת הזמנה זו. תודה!');
+                            return;
+                        }
                     }
+                } catch (e) {
+                    console.warn('Rating-status check skipped:', e);
                 }
 
                 // Display order info
-                document.getElementById('orderNumber').textContent = orderData.order_number;
-                document.getElementById('courierName').textContent = 
-                    `השליח: ${orderData.courier_first_name} ${orderData.courier_last_name}`;
+                document.getElementById('orderNumber').textContent = orderData.order_number || orderParam;
+                document.getElementById('courierName').textContent = orderData.courier_first_name
+                    ? `השליח: ${orderData.courier_first_name} ${orderData.courier_last_name || ''}`
+                    : 'השליח';
 
                 // Show rating form
                 document.getElementById('loadingState').classList.add('hidden');
@@ -312,7 +327,7 @@
 
             try {
                 const ratingData = {
-                    orderId: parseInt(orderId),
+                    orderId: resolvedOrderId,
                     rating: selectedRating,
                     speedRating: criteriaRatings.speed || null,
                     courtesyRating: criteriaRatings.courtesy || null,
@@ -320,7 +335,7 @@
                     comment: document.getElementById('comment').value || null
                 };
 
-                const response = await fetch(`${API_URL}/api/orders/${orderId}/rate`, {
+                const response = await fetch(`${API_URL}/api/orders/${resolvedOrderId}/rate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(ratingData)
