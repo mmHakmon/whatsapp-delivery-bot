@@ -164,29 +164,65 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Initialize WebSocket
+
+// Initialize WebSocket
 websocketService.initialize(server);
+
+// ==========================================
+// DATABASE INIT — creates tables if missing
+// ==========================================
+const { Pool } = require('pg');
+const fs = require('fs');
+
+async function initDatabase() {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
+
+  try {
+    const result = await pool.query(
+      "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')"
+    );
+
+    if (!result.rows[0].exists) {
+      console.log('🔄 Tables not found — running init.sql...');
+      const sql = fs.readFileSync(path.join(__dirname, 'init.sql'), 'utf8');
+      await pool.query(sql);
+      console.log('✅ Database tables created successfully!');
+    } else {
+      console.log('✅ Database tables already exist.');
+    }
+
+    await pool.end();
+  } catch (error) {
+    console.error('❌ Database init failed:', error.message);
+  }
+}
 
 // Start server
 const PORT = process.env.PORT || 10000;
 const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 
-server.listen(PORT, () => {
-  console.log('✅ WebSocket server initialized');
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 Public URL: ${PUBLIC_URL}`);
-  console.log('');
-  console.log('✅ M.M.H Delivery System is ready!');
-  console.log('');
-  console.log('🔗 Admin Panel:', `${PUBLIC_URL}/admin`);
-  console.log('🔗 Courier App:', `${PUBLIC_URL}/courier`);
-  console.log('🔗 Customer Order:', `${PUBLIC_URL}/customer/order.html`);
-  console.log('🔗 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
-  console.log('🔗 Price Calculator:', `${PUBLIC_URL}/calculator`);
-  console.log('🔗 CURresponse VIP:', `${PUBLIC_URL}/customer/curresponse/login.html`);
-  console.log('🔗 Quick Confirm:', `${PUBLIC_URL}/confirm.html`); // ✅ NEW
-  console.log('🔗 Rating:', `${PUBLIC_URL}/rate.html`); // ✅ NEW
-  console.log('');
+initDatabase().then(() => {
+  server.listen(PORT, () => {
+    console.log('✅ WebSocket server initialized');
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🌐 Public URL: ${PUBLIC_URL}`);
+    console.log('');
+    console.log('✅ M.M.H Delivery System is ready!');
+    console.log('');
+    console.log('🔗 Admin Panel:', `${PUBLIC_URL}/admin`);
+    console.log('🔗 Courier App:', `${PUBLIC_URL}/courier`);
+    console.log('🔗 Customer Order:', `${PUBLIC_URL}/customer/order.html`);
+    console.log('🔗 Courier Register:', `${PUBLIC_URL}/courier/register.html`);
+    console.log('🔗 Price Calculator:', `${PUBLIC_URL}/calculator`);
+    console.log('🔗 CURresponse VIP:', `${PUBLIC_URL}/customer/curresponse/login.html`);
+    console.log('🔗 Quick Confirm:', `${PUBLIC_URL}/confirm.html`);
+    console.log('🔗 Rating:', `${PUBLIC_URL}/rate.html`);
+    console.log('');
+  });
 });
 
 // Graceful shutdown
