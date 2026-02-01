@@ -153,7 +153,13 @@ function getRoleNameHebrew(role) {
 // WEBSOCKET
 // ==========================================
 
+let wsReconnectAttempts = 0;
+
 function connectWebSocket() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        return;
+    }
+
     const wsUrl = window.location.protocol === 'https:' 
         ? `wss://${window.location.host}` 
         : `ws://${window.location.host}`;
@@ -162,12 +168,17 @@ function connectWebSocket() {
     
     ws.onopen = () => {
         console.log('✅ WebSocket connected');
+        wsReconnectAttempts = 0;
         ws.send(JSON.stringify({
             type: 'auth',
             userId: userData.id,
             role: userData.role,
             userType: 'admin'
         }));
+        // Reload all data after reconnect
+        loadStatistics();
+        loadOrders(currentFilter === 'all' ? null : currentFilter);
+        loadCouriers();
     };
     
     ws.onmessage = (event) => {
@@ -176,8 +187,15 @@ function connectWebSocket() {
     };
     
     ws.onclose = () => {
-        console.log('❌ WebSocket disconnected');
-        setTimeout(connectWebSocket, 3000);
+        ws = null;
+        wsReconnectAttempts++;
+        const delay = Math.min(3000 * wsReconnectAttempts, 30000);
+        console.log(`❌ WebSocket disconnected. Reconnecting in ${delay/1000}s...`);
+        setTimeout(connectWebSocket, delay);
+    };
+
+    ws.onerror = () => {
+        ws.close();
     };
 }
 
@@ -258,6 +276,12 @@ async function loadStatistics() {
         const response = await fetch('/api/admin/dashboard-stats', {
             headers: { 'Authorization': `Bearer ${adminToken}` }
         });
+
+        if (response.status === 401) {
+            localStorage.clear();
+            window.location.reload();
+            return;
+        }
         
         if (response.ok) {
             const data = await response.json();
@@ -320,6 +344,12 @@ async function loadOrders(status = null) {
             headers: { 'Authorization': `Bearer ${adminToken}` }
         });
         
+        if (response.status === 401) {
+            localStorage.clear();
+            window.location.reload();
+            return;
+        }
+
         if (response.ok) {
             const data = await response.json();
             displayOrders(data.orders);
