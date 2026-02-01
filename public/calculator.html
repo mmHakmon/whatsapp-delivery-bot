@@ -3,721 +3,658 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>מחשבון משלוחים - M.M.H Delivery</title>
+    <title>מחשבון מחירים - M.M.H Delivery</title>
+    <link rel="icon" href="/assets/logo.png">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap');
+
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --card-hover: #334155;
+            --border: #334155;
+            --accent: #10b981;
+            --accent-hover: #059669;
+            --accent-dim: rgba(16,185,129,0.1);
+            --text: #f1f5f9;
+            --text-sec: #94a3b8;
+            --text-mute: #64748b;
+            --input-bg: #0f172a;
+            --red: #ef4444;
         }
+
+        * { margin:0; padding:0; box-sizing:border-box; }
 
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #003B73 0%, #00A9E0 100%);
+            font-family: 'Heebo', sans-serif;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
-            padding: 20px;
+        }
+
+        /* HEADER */
+        header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 24px;
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 12px;
+        }
+        header img { height: 40px; }
+        header .hdr-text h1 { font-size: 17px; font-weight: 700; }
+        header .hdr-text p { font-size: 11px; color: var(--text-mute); }
+
+        /* LAYOUT */
+        .wrap {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 28px 18px 70px;
         }
 
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            max-width: 600px;
-            width: 100%;
-            padding: 40px;
-            animation: fadeIn 0.5s ease-in;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .logo-container {
+        .page-head {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 28px;
         }
+        .page-head h2 { font-size: 24px; font-weight: 800; }
+        .page-head p { color: var(--text-sec); font-size: 13px; margin-top: 4px; }
 
-        h1 {
-            color: #003B73;
-            text-align: center;
-            margin-bottom: 30px;
-            font-size: 28px;
-        }
-
-        .form-group {
-            margin-bottom: 25px;
-        }
-
-        label {
-            display: block;
-            color: #003B73;
-            font-weight: bold;
-            margin-bottom: 8px;
-            font-size: 16px;
-        }
-
-        input[type="text"],
-        select {
-            width: 100%;
-            padding: 12px 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            font-family: inherit;
-        }
-
-        input[type="text"]:focus,
-        select:focus {
-            outline: none;
-            border-color: #00A9E0;
-            box-shadow: 0 0 0 3px rgba(0,169,224,0.1);
-        }
-
-        select {
-            cursor: pointer;
-            background-color: white;
-        }
-
-        .vehicle-options {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .vehicle-option {
-            position: relative;
-        }
-
-        .vehicle-option input[type="radio"] {
-            position: absolute;
-            opacity: 0;
-        }
-
-        .vehicle-option label {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            border: 3px solid #e0e0e0;
-            border-radius: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: white;
-            height: 120px;
-        }
-
-        .vehicle-option input[type="radio"]:checked + label {
-            border-color: #00A9E0;
-            background: linear-gradient(135deg, #00A9E0 0%, #003B73 100%);
-            color: white;
-            transform: scale(1.05);
-        }
-
-        .vehicle-icon {
-            font-size: 32px;
-            margin-bottom: 8px;
-        }
-
-        .vehicle-name {
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .vehicle-base {
-            font-size: 12px;
-            margin-top: 4px;
-            opacity: 0.8;
-        }
-
-        .packaging-options {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
+        /* STEP */
+        .step-lbl {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+            color: var(--accent);
             margin-bottom: 10px;
-        }
-
-        .packaging-option {
-            position: relative;
-        }
-
-        .packaging-option input[type="radio"] {
-            position: absolute;
-            opacity: 0;
-        }
-
-        .packaging-option label {
             display: flex;
-            flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 15px;
-            border: 3px solid #e0e0e0;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: white;
-            min-height: 100px;
+            gap: 7px;
         }
-
-        .packaging-option input[type="radio"]:checked + label {
-            border-color: #00A9E0;
-            background: linear-gradient(135deg, rgba(0,169,224,0.1) 0%, rgba(0,59,115,0.1) 100%);
-            transform: scale(1.03);
-        }
-
-        .packaging-icon {
-            font-size: 28px;
-            margin-bottom: 6px;
-        }
-
-        .packaging-name {
-            font-weight: bold;
-            font-size: 13px;
-            margin-bottom: 4px;
-            text-align: center;
-        }
-
-        .packaging-price {
-            font-size: 14px;
-            color: #00A9E0;
-            font-weight: bold;
-        }
-
-        .packaging-info {
-            margin-top: 10px;
-            text-align: center;
-        }
-
-        .packaging-info small {
-            color: #666;
-            font-size: 13px;
-            font-style: italic;
-        }
-
-        .calculate-btn {
-            width: 100%;
-            padding: 15px;
-            background: linear-gradient(135deg, #00A9E0 0%, #003B73 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 20px;
-        }
-
-        .calculate-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 25px rgba(0,169,224,0.3);
-        }
-
-        .calculate-btn:active {
-            transform: translateY(0);
-        }
-
-        .calculate-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .result {
-            margin-top: 30px;
-            padding: 25px;
-            background: linear-gradient(135deg, #003B73 0%, #00A9E0 100%);
-            border-radius: 15px;
-            color: white;
-            display: none;
-            animation: slideIn 0.5s ease-out;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .result.show {
-            display: block;
-        }
-
-        .result-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.2);
-        }
-
-        .result-row:last-child {
-            border-bottom: none;
-            margin-top: 10px;
-            padding-top: 20px;
-            border-top: 2px solid rgba(255,255,255,0.3);
-        }
-
-        .result-label {
-            font-size: 16px;
-        }
-
-        .result-value {
-            font-size: 18px;
-            font-weight: bold;
-        }
-
-        .total-price {
-            font-size: 28px !important;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .loading {
-            text-align: center;
-            color: #00A9E0;
-            margin-top: 15px;
-            display: none;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        .spinner {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #00A9E0;
+        .step-lbl .sn {
+            background: var(--accent);
+            color:#fff;
+            width: 18px; height: 18px;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 800;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        /* CARD */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            margin-bottom: 16px;
         }
 
-        .error {
-            background: #ff4444;
-            color: white;
-            padding: 15px;
+        /* ===== DELIVERY TYPE GRID ===== */
+        .type-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .type-btn {
+            background: var(--input-bg);
+            border: 1.5px solid var(--border);
             border-radius: 10px;
-            margin-top: 15px;
-            display: none;
+            padding: 13px 11px 11px;
+            cursor: pointer;
+            transition: all 0.15s;
+            position: relative;
+            text-align: right;
+        }
+        .type-btn:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .type-btn.active {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+        }
+        .type-btn .t-icon { font-size: 18px; margin-bottom: 3px; }
+        .type-btn .t-name { font-size: 13px; font-weight: 600; }
+        .type-btn .t-price { font-size: 11px; color: var(--text-mute); margin-top: 2px; }
+        .type-btn .t-price span { color: var(--accent); font-weight: 700; }
+        .type-btn .t-chk {
+            position: absolute; top: 9px; left: 9px;
+            width: 18px; height: 18px; border-radius: 50%;
+            border: 2px solid var(--border);
+            background: transparent;
+            transition: all 0.15s;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 10px; color: #fff;
+        }
+        .type-btn.active .t-chk {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+        .type-btn.active .t-chk::after { content:'✓'; }
+
+        /* ===== VEHICLE GRID ===== */
+        .vehicle-section { display: none; margin-top: 14px; }
+        .vehicle-section.visible { display: block; }
+        .vehicle-section .sub-lbl {
+            font-size: 12px; color: var(--text-sec); font-weight: 600; margin-bottom: 8px;
+        }
+        .vehicle-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 7px;
+        }
+        .veh-btn {
+            background: var(--input-bg);
+            border: 1.5px solid var(--border);
+            border-radius: 9px;
+            padding: 12px 4px;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s;
+        }
+        .veh-btn:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .veh-btn.active { border-color: var(--accent); background: var(--accent-dim); }
+        .veh-btn .vi { font-size: 20px; }
+        .veh-btn .vn { font-size: 11px; font-weight: 600; margin-top: 3px; color: var(--text); }
+        .veh-btn .vp { font-size: 10px; color: var(--accent); font-weight: 700; margin-top: 1px; }
+
+        /* ===== PACKAGING GRID ===== */
+        .pack-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 7px;
+        }
+        .pack-btn {
+            background: var(--input-bg);
+            border: 1.5px solid var(--border);
+            border-radius: 9px;
+            padding: 11px;
+            cursor: pointer;
+            display: flex; align-items: center; gap: 10px;
+            transition: all 0.15s;
+        }
+        .pack-btn:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .pack-btn.active { border-color: var(--accent); background: var(--accent-dim); }
+        .pack-btn .pi { font-size: 18px; }
+        .pack-btn .pn { font-size: 12px; font-weight: 600; color: var(--text); }
+        .pack-btn .pp { font-size: 11px; color: var(--text-mute); margin-top: 1px; }
+        .pack-btn .pp span { color: var(--accent); font-weight: 700; }
+        .pack-desc {
+            margin-top: 10px;
+            font-size: 11px;
+            color: var(--text-mute);
+            font-style: italic;
+            text-align: center;
         }
 
-        .error.show {
+        /* ===== ADDRESS INPUTS ===== */
+        .addr-row { display: flex; flex-direction: column; gap: 10px; }
+        .addr-block label {
             display: block;
+            font-size: 12px; font-weight: 600; color: var(--text-sec);
+            margin-bottom: 5px;
+        }
+        .addr-block input {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1.5px solid var(--border);
+            border-radius: 9px;
+            padding: 11px 13px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: 'Heebo', sans-serif;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .addr-block input:focus { border-color: var(--accent); }
+        .addr-block input::placeholder { color: var(--text-mute); }
+
+        /* Google autocomplete dark styling */
+        .pac-container {
+            background-color: #1e293b !important;
+            border: 1px solid #475569 !important;
+            border-radius: 8px;
+            font-family: 'Heebo', sans-serif;
+            z-index: 99999 !important;
+        }
+        .pac-item { color: #e2e8f0 !important; padding: 8px; border-top: 1px solid #475569 !important; cursor: pointer; }
+        .pac-item:hover { background-color: #334155 !important; }
+        .pac-item-query { color: #10b981 !important; font-weight: bold; }
+        .pac-icon { display: none; }
+
+        /* ===== CALC BUTTON ===== */
+        .calc-btn {
+            width: 100%;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 11px;
+            padding: 15px;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: 'Heebo', sans-serif;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            margin-top: 6px;
+            display: flex; align-items: center; justify-content: center; gap: 7px;
+        }
+        .calc-btn:hover { background: var(--accent-hover); }
+        .calc-btn:active { transform: scale(0.98); }
+        .calc-btn:disabled { background: var(--card-hover); color: var(--text-mute); cursor: not-allowed; }
+
+        /* SPINNER */
+        .spinner {
+            width: 16px; height: 16px;
+            border: 2.5px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.55s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ===== RESULT PANEL ===== */
+        .result-panel {
+            display: none;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            margin-top: 14px;
+        }
+        .result-panel.visible { display: block; animation: fadeUp 0.3s ease; }
+        @keyframes fadeUp {
+            from { opacity:0; transform: translateY(8px); }
+            to   { opacity:1; transform: translateY(0); }
         }
 
-        @media (max-width: 600px) {
-            .container {
-                padding: 25px;
-            }
+        .res-header {
+            background: var(--accent);
+            padding: 14px 18px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .res-header .rh-label { font-size: 13px; font-weight: 600; }
+        .res-header .rh-total { font-size: 24px; font-weight: 800; }
 
-            h1 {
-                font-size: 24px;
-            }
+        .res-body { padding: 16px 18px; }
+        .res-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }
+        .res-row:last-child { border-bottom: none; }
+        .res-row .rl { color: var(--text-sec); }
+        .res-row .rv { color: var(--text); font-weight: 600; }
+        .res-row.subtotal-row .rl { color: var(--text); font-weight: 600; }
+        .res-row.subtotal-row .rv { color: var(--accent); font-size: 15px; }
+        .res-row.vat .rl, .res-row.vat .rv { color: var(--text-mute); font-size: 12px; }
 
-            .vehicle-options {
-                grid-template-columns: 1fr;
-            }
+        /* ERROR */
+        .error-box {
+            display: none;
+            background: rgba(239,68,68,0.12);
+            border: 1px solid var(--red);
+            border-radius: 9px;
+            padding: 12px 14px;
+            color: #fca5a5;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+        .error-box.visible { display: block; }
 
-            .packaging-options {
-                grid-template-columns: 1fr;
-            }
-
-            .logo-container img {
-                max-width: 150px;
-            }
+        /* RESPONSIVE */
+        @media (max-width: 500px) {
+            .type-grid { grid-template-columns: 1fr 1fr; }
+            .vehicle-grid { grid-template-columns: repeat(2, 1fr); }
+            .pack-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo-container">
-            <svg width="200" height="100" viewBox="0 0 200 100" xmlns="http://www.w3.org/2000/svg">
-                <path d="M30,50 Q25,30 35,35 L50,45 Z" fill="#00A9E0" opacity="0.7"/>
-                <path d="M25,50 Q20,35 30,38 L45,47 Z" fill="#00A9E0" opacity="0.5"/>
-                <path d="M170,50 Q175,30 165,35 L150,45 Z" fill="#00A9E0" opacity="0.7"/>
-                <path d="M175,50 Q180,35 170,38 L155,47 Z" fill="#00A9E0" opacity="0.5"/>
-                <circle cx="100" cy="50" r="35" fill="white" stroke="#00A9E0" stroke-width="3"/>
-                <text x="100" y="60" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#00A9E0" text-anchor="middle">MMH</text>
-            </svg>
+
+<header>
+    <img src="/assets/logo.png" alt="MMH">
+    <div class="hdr-text">
+        <h1>M.M.H Delivery</h1>
+        <p>מחשבון מחירים</p>
+    </div>
+</header>
+
+<div class="wrap">
+    <div class="page-head">
+        <h2>מחשבון מחירים</h2>
+        <p>בחר סוג משלוח, הכנס כתובות וקבל מחיר לאלתר</p>
+    </div>
+
+    <!-- STEP 1 -->
+    <div class="step-lbl"><span class="sn">1</span> בחר סוג משלוח</div>
+    <div class="card">
+        <div class="type-grid" id="typeGrid"></div>
+        <div class="vehicle-section" id="vehicleSection">
+            <div class="sub-lbl">בחר סוג רכב:</div>
+            <div class="vehicle-grid" id="vehicleGrid"></div>
         </div>
-        
-        <h1>מחשבון מחירים</h1>
+    </div>
 
-        <form id="calculatorForm">
-            <div class="form-group">
-                <label>בחר סוג רכב:</label>
-                <div class="vehicle-options">
-                    <div class="vehicle-option">
-                        <input type="radio" name="vehicleType" id="motorcycle" value="motorcycle" required>
-                        <label for="motorcycle">
-                            <div class="vehicle-icon">🏍️</div>
-                            <div class="vehicle-name">אופנוע</div>
-                            <div class="vehicle-base">בסיס: ₪70</div>
-                        </label>
-                    </div>
-                    <div class="vehicle-option">
-                        <input type="radio" name="vehicleType" id="car" value="car" required>
-                        <label for="car">
-                            <div class="vehicle-icon">🚗</div>
-                            <div class="vehicle-name">רכב</div>
-                            <div class="vehicle-base">בסיס: ₪100</div>
-                        </label>
-                    </div>
-                    <div class="vehicle-option">
-                        <input type="radio" name="vehicleType" id="commercial" value="commercial" required>
-                        <label for="commercial">
-                            <div class="vehicle-icon">🚐</div>
-                            <div class="vehicle-name">מסחרית</div>
-                            <div class="vehicle-base">בסיס: ₪320</div>
-                        </label>
-                    </div>
-                    <div class="vehicle-option">
-                        <input type="radio" name="vehicleType" id="truck" value="truck" required>
-                        <label for="truck">
-                            <div class="vehicle-icon">🚚</div>
-                            <div class="vehicle-name">משאית</div>
-                            <div class="vehicle-base">בסיס: ₪900</div>
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>האם נדרשת אריזה?</label>
-                <div class="packaging-options">
-                    <div class="packaging-option">
-                        <input type="radio" name="packaging" id="noPackaging" value="none" checked>
-                        <label for="noPackaging">
-                            <div class="packaging-icon">📦</div>
-                            <div class="packaging-name">ללא אריזה</div>
-                            <div class="packaging-price">₪0</div>
-                        </label>
-                    </div>
-                    <div class="packaging-option">
-                        <input type="radio" name="packaging" id="basicPackaging" value="basic">
-                        <label for="basicPackaging">
-                            <div class="packaging-icon">📦✨</div>
-                            <div class="packaging-name">אריזה רגילה</div>
-                            <div class="packaging-price">₪50</div>
-                        </label>
-                    </div>
-                    <div class="packaging-option">
-                        <input type="radio" name="packaging" id="enhancedPackaging" value="enhanced">
-                        <label for="enhancedPackaging">
-                            <div class="packaging-icon">📦🛡️</div>
-                            <div class="packaging-name">אריזה מוגברת</div>
-                            <div class="packaging-price">₪100</div>
-                        </label>
-                    </div>
-                    <div class="packaging-option">
-                        <input type="radio" name="packaging" id="professionalPackaging" value="professional">
-                        <label for="professionalPackaging">
-                            <div class="packaging-icon">📦💎</div>
-                            <div class="packaging-name">אריזה מקצועית</div>
-                            <div class="packaging-price">₪150</div>
-                        </label>
-                    </div>
-                </div>
-                <div class="packaging-info">
-                    <small id="packagingDescription">ללא שירותי אריזה</small>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label for="origin">כתובת איסוף:</label>
-                <input type="text" id="origin" placeholder="לדוגמה: תל אביב, רחוב הרצל 1" required>
-            </div>
-
-            <div class="form-group">
-                <label for="destination">כתובת יעד:</label>
-                <input type="text" id="destination" placeholder="לדוגמה: ירושלים, רחוב יפו 23" required>
-            </div>
-
-            <button type="submit" class="calculate-btn">חשב מחיר</button>
-        </form>
-
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>מחשב מרחק...</p>
+    <!-- STEP 2 -->
+    <div id="packagingStep">
+        <div class="step-lbl"><span class="sn">2</span> אריזה</div>
+        <div class="card">
+            <div class="pack-grid" id="packGrid"></div>
+            <div class="pack-desc" id="packDesc">ללא שירותי אריזה</div>
         </div>
+    </div>
 
-        <div class="error" id="error"></div>
-
-        <div class="result" id="result">
-            <div class="result-row">
-                <span class="result-label">מרחק נסיעה:</span>
-                <span class="result-value" id="distance">-</span>
+    <!-- STEP 3 -->
+    <div class="step-lbl" id="addrStepLbl"><span class="sn">3</span> כתובות</div>
+    <div class="card">
+        <div class="addr-row">
+            <div class="addr-block">
+                <label>📍 כתובת איסוף</label>
+                <input type="text" id="origin" placeholder="לדוגמה: תל אביב, רחוב הרצל 1">
             </div>
-            <div class="result-row">
-                <span class="result-label">זמן נסיעה משוער:</span>
-                <span class="result-value" id="duration">-</span>
-            </div>
-            <div class="result-row">
-                <span class="result-label">מחיר בסיס:</span>
-                <span class="result-value" id="basePrice">-</span>
-            </div>
-            <div class="result-row" id="surchargeRow" style="display: none;">
-                <span class="result-label">תוספת רכב:</span>
-                <span class="result-value" id="vehicleSurcharge">-</span>
-            </div>
-            <div class="result-row">
-                <span class="result-label">תוספת ק"מ:</span>
-                <span class="result-value" id="kmCharge">-</span>
-            </div>
-            <div class="result-row" id="packagingRow" style="display: none;">
-                <span class="result-label">אריזה:</span>
-                <span class="result-value" id="packagingCharge">-</span>
-            </div>
-            <div class="result-row">
-                <span class="result-label">סכום ביניים:</span>
-                <span class="result-value" id="subtotal">-</span>
-            </div>
-            <div class="result-row">
-                <span class="result-label">מע"מ (18%):</span>
-                <span class="result-value" id="vatAmount">-</span>
-            </div>
-            <div class="result-row">
-                <span class="result-label">מחיר כולל מע"מ:</span>
-                <span class="result-value total-price" id="totalPrice">-</span>
+            <div class="addr-block">
+                <label>🏠 כתובת יעד</label>
+                <input type="text" id="destination" placeholder="לדוגמה: ירושלים, רחוב יפו 23">
             </div>
         </div>
     </div>
 
-    <script>
-        const API_KEY = 'AIzaSyAsjRq5dOUsIamcrzvONHeBZtYuDKIu6U4';
-        
-        const vehicleRates = {
-            motorcycle: { base: 70, perKm: 2.5, surcharge: 0 },
-            car: { base: 70, perKm: 2.5, surcharge: 30 },
-            commercial: { base: 320, perKm: 2.7, surcharge: 0 },
-            truck: { base: 900, perKm: 3.0, surcharge: 0 }
-        };
+    <button class="calc-btn" id="calcBtn" onclick="calculate()">חשב מחיר</button>
+    <div class="error-box" id="errorBox"></div>
 
-        const packagingRates = {
-            none: { price: 0, description: 'ללא שירותי אריזה' },
-            basic: { price: 50, description: 'כולל: קרטונים, סלוטייפ וחומרי אריזה בסיסיים' },
-            enhanced: { price: 100, description: 'כולל: בועות אוויר, קרטונים מחוזקים, ריפוד מיוחד' },
-            professional: { price: 150, description: 'כולל: אריזה מקצועית לציוד שביר/רפואי/יקר ערך' }
-        };
+    <!-- RESULT -->
+    <div class="result-panel" id="resultPanel">
+        <div class="res-header">
+            <span class="rh-label">מחיר כולל מע"מ</span>
+            <span class="rh-total" id="totalPrice">₪0</span>
+        </div>
+        <div class="res-body" id="resBody"></div>
+    </div>
+</div>
 
-        // Update packaging description on selection
-        document.querySelectorAll('input[name="packaging"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                const description = packagingRates[e.target.value].description;
-                document.getElementById('packagingDescription').textContent = description;
-            });
-        });
+<script>
+// ==========================================
+// DATA
+// ==========================================
+const DELIVERY_TYPES = [
+    { id:'express',   icon:'🏍️',  name:'אקספרס',              base:70,  includedKm:0,  perKm:3,   hasVehicle:true  },
+    { id:'legal',     icon:'⚖️',  name:'מסירה משפטית',        base:350, includedKm:30, perKm:0.5, hasVehicle:false },
+    { id:'apostille', icon:'📜',  name:'אפוסטיל',             base:200, includedKm:15, perKm:0.5, hasVehicle:false },
+    { id:'taboo',     icon:'🏛️',  name:'רשם מקרקעין (טאבו)',  base:200, includedKm:15, perKm:0.5, hasVehicle:false },
+    { id:'company',   icon:'🏢',  name:'רשם חברות ועמותות',   base:200, includedKm:15, perKm:0.5, hasVehicle:false },
+    { id:'pension',   icon:'💼',  name:'רשם מסכונות',         base:200, includedKm:15, perKm:0.5, hasVehicle:false },
+    { id:'inherit',   icon:'📋',  name:'רשם ירושות',          base:200, includedKm:15, perKm:0.5, hasVehicle:false }
+];
 
-        // Load Google Maps API
-        function loadGoogleMapsAPI() {
-            return new Promise((resolve, reject) => {
-                if (window.google && window.google.maps) {
-                    resolve();
-                    return;
-                }
-                
-                const script = document.createElement('script');
-                script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&libraries=places`;
-                script.async = true;
-                script.defer = true;
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
+const VEHICLES = [
+    { id:'motorcycle', icon:'🏍️', name:'אופנוע',  base:70,  perKm:2.5 },
+    { id:'car',        icon:'🚗', name:'רכב',      base:100, perKm:2.5 },
+    { id:'van',        icon:'🚐', name:'מסחרית',  base:320, perKm:2.7 },
+    { id:'truck',      icon:'🚚', name:'משאית',   base:900, perKm:3.0 }
+];
 
-        // Initialize autocomplete
-        let originAutocomplete, destinationAutocomplete;
+const PACKAGING = [
+    { id:'none',         icon:'📦',   name:'ללא אריזה',      price:0,   desc:'ללא שירותי אריזה' },
+    { id:'basic',        icon:'📦✨',  name:'אריזה רגילה',    price:50,  desc:'קרטונים, סלוטייפ וחומרי אריזה בסיסיים' },
+    { id:'enhanced',     icon:'📦🛡️', name:'אריזה מוגברת',   price:100, desc:'בועות אוויר, קרטונים מחוזקים, ריפוד מיוחד' },
+    { id:'professional', icon:'📦💎', name:'אריזה מקצועית',  price:150, desc:'אריזה מקצועית לציוד שביר / רפואי / יקר ערך' }
+];
 
-        loadGoogleMapsAPI().then(() => {
-            const options = {
-                componentRestrictions: { country: 'il' },
-                fields: ['formatted_address', 'geometry']
-            };
+const VAT = 0.18;
 
-            originAutocomplete = new google.maps.places.Autocomplete(
-                document.getElementById('origin'),
-                options
-            );
+// ==========================================
+// STATE
+// ==========================================
+let selectedType    = 'express';
+let selectedVehicle = 'motorcycle';
+let selectedPacking = 'none';
 
-            destinationAutocomplete = new google.maps.places.Autocomplete(
-                document.getElementById('destination'),
-                options
-            );
-        }).catch(error => {
-            console.error('Error loading Google Maps:', error);
-            showError('שגיאה בטעינת מפות Google. אנא נסה שוב מאוחר יותר.');
-        });
+// ==========================================
+// RENDER
+// ==========================================
+function renderTypes() {
+    document.getElementById('typeGrid').innerHTML = DELIVERY_TYPES.map(t => `
+        <div class="type-btn ${t.id === selectedType ? 'active' : ''}" onclick="selectType('${t.id}')">
+            <div class="t-chk"></div>
+            <div class="t-icon">${t.icon}</div>
+            <div class="t-name">${t.name}</div>
+            <div class="t-price">בסיס <span>₪${t.base}</span>${t.includedKm > 0 ? ` · כולל ${t.includedKm} ק"מ` : ''}</div>
+        </div>
+    `).join('');
+}
 
-        // Form submission
-        document.getElementById('calculatorForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const vehicleType = document.querySelector('input[name="vehicleType"]:checked');
-            const packaging = document.querySelector('input[name="packaging"]:checked');
-            const origin = document.getElementById('origin').value.trim();
-            const destination = document.getElementById('destination').value.trim();
+function renderVehicles() {
+    document.getElementById('vehicleGrid').innerHTML = VEHICLES.map(v => `
+        <div class="veh-btn ${v.id === selectedVehicle ? 'active' : ''}" onclick="selectVehicle('${v.id}')">
+            <div class="vi">${v.icon}</div>
+            <div class="vn">${v.name}</div>
+            <div class="vp">₪${v.base}</div>
+        </div>
+    `).join('');
+}
 
-            if (!vehicleType || !origin || !destination) {
-                showError('אנא מלא את כל השדות');
-                return;
-            }
+function renderPackaging() {
+    document.getElementById('packGrid').innerHTML = PACKAGING.map(p => `
+        <div class="pack-btn ${p.id === selectedPacking ? 'active' : ''}" onclick="selectPacking('${p.id}')">
+            <div class="pi">${p.icon}</div>
+            <div class="pn">${p.name}</div>
+            <div class="pp"><span>₪${p.price}</span></div>
+        </div>
+    `).join('');
+    document.getElementById('packDesc').textContent = PACKAGING.find(p => p.id === selectedPacking).desc;
+}
 
-            hideError();
-            hideResult();
-            showLoading();
+function updateLayout() {
+    const type = DELIVERY_TYPES.find(t => t.id === selectedType);
 
-            try {
-                const distance = await calculateDistance(origin, destination);
-                const price = calculatePrice(vehicleType.value, distance, packaging.value);
-                displayResult(distance, price, packaging.value, vehicleType.value);
-            } catch (error) {
-                console.error('Error:', error);
-                showError(error.message || 'שגיאה בחישוב המרחק. אנא בדוק את הכתובות ונסה שוב.');
-            } finally {
-                hideLoading();
-            }
-        });
+    // Vehicle sub-selector: only for express
+    document.getElementById('vehicleSection').classList.toggle('visible', type.hasVehicle);
 
-        async function calculateDistance(origin, destination) {
-            return new Promise((resolve, reject) => {
-                const service = new google.maps.DistanceMatrixService();
-                
-                service.getDistanceMatrix({
-                    origins: [origin],
-                    destinations: [destination],
-                    travelMode: 'DRIVING',
-                    unitSystem: google.maps.UnitSystem.METRIC
-                }, (response, status) => {
-                    if (status === 'OK') {
-                        const result = response.rows[0].elements[0];
-                        
-                        if (result.status === 'OK') {
-                            resolve({
-                                distanceMeters: result.distance.value,
-                                distanceKm: result.distance.value / 1000,
-                                distanceText: result.distance.text,
-                                durationText: result.duration.text
-                            });
-                        } else {
-                            reject(new Error('לא ניתן למצוא מסלול בין הכתובות. אנא בדוק את הכתובות.'));
-                        }
-                    } else {
-                        reject(new Error('שגיאה בחישוב המרחק. אנא נסה שוב.'));
-                    }
+    // Packaging step: only for express
+    const packStep = document.getElementById('packagingStep');
+    packStep.style.display = type.hasVehicle ? 'block' : 'none';
+
+    // Address step number: 3 if packaging shown, else 2
+    const addrLbl = document.getElementById('addrStepLbl');
+    addrLbl.querySelector('.sn').textContent = type.hasVehicle ? '3' : '2';
+}
+
+// ==========================================
+// SELECTORS
+// ==========================================
+function selectType(id) {
+    selectedType = id;
+    renderTypes();
+    updateLayout();
+    hideResult();
+    hideError();
+}
+
+function selectVehicle(id) {
+    selectedVehicle = id;
+    renderVehicles();
+    hideResult();
+}
+
+function selectPacking(id) {
+    selectedPacking = id;
+    renderPackaging();
+    hideResult();
+}
+
+// ==========================================
+// GOOGLE MAPS
+// ==========================================
+const GOOGLE_MAPS_KEY = 'AIzaSyAsjRq5dOUsIamcrzvONHeBZtYuDKIu6U4';
+
+async function loadGoogleMaps() {
+    if (window.google && window.google.maps) return;
+
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places&language=he`;
+        s.async = true;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+    });
+}
+
+function initAutocomplete() {
+    const opts = { componentRestrictions: { country: 'il' }, fields: ['formatted_address','geometry'] };
+    new google.maps.places.Autocomplete(document.getElementById('origin'), opts);
+    new google.maps.places.Autocomplete(document.getElementById('destination'), opts);
+}
+
+function getDistance(origin, destination) {
+    return new Promise((resolve, reject) => {
+        const svc = new google.maps.DistanceMatrixService();
+        svc.getDistanceMatrix({
+            origins: [origin],
+            destinations: [destination],
+            travelMode: 'DRIVING',
+            unitSystem: google.maps.UnitSystem.METRIC
+        }, (res, status) => {
+            if (status === 'OK' && res.rows[0].elements[0].status === 'OK') {
+                const el = res.rows[0].elements[0];
+                resolve({
+                    km: el.distance.value / 1000,
+                    distText: el.distance.text,
+                    durText: el.duration.text
                 });
-            });
-        }
-
-        function calculatePrice(vehicleType, distance, packagingType) {
-            const rate = vehicleRates[vehicleType];
-            const packagingRate = packagingRates[packagingType];
-            const distanceKm = distance.distanceKm;
-            
-            // Base price + vehicle surcharge + all km charged
-            const basePrice = rate.base;
-            const vehicleSurcharge = rate.surcharge;
-            const kmCharge = distanceKm * rate.perKm; // No free km!
-            const packagingPrice = packagingRate.price;
-            const subtotal = basePrice + vehicleSurcharge + kmCharge + packagingPrice;
-            
-            // Calculate VAT (18%)
-            const vatAmount = subtotal * 0.18;
-            const totalPrice = subtotal + vatAmount;
-
-            return {
-                basePrice: basePrice.toFixed(2),
-                vehicleSurcharge: vehicleSurcharge.toFixed(2),
-                kmCharge: kmCharge.toFixed(2),
-                packagingPrice: packagingPrice.toFixed(2),
-                subtotal: subtotal.toFixed(2),
-                vatAmount: vatAmount.toFixed(2),
-                totalPrice: totalPrice.toFixed(2),
-                totalKm: distanceKm.toFixed(2)
-            };
-        }
-
-        function displayResult(distance, price, packagingType, vehicleType) {
-            document.getElementById('distance').textContent = `${distance.distanceKm.toFixed(2)} ק"מ (${distance.distanceText})`;
-            document.getElementById('duration').textContent = distance.durationText;
-            document.getElementById('basePrice').textContent = `₪${price.basePrice}`;
-            
-            // Show/hide vehicle surcharge row
-            const surchargeRow = document.getElementById('surchargeRow');
-            if (parseFloat(price.vehicleSurcharge) > 0) {
-                document.getElementById('vehicleSurcharge').textContent = `₪${price.vehicleSurcharge}`;
-                surchargeRow.style.display = 'flex';
             } else {
-                surchargeRow.style.display = 'none';
+                reject(new Error('לא ניתן למצוא מסלול בין הכתובות. אנא בדוק את הכתובות.'));
             }
-            
-            document.getElementById('kmCharge').textContent = `₪${price.kmCharge} (${price.totalKm} ק"מ)`;
-            
-            // Show/hide packaging row
-            const packagingRow = document.getElementById('packagingRow');
-            if (packagingType !== 'none') {
-                document.getElementById('packagingCharge').textContent = `₪${price.packagingPrice}`;
-                packagingRow.style.display = 'flex';
-            } else {
-                packagingRow.style.display = 'none';
-            }
-            
-            document.getElementById('subtotal').textContent = `₪${price.subtotal}`;
-            document.getElementById('vatAmount').textContent = `₪${price.vatAmount}`;
-            document.getElementById('totalPrice').textContent = `₪${price.totalPrice}`;
-            
-            showResult();
-        }
+        });
+    });
+}
 
-        function showLoading() {
-            document.getElementById('loading').classList.add('show');
-        }
+// ==========================================
+// PRICING
+// ==========================================
+function calcPrice(distKm) {
+    const type = DELIVERY_TYPES.find(t => t.id === selectedType);
+    let base, perKm, includedKm;
 
-        function hideLoading() {
-            document.getElementById('loading').classList.remove('show');
-        }
+    if (type.hasVehicle) {
+        const veh = VEHICLES.find(v => v.id === selectedVehicle);
+        base       = veh.base;
+        perKm      = veh.perKm;
+        includedKm = 0;
+    } else {
+        base       = type.base;
+        perKm      = type.perKm;
+        includedKm = type.includedKm;
+    }
 
-        function showResult() {
-            document.getElementById('result').classList.add('show');
-        }
+    const chargeableKm = Math.max(0, distKm - includedKm);
+    const kmCost       = chargeableKm * perKm;
+    const packCost     = type.hasVehicle ? PACKAGING.find(p => p.id === selectedPacking).price : 0;
+    const subtotal     = base + kmCost + packCost;
+    const vat          = subtotal * VAT;
+    const total        = subtotal + vat;
 
-        function hideResult() {
-            document.getElementById('result').classList.remove('show');
-        }
+    return { base, includedKm, chargeableKm, kmCost, packCost, subtotal, vat, total, perKm, distKm };
+}
 
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.textContent = message;
-            errorDiv.classList.add('show');
-        }
+// ==========================================
+// CALCULATE
+// ==========================================
+async function calculate() {
+    const origin = document.getElementById('origin').value.trim();
+    const dest   = document.getElementById('destination').value.trim();
 
-        function hideError() {
-            document.getElementById('error').classList.remove('show');
-        }
-    </script>
+    if (!origin || !dest) { showError('אנא הכנס כתובת איסוף וכתובת יעד'); return; }
+
+    hideError();
+    hideResult();
+    setLoading(true);
+
+    try {
+        const dist  = await getDistance(origin, dest);
+        const price = calcPrice(dist.km);
+        showResult(dist, price);
+    } catch (e) {
+        showError(e.message || 'שגיאה בחישוב המרחק. אנא נסה שוב.');
+    } finally {
+        setLoading(false);
+    }
+}
+
+// ==========================================
+// UI
+// ==========================================
+function setLoading(on) {
+    const btn = document.getElementById('calcBtn');
+    btn.disabled = on;
+    btn.innerHTML = on ? '<div class="spinner"></div> מחשב...' : 'חשב מחיר';
+}
+
+function showError(msg) {
+    const el = document.getElementById('errorBox');
+    el.textContent = msg;
+    el.classList.add('visible');
+}
+function hideError() {
+    document.getElementById('errorBox').classList.remove('visible');
+}
+
+function showResult(dist, price) {
+    const type = DELIVERY_TYPES.find(t => t.id === selectedType);
+    let rows = '';
+
+    // Type & vehicle
+    rows += `<div class="res-row"><span class="rl">סוג משלוח</span><span class="rv">${type.name}</span></div>`;
+    if (type.hasVehicle) {
+        const veh = VEHICLES.find(v => v.id === selectedVehicle);
+        rows += `<div class="res-row"><span class="rl">סוג רכב</span><span class="rv">${veh.name}</span></div>`;
+    }
+
+    // Distance & duration
+    rows += `<div class="res-row"><span class="rl">מרחק נסיעה</span><span class="rv">${dist.km.toFixed(1)} ק"מ (${dist.distText})</span></div>`;
+    rows += `<div class="res-row"><span class="rl">זמן משוער</span><span class="rv">${dist.durText}</span></div>`;
+
+    // Base
+    rows += `<div class="res-row"><span class="rl">מחיר בסיס</span><span class="rv">₪${price.base.toFixed(0)}</span></div>`;
+
+    // Included km
+    if (price.includedKm > 0) {
+        rows += `<div class="res-row"><span class="rl">ק"מ כלולים במחיר</span><span class="rv">${price.includedKm} ק"מ</span></div>`;
+    }
+
+    // Chargeable km
+    if (price.chargeableKm > 0) {
+        rows += `<div class="res-row"><span class="rl">תוספת ק"מ</span><span class="rv">₪${price.kmCost.toFixed(2)} (${price.chargeableKm.toFixed(1)} ק"מ × ₪${price.perKm})</span></div>`;
+    } else if (price.includedKm > 0) {
+        rows += `<div class="res-row"><span class="rl">תוספת ק"מ</span><span class="rv" style="color:var(--accent)">₪0 (בתוך הכולל)</span></div>`;
+    }
+
+    // Packaging
+    if (price.packCost > 0) {
+        const pk = PACKAGING.find(p => p.id === selectedPacking);
+        rows += `<div class="res-row"><span class="rl">אריזה (${pk.name})</span><span class="rv">₪${price.packCost.toFixed(0)}</span></div>`;
+    }
+
+    // Subtotal
+    rows += `<div class="res-row subtotal-row"><span class="rl">סכום לפני מע"מ</span><span class="rv">₪${price.subtotal.toFixed(2)}</span></div>`;
+    rows += `<div class="res-row vat"><span class="rl">מע"מ (18%)</span><span class="rv">₪${price.vat.toFixed(2)}</span></div>`;
+
+    document.getElementById('resBody').innerHTML = rows;
+    document.getElementById('totalPrice').textContent = `₪${price.total.toFixed(2)}`;
+    document.getElementById('resultPanel').classList.add('visible');
+}
+
+function hideResult() {
+    document.getElementById('resultPanel').classList.remove('visible');
+}
+
+// ==========================================
+// INIT
+// ==========================================
+renderTypes();
+renderVehicles();
+renderPackaging();
+updateLayout();
+
+loadGoogleMaps().then(initAutocomplete).catch(e => console.error('Google Maps:', e));
+</script>
 </body>
 </html>
